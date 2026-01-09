@@ -11,6 +11,7 @@ logs/
 # Backups / dumps
 backups/
 *.sql
+!scripts/*.sql
 *.dump
 *.bak
 
