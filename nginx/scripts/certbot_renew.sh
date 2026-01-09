@@ -8,7 +8,10 @@ mkdir -p certbot/www certbot/conf certbot/logs
 docker compose --profile certbot run --rm \
   certbot renew \
   --webroot -w /var/www/certbot \
-  --quiet
+  --quiet \
+  --config-dir /etc/letsencrypt \
+  --work-dir /etc/letsencrypt \
+  --logs-dir /var/log/letsencrypt
 
 # Reload Nginx so it picks up the renewed certificate
 if docker compose ps --status=running --services | grep -q '^core$'; then

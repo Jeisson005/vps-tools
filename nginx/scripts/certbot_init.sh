@@ -32,6 +32,9 @@ docker compose --profile certbot run --rm \
   --email "$CERTBOT_EMAIL" \
   --agree-tos \
   --non-interactive \
-  --keep-until-expiring
+  --keep-until-expiring \
+  --config-dir /etc/letsencrypt \
+  --work-dir /etc/letsencrypt \
+  --logs-dir /var/log/letsencrypt
 
 echo "Certificate ready at: certbot/conf/live/${DOMAIN}/"
