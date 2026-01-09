@@ -1,98 +1,55 @@
-# Postgres (local compose)
+# Postgres + PgBouncer
 
-Quick guide to deploy the Postgres + PgBouncer stack (SCRAM-SHA-256 auth recommended; PgBouncer configured for SCRAM).
+Postgres stack in Docker with PgBouncer, intended to be easy to run in a VPS.
 
-## Prerequisites ✅
-- Docker and Docker Compose (plugin) installed
-- Copy the example environment and set credentials:
-  - `cp .env.example .env`
-  - Edit `.env` and set `POSTGRES_DB`, `POSTGRES_USER` and `POSTGRES_PASSWORD`
-- This setup prefers SCRAM-SHA-256; see `pgbouncer/pgbouncer.ini` for auth options and the recommended `auth_user` + `auth_query`.  
-- **Security:** do not commit real credentials; use Docker/Kubernetes secrets or a secret manager for production.
+## Available Commands
 
-## First-time setup — Step by step 🔧
+### Setup
+- `cp .env.example .env`
+  Configure `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`.
 
-Follow these steps when you clone this repo for the first time in a new environment.
+### Stack
+- `docker compose up -d --build`
+  Starts Postgres (`db`) + PgBouncer (`pgbouncer`).
+- `docker compose down`
+  Stops containers.
+- `docker compose down -v`
+  Stops and deletes named volumes (DESTRUCTIVE).
 
-1) Configure environment
+### Logs
+- `docker compose logs -f --tail=200 db`
+- `docker compose logs -f --tail=200 pgbouncer`
 
-```bash
-# Copy the example env and edit credentials
-cp .env.example .env
-# Edit .env and set: POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
-```
-2) (Optional) Clean state — recommended on first run if you previously used another password
+### Connectivity checks
+- Direct to Postgres:
+  - `docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c '\conninfo'`
+- Through PgBouncer:
+  - `docker compose exec -T db bash -lc "PGPASSWORD=$POSTGRES_PASSWORD psql -h pgbouncer -U $POSTGRES_USER -d $POSTGRES_DB -c '\\conninfo'"`
 
-```bash
-# Remove containers and named volumes created by this compose (DESTRUCTIVE)
-docker compose down -v
-```
+### PgBouncer auth sync (SCRAM)
+- `bash sync_pgbouncer_auth.sh`
+  Extracts the SCRAM verifier for `$POSTGRES_USER` and writes it to `pgbouncer/userlist.txt`.
 
-3) Start services
+### Backups (one dump per database)
 
-```bash
-docker compose up -d --build
-```
+Backups are written to `BACKUP_DIR` (default: `./backups`, i.e. `vps-tools/postgres/backups/`).
 
-4) Bootstrap PgBouncer auth (one-time after DB is ready)
+- `bash scripts/backup_dbs.sh`
+  Creates one `.dump` per database (custom format).
+- Optional `.env` vars:
+  - `BACKUP_DIR=./backups`
+  - `RETENTION_DAYS=14`
+  - `BACKUP_EXCLUDE_DBS=postgres` (comma-separated)
 
-```bash
-# Extract SCRAM verifier and restart pgbouncer
-bash sync_pgbouncer_auth.sh
-```
+### Cleanup (delete dumps older than N days)
+- `RETENTION_DAYS=30 bash scripts/cleanup_backups.sh`
 
-5) Verify services and connections
+## Cron examples
+- Backup daily:
+  - `15 3 * * * cd /path/to/vps-tools/postgres && bash scripts/backup_dbs.sh >> backups/cron.log 2>&1`
+- Cleanup daily (older than 30 days):
+  - `30 3 * * * cd /path/to/vps-tools/postgres && RETENTION_DAYS=30 bash scripts/cleanup_backups.sh >> backups/cleanup.log 2>&1`
 
-```bash
-# Check logs
-docker compose logs --tail=200 pgbouncer
-docker compose logs --tail=200 db
-
-# Direct to Postgres
-docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c '\conninfo'
-
-# Through PgBouncer
-docker compose exec -T db bash -lc "PGPASSWORD=$POSTGRES_PASSWORD psql -h pgbouncer -U $POSTGRES_USER -d $POSTGRES_DB -c '\\conninfo'"
-```
-
-6) If you change `POSTGRES_PASSWORD` after the DB has been initialized
-
-- Either update the password inside Postgres:
-
-```bash
-docker compose exec -T db psql -U postgres -c "ALTER USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';"
-```
-
-- Or reinitialize the DB (destructive):
-
-```bash
-docker compose down -v && docker compose up -d --build
-bash sync_pgbouncer_auth.sh
-```
-
-
-Notes:
-- The `sync_pgbouncer_auth.sh` script extracts the SCRAM verifier for `$POSTGRES_USER` from Postgres and writes it to `pgbouncer/userlist.txt` (this is required so PgBouncer can bootstrap authentication). Keep the `userlist.txt` mount in `docker-compose.yml` so PgBouncer can read the verifier.
-- For production, prefer `auth_user` + `auth_query` with a dedicated `pgbouncer_auth_user` and a `SECURITY DEFINER` helper function to avoid reading `pg_authid` directly.
-
-## Useful commands ⚡
-- Rebuild / restart the stack:
-  - `docker compose up -d --build`
-- Stop & remove containers + named volumes (clean start):
-  - `docker compose down -v`
-- Prefer `auth_user` + `auth_query` for PgBouncer authentication; if you change Postgres passwords, ensure PgBouncer can read updated verifiers and then restart PgBouncer if needed.
-
-## Troubleshooting (short) 🛠️
-- FATAL: unsupported startup parameter: extra_float_digits
-  - Add to `pgbouncer/pgbouncer.ini`:
-    `ignore_startup_parameters = extra_float_digits`
-  - Then `docker compose restart pgbouncer`
-
-- FATAL: password authentication failed
-  - Ensure the password in `postgres/.env` matches the Postgres role password, and that PgBouncer auth method matches your Postgres auth (SCRAM vs MD5).
-  - Prefer `auth_user` + `auth_query` (recommended) to avoid syncing static auth files.
-  - To reset the environment (destructive): `docker compose down -v` then `docker compose up -d --build` (this will remove DB data).
-
----
-
-That’s it — concise steps to bring up and verify the local Postgres + PgBouncer stack. If you want, I can add a quick `make` target to automate these steps next. 🚀
+## Notes
+- Prefer dumping from `db` (direct Postgres), not through PgBouncer.
+- For production: store backups off-host and test restores.

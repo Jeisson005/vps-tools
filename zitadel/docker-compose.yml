@@ -25,6 +25,12 @@ services:
       - zitadel
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "zitadel_core_{{.Name}}"
     deploy:
       resources:
         limits:
@@ -52,6 +58,12 @@ services:
           memory: "${LOGIN_RESERVATION_MEMORY:-64M}"
     volumes:
       - .:/current-dir:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "zitadel_login_{{.Name}}"
     depends_on:
       core:
         condition: service_healthy

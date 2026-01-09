@@ -1,0 +1,52 @@
+# ==============================================================================
+# EXAMPLE 1: STANDARD MAINTENANCE
+# ==============================================================================
+# Adjust '/path/to/vps-tools' to the real absolute path of your project.
+# Scheduled to run between 6:00 AM and 8:00 AM UTC (1:00 AM - 3:00 AM UTC-5).
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# 1. Cron function test (Every 2 minutes)
+*/2 * * * * /path/to/vps-tools/cron/cron_test.sh
+
+# 2. Postgres Backups (Daily at 6:00 AM UTC / 1:00 AM UTC-5)
+0 6 * * * /path/to/vps-tools/postgres/scripts/backup_dbs.sh >> /path/to/vps-tools/postgres/logs/backup.log 2>&1
+
+# 3. Old Postgres Backups Cleanup (Daily at 6:30 AM UTC / 1:30 AM UTC-5)
+30 6 * * * /path/to/vps-tools/postgres/scripts/cleanup_backups.sh >> /path/to/vps-tools/postgres/logs/cleanup.log 2>&1
+
+# 4. Nginx Certificate Renewal (Daily at 7:00 AM UTC / 2:00 AM UTC-5)
+0 7 * * * /path/to/vps-tools/nginx/scripts/certbot_renew.sh >> /path/to/vps-tools/nginx/logs/renew.log 2>&1
+
+# 5. Log Cleanup (Daily at 8:00 AM UTC / 3:00 AM UTC-5)
+# Keeps logs for 30 days by default.
+0 8 * * * /path/to/vps-tools/cron/cleanup_logs.sh >> /path/to/vps-tools/cron/logs/cleanup.log 2>&1
+
+
+# ==============================================================================
+# EXAMPLE 2: SPECIFIC CONFIGURATION (ROOT-BASED EXECUTION & DATE-BASED LOGS)
+# ==============================================================================
+
+# 1. Cron function test (Disabled by default)
+# */2 * * * * /path/to/vps-tools/cron/cron_test.sh
+
+# 2. Postgres Backups with 90-day retention (Daily at 6:00 AM UTC / 1:00 AM UTC-5)
+# Executed from the postgres folder. Logs are created with current date.
+0 6 * * * cd /path/to/vps-tools/postgres && export RETENTION_DAYS=90 && ./scripts/backup_dbs.sh >> logs/backup_$(date +\%Y\%m\%d).log 2>&1
+
+# 3. Nginx Certificate Renewal (Every 15th of the month at 7:00 AM UTC / 2:00 AM UTC-5)
+# Executed from the nginx folder.
+0 7 15 * * cd /path/to/vps-tools/nginx && ./scripts/certbot_renew.sh >> logs/renew_$(date +\%Y\%m\%d).log 2>&1
+
+# 4. Zitadel PAT Rotation (Quarterly - 1st of every 3rd month at 7:00 AM UTC / 2:00 AM UTC-5)
+# Executed from the zitadel folder using default PAT settings.
+0 7 1 */3 * cd /path/to/vps-tools/zitadel && ./scripts/rotate_pats.sh >> logs/rotate_$(date +\%Y\%m\%d).log 2>&1
+
+# 5. Log Cleanup (Daily at 8:00 AM UTC / 3:00 AM UTC-5)
+# Note: Cleanup is crucial when using date-based filenames to avoid disk fill-up.
+0 8 * * * cd /path/to/vps-tools/cron && export LOG_RETENTION_DAYS=30 && ./cleanup_logs.sh >> logs/cleanup.log 2>&1
+
+
+
+

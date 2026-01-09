@@ -1,0 +1,14 @@
+# Logrotate configuration for vps-tools
+# To use: 
+# 1. Copy this file to /etc/logrotate.d/vps-tools (requires root)
+# 2. Adjust '/path/to/vps-tools' to the real absolute path.
+
+/path/to/vps-tools/*/logs/*.log {
+    daily
+    rotate 14
+    missingok
+    compress
+    delaycompress
+    notifempty
+    copytruncate
+}

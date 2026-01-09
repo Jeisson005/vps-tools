@@ -10,3 +10,7 @@ logs/
 
 # Zitadel
 login-client.pat
+admin.pat
+
+# PAT expiry metadata (do not commit)
+*.pat.expiry
