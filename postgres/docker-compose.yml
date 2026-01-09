@@ -5,6 +5,7 @@ services:
       - .env
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-pgbouncer.sql:/docker-entrypoint-initdb.d/init-pgbouncer.sql:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]

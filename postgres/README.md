@@ -2,33 +2,36 @@
 
 Postgres stack in Docker with PgBouncer, intended to be easy to run in a VPS.
 
+## Getting Started (First Install)
+
+Follow these steps to get the database running for the first time:
+
+1. **Configure Environment**:
+   ```bash
+   cp .env.example .env
+   # Ensure pgbouncer/userlist.txt exists as a file to prevent Docker creating it as a folder
+   mkdir -p pgbouncer && touch pgbouncer/userlist.txt
+   ```
+   Edit `.env` and set your `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+
+2. **Start the Stack**:
+   ```bash
+   docker compose up -d
+   ```
+   This will initialize the database and create the `pgbouncer.get_auth` secure function.
+
+3. **Synchronize PgBouncer Auth**:
+   Since PgBouncer requires a valid SCRAM hash to perform user lookups, run the sync script:
+   ```bash
+   bash sync_pgbouncer_auth.sh
+   ```
+   This script extracts your user's hash and updates `pgbouncer/userlist.txt`.
+
+4. **Verify Connectivity**:
+   - Direct: `docker compose exec db psql -U your_user -d your_db`
+   - Via PgBouncer: `psql -h 127.0.0.1 -p 5432 -U your_user -d your_db`
+
 ## Available Commands
-
-### Setup
-- `cp .env.example .env`
-  Configure `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`.
-
-### Stack
-- `docker compose up -d --build`
-  Starts Postgres (`db`) + PgBouncer (`pgbouncer`).
-- `docker compose down`
-  Stops containers.
-- `docker compose down -v`
-  Stops and deletes named volumes (DESTRUCTIVE).
-
-### Logs
-- `docker compose logs -f --tail=200 db`
-- `docker compose logs -f --tail=200 pgbouncer`
-
-### Connectivity checks
-- Direct to Postgres:
-  - `docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c '\conninfo'`
-- Through PgBouncer:
-  - `docker compose exec -T db bash -lc "PGPASSWORD=$POSTGRES_PASSWORD psql -h pgbouncer -U $POSTGRES_USER -d $POSTGRES_DB -c '\\conninfo'"`
-
-### PgBouncer auth sync (SCRAM)
-- `bash sync_pgbouncer_auth.sh`
-  Extracts the SCRAM verifier for `$POSTGRES_USER` and writes it to `pgbouncer/userlist.txt`.
 
 ### Backups (one dump per database)
 
