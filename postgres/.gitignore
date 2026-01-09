@@ -1,0 +1,18 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs
+logs/
+*.log
+
+# Backups / dumps
+backups/
+*.sql
+*.dump
+*.bak
+
+# Postgres / PgBouncer
+pgbouncer/userlist.txt

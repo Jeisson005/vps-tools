@@ -1,0 +1,64 @@
+services:
+  core:
+    restart: unless-stopped
+    image: ghcr.io/zitadel/zitadel:v4.9.0
+    command: start-from-init --masterkey "${MASTERKEY}"
+    env_file:
+      - .env.core
+
+    healthcheck:
+      test:
+        - CMD
+        - /app/zitadel
+        - ready
+      interval: 10s
+      timeout: 60s
+      retries: 5
+      start_period: 10s
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - .:/current-dir:delegated
+    ports:
+      - 8080:8080
+      - 3000:3000
+    networks:
+      - zitadel
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          cpus: "${CORE_LIMIT_CPUS:-0.2}"
+          memory: "${CORE_LIMIT_MEMORY:-256M}"
+        reservations:
+          cpus: "${CORE_RESERVATION_CPUS:-0.1}"
+          memory: "${CORE_RESERVATION_MEMORY:-128M}"
+
+  login:
+    restart: unless-stopped
+    image: ghcr.io/zitadel/zitadel-login:v4.9.0
+    # If you can't use the network_mode service:core, you can pass the environment variables ZITADEL_API_URL=http://core:8080 and CUSTOM_REQUEST_HEADERS=Host:localhost instead.
+    env_file:
+      - .env.login
+    network_mode: service:core
+    user: "${UID:-1000}:${GID:-1000}"
+    deploy:
+      resources:
+        limits:
+          cpus: "${LOGIN_LIMIT_CPUS:-0.2}"
+          memory: "${LOGIN_LIMIT_MEMORY:-200M}"
+        reservations:
+          cpus: "${LOGIN_RESERVATION_CPUS:-0.1}"
+          memory: "${LOGIN_RESERVATION_MEMORY:-64M}"
+    volumes:
+      - .:/current-dir:ro
+    depends_on:
+      core:
+        condition: service_healthy
+        restart: false
+
+networks:
+  zitadel:
+
+volumes:
+  data:

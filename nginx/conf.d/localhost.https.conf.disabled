@@ -1,0 +1,73 @@
+# To enable HTTPS: rename this file to .conf (see scripts/enable_https.sh)
+# Requires these files to exist:
+# - ./certbot/conf/live/local.jeisson.top/fullchain.pem
+# - ./certbot/conf/live/local.jeisson.top/privkey.pem
+
+# HTTP -> HTTPS (except for the challenge)
+server {
+  listen 80;
+  server_name localhost;
+
+  access_log /dev/stdout;
+  access_log /var/log/nginx/localhost.access.log;
+  error_log  /dev/stderr warn;
+
+  location ^~ /.well-known/acme-challenge/ {
+    root /var/www/certbot;
+    default_type "text/plain";
+    try_files $uri =404;
+  }
+
+  location / {
+    return 301 https://$host$request_uri;
+  }
+}
+
+# HTTPS reverse proxy
+server {
+  listen 443 ssl http2;
+  server_name localhost;
+
+  access_log /dev/stdout;
+  access_log /var/log/nginx/localhost.access.log;
+  error_log  /dev/stderr warn;
+
+  ssl_certificate     /etc/letsencrypt/live/localhost/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/localhost/privkey.pem;
+
+  # TLS hardening (baseline)
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_session_cache shared:SSL:10m;
+  ssl_session_timeout 10m;
+  ssl_session_tickets off;
+
+  ssl_prefer_server_ciphers off;
+  ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+
+  resolver 127.0.0.11 ipv6=off valid=30s;
+  resolver_timeout 5s;
+  ssl_stapling on;
+  ssl_stapling_verify on;
+
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header X-Frame-Options "SAMEORIGIN" always;
+  add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+  add_header Strict-Transport-Security "max-age=15552000" always;
+
+  location / {
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 60s;
+    proxy_send_timeout 60s;
+
+    proxy_pass http://host.docker.internal:9000;
+  }
+}

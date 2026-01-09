@@ -1,0 +1,27 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs
+logs/*
+!logs/.gitkeep
+*.log
+
+# Python
+**/__pycache__/
+*.py[cod]
+
+# Certbot (generated)
+certbot/conf/*
+certbot/logs/*
+certbot/www/*
+!certbot/conf/.gitkeep
+!certbot/logs/.gitkeep
+!certbot/www/.gitkeep
+
+# Nginx sites: keep only baseline + localhost
+conf.d/*
+!conf.d/00-default.conf
+!conf.d/localhost.*.conf*

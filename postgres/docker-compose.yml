@@ -1,0 +1,88 @@
+services:
+  db:
+    image: "postgres:17-alpine"
+    env_file:
+      - .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS}
+      - -c
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE}
+      - -c
+      - work_mem=${POSTGRES_WORK_MEM}
+      - -c
+      - maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM}
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS}
+      - -c
+      - wal_buffers=${POSTGRES_WAL_BUFFERS}
+      - -c
+      - max_wal_size=${POSTGRES_MAX_WAL_SIZE}
+      - -c
+      - checkpoint_timeout=${POSTGRES_CHECKPOINT_TIMEOUT}
+      - -c
+      - autovacuum_naptime=${POSTGRES_AUTOVACUUM_NAPTIME}
+      - -c
+      - autovacuum_max_workers=${POSTGRES_AUTOVACUUM_MAX_WORKERS}
+      - -c
+      - autovacuum_vacuum_scale_factor=${POSTGRES_AUTOVACUUM_VACUUM_SCALE_FACTOR}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "postgres_db_{{.Name}}"
+    deploy:
+      resources:
+        limits:
+          cpus: ${POSTGRES_CPUS}
+          memory: ${POSTGRES_MEM_LIMIT}
+        reservations:
+          cpus: ${POSTGRES_CPUS_RESERVATION}
+          memory: ${POSTGRES_MEM_RESERVATION}
+
+  pgbouncer:
+    image: "edoburu/pgbouncer:v1.25.1-p0"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    volumes:
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports:
+      - "0.0.0.0:5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "postgres_pgbouncer_{{.Name}}"
+    deploy:
+      resources:
+        limits:
+          cpus: ${PGBOUNCER_CPUS}
+          memory: ${PGBOUNCER_MEM_LIMIT}
+        reservations:
+          cpus: ${PGBOUNCER_CPUS_RESERVATION}
+          memory: ${PGBOUNCER_MEM_RESERVATION}
+
+volumes:
+  pgdata:

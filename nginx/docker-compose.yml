@@ -1,0 +1,64 @@
+services:
+  core:
+    image: nginx:1.28.1-alpine
+    restart: unless-stopped
+    cpus: "${NGINX_CPUS_LIMIT:-0.25}"
+    mem_limit: "${NGINX_MEM_LIMIT:-64M}"
+    ports:
+      - "80:80"
+      - "443:443"
+    user: "${UID:-1000}:${GID:-1000}"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /run
+    stop_signal: SIGQUIT
+    deploy:
+      resources:
+        limits:
+          cpus: "${NGINX_CPUS_LIMIT:-0.25}"
+          memory: "${NGINX_MEM_LIMIT:-64M}"
+        reservations:
+          cpus: "${NGINX_CPUS_RESERVE:-0.1}"
+          memory: "${NGINX_MEM_RESERVE:-32M}"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./conf.d:/etc/nginx/conf.d:ro
+      - ./logs:/var/log/nginx
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "nginx_core_{{.Name}}"
+    # Required on Linux so the container can reach services on the host
+    # via host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  certbot:
+    image: certbot/certbot:v5.2.2
+    # Service intended to be run on-demand:
+    # docker compose run --rm certbot <comando>
+    profiles:
+      - certbot
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/logs:/var/log/letsencrypt
