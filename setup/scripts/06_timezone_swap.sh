@@ -8,7 +8,7 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-TIMEZONE="${TIMEZONE:-UTC}"
+TIMEZONE="${TIMEZONE:-America/Bogota}"
 SWAP_SIZE="${SWAP_SIZE:-4G}"
 SWAPPINESS="${SWAPPINESS:-10}"
 

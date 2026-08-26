@@ -13,7 +13,7 @@ Modular suite to provision, secure, and optimize a brand new Linux VPS (Ubuntu/D
 | **`03_ssh_hardening.sh`** | Hardens SSH configuration (disables password login once keys exist, limits auth tries, prevents root login) with anti-lockout safety checks. |
 | **`04_ufw_firewall.sh`** | Applies a strict firewall policy (`deny incoming`, `allow outgoing`) allowing SSH, HTTP (80), HTTPS (443), and custom ports. |
 | **`05_fail2ban.sh`** | Configures Fail2ban with an active SSH jail to block brute-force attacks. |
-| **`06_timezone_swap.sh`** | Sets system timezone (default: `UTC`) and creates an optimized Swapfile (`4G`, `swappiness=10`) to prevent OOM errors. |
+| **`06_timezone_swap.sh`** | Sets system timezone (default: `America/Bogota`) and creates an optimized Swapfile (`4G`, `swappiness=10`) to prevent OOM errors. |
 | **`07_security_upgrades.sh`**| Configures `unattended-upgrades` to automatically install critical security patches. |
 | **`08_journald_tuning.sh`** | Limits `systemd-journald` size to `500M` and 30 days retention to avoid disk saturation. |
 | **`09_clean_motd.sh`** | Suppresses Contabo/Ubuntu ESM promotional text and sets up a clean, dynamic status dashboard with system metrics. |
