@@ -85,6 +85,8 @@ After=network.target
 [Service]
 Type=simple
 Environment=BASH_MCP_MODE=${BASH_MCP_MODE}
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment=HOME=/root
 ExecStart=$(command -v supergateway) --stdio "${TARGET_CMD}" --outputTransport streamableHttp --port ${MCP_PORT} --host ${MCP_BIND} --logLevel info
 Restart=on-failure
 RestartSec=3
