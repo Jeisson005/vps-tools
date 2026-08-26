@@ -1,23 +1,38 @@
-# KasmVNC Server Configuration
 desktop:
   resolution:
     width: 1920
     height: 1080
   allow_resize: true
+  pixel_depth: 24
 
 network:
+  protocol: http
   interface: 0.0.0.0
   websocket_port: 8444
+  use_ipv4: true
+  use_ipv6: true
   ssl:
     require_ssl: false
 
 logging:
-  level: 100
+  log_writer_name: all
+  log_dest: logfile
+  level: 30
 
 data_loss_prevention:
-  allow_clipboard_down: true
-  allow_clipboard_up: true
-  allow_file_transfer: true
+  clipboard:
+    server_to_client:
+      enabled: true
+    client_to_server:
+      enabled: true
+  keyboard:
+    enabled: true
 
-runtime_configuration:
-  allow_dynamic_configuration: true
+encoding:
+  max_frame_rate: 60
+
+server:
+  http:
+    httpd_directory: /usr/share/kasmvnc/www
+  advanced:
+    kasm_password_file: ${HOME}/.kasmpasswd

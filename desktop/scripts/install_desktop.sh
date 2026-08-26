@@ -110,32 +110,51 @@ desktop:
     width: $(echo "$KASMVNC_RESOLUTION" | cut -d'x' -f1)
     height: $(echo "$KASMVNC_RESOLUTION" | cut -d'x' -f2)
   allow_resize: true
+  pixel_depth: ${KASMVNC_DEPTH}
 
 network:
+  protocol: http
   interface: ${KASMVNC_BIND}
   websocket_port: ${KASMVNC_PORT}
+  use_ipv4: true
+  use_ipv6: true
   ssl:
     require_ssl: false
 
 logging:
-  level: 100
+  log_writer_name: all
+  log_dest: logfile
+  level: 30
 
 data_loss_prevention:
-  allow_clipboard_down: true
-  allow_clipboard_up: true
-  allow_file_transfer: true
+  clipboard:
+    server_to_client:
+      enabled: true
+    client_to_server:
+      enabled: true
+  keyboard:
+    enabled: true
 
-runtime_configuration:
-  allow_dynamic_configuration: true
+encoding:
+  max_frame_rate: 60
+
+server:
+  http:
+    httpd_directory: /usr/share/kasmvnc/www
+  advanced:
+    kasm_password_file: ${USER_HOME}/.kasmpasswd
 YAML
 
 # Configure password if provided
 if [[ -n "$DESKTOP_PASSWORD" ]]; then
   echo "--> Setting KasmVNC credentials for user '$DESKTOP_USER'..."
-  echo -e "${DESKTOP_PASSWORD}\n${DESKTOP_PASSWORD}\n" | kasmvncpasswd -u "$DESKTOP_USER" -o "${USER_HOME}/.vnc/.kasmpasswd" -a "${USER_HOME}/.vnc/.kasmpasswd" 2>/dev/null || \
-  echo -e "${DESKTOP_PASSWORD}\n${DESKTOP_PASSWORD}\n" | kasmvncpasswd -u "$DESKTOP_USER" -w -r 2>/dev/null || true
+  # Write password to ~/.kasmpasswd and ~/.vnc/.kasmpasswd
+  echo -e "${DESKTOP_PASSWORD}\n${DESKTOP_PASSWORD}\n" | kasmvncpasswd -u "$DESKTOP_USER" -o "${USER_HOME}/.kasmpasswd" -a "${USER_HOME}/.kasmpasswd" 2>/dev/null || true
+  cp -f "${USER_HOME}/.kasmpasswd" "${USER_HOME}/.vnc/.kasmpasswd" 2>/dev/null || true
+  chown "${DESKTOP_USER}:${DESKTOP_USER}" "${USER_HOME}/.kasmpasswd" "${USER_HOME}/.vnc/.kasmpasswd" 2>/dev/null || true
+  chmod 600 "${USER_HOME}/.kasmpasswd" "${USER_HOME}/.vnc/.kasmpasswd" 2>/dev/null || true
   
-  # Also sync with system user password if required
+  # Also sync system password
   echo "${DESKTOP_USER}:${DESKTOP_PASSWORD}" | chpasswd
 fi
 
