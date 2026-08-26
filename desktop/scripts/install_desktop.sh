@@ -11,10 +11,24 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+load_env() {
+  local env_file="$1"
+  if [[ -f "$env_file" ]]; then
+    while IFS='=' read -r key value || [[ -n "$key" ]]; do
+      [[ "$key" =~ ^[[:space:]]*# ]] && continue
+      [[ -z "$key" ]] && continue
+      key="$(echo "$key" | tr -d '[:space:]')"
+      # Strip quotes from value
+      value="$(echo "$value" | sed -e "s/^[[:space:]]*['\"]*//" -e "s/['\"]*[[:space:]]*$//")"
+      export "${key}=${value}"
+    done < "$env_file"
+  fi
+}
+
 if [[ -f .env ]]; then
-  set -a; source .env; set +a
+  load_env .env
 elif [[ -f .env.example ]]; then
-  set -a; source .env.example; set +a
+  load_env .env.example
 fi
 
 DESKTOP_USER="${DESKTOP_USER:-jeisson}"
