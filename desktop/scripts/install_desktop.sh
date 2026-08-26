@@ -105,7 +105,6 @@ echo "xfce" > "${USER_HOME}/.vnc/.de-was-selected"
 
 # kasmvnc.yaml configuration
 mkdir -p "${USER_HOME}/.vnc"
-INTERNAL_KASMVNC_PORT=8445
 cat << YAML > "${USER_HOME}/.vnc/kasmvnc.yaml"
 desktop:
   resolution:
@@ -116,8 +115,8 @@ desktop:
 
 network:
   protocol: http
-  interface: 127.0.0.1
-  websocket_port: ${INTERNAL_KASMVNC_PORT}
+  interface: ${KASMVNC_BIND}
+  websocket_port: ${KASMVNC_PORT}
   use_ipv4: true
   use_ipv6: true
   ssl:
@@ -174,8 +173,8 @@ fi
 
 chown -R "${DESKTOP_USER}:${DESKTOP_USER}" "${USER_HOME}/.vnc"
 
-# 5. Configure Systemd Units (Socket Activation for 0 RAM Idle)
-echo "--> [5/6] Registering KasmVNC on-demand systemd units..."
+# 5. Configure Systemd Service for KasmVNC
+echo "--> [5/6] Registering KasmVNC systemd service..."
 cat << UNIT > "/etc/systemd/system/kasmvnc@.service"
 [Unit]
 Description=KasmVNC HTML5 Remote Desktop Server for %i
@@ -190,42 +189,21 @@ PIDFile=/home/%i/.vnc/%H:1.pid
 ExecStartPre=-/usr/bin/vncserver -kill :1
 ExecStart=/usr/bin/vncserver :1 -autokill
 ExecStop=/usr/bin/vncserver -kill :1
-TimeoutStopSec=10
+Restart=always
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 
-SOCKET_PROXY_BIN="$(which /lib/systemd/systemd-socket-proxyd 2>/dev/null || which /usr/lib/systemd/systemd-socket-proxyd 2>/dev/null || echo "/lib/systemd/systemd-socket-proxyd")"
-
-cat << PROXY > "/etc/systemd/system/kasmvnc-proxy.service"
-[Unit]
-Description=KasmVNC On-Demand Socket Proxy
-Requires=kasmvnc@${DESKTOP_USER}.service
-After=kasmvnc@${DESKTOP_USER}.service
-
-[Service]
-ExecStart=${SOCKET_PROXY_BIN} 127.0.0.1:${INTERNAL_KASMVNC_PORT}
-PROXY
-
-cat << SOCKET > "/etc/systemd/system/kasmvnc.socket"
-[Unit]
-Description=KasmVNC On-Demand Activation Socket
-
-[Socket]
-ListenStream=${KASMVNC_BIND}:${KASMVNC_PORT}
-Service=kasmvnc-proxy.service
-NoDelay=true
-
-[Install]
-WantedBy=sockets.target
-SOCKET
+# Clean up socket proxy if existed
+systemctl stop kasmvnc.socket kasmvnc-proxy.service 2>/dev/null || true
+systemctl disable kasmvnc.socket kasmvnc-proxy.service 2>/dev/null || true
+rm -f /etc/systemd/system/kasmvnc.socket /etc/systemd/system/kasmvnc-proxy.service
 
 systemctl daemon-reload
-# Disable continuous running service and enable on-demand socket
-systemctl stop "kasmvnc@${DESKTOP_USER}" 2>/dev/null || true
-systemctl disable "kasmvnc@${DESKTOP_USER}" 2>/dev/null || true
-systemctl enable --now kasmvnc.socket
+systemctl enable --now "kasmvnc@${DESKTOP_USER}"
+sleep 2
 
 # 6. Firewall Configuration (UFW)
 echo "--> [6/6] Configuring Firewall rules..."
@@ -239,7 +217,7 @@ fi
 
 echo ""
 echo "========================================================================"
-echo "  REMOTE DESKTOP (XFCE4 + KASMVNC ON-DEMAND) INSTALLED SUCCESSFULLY"
-echo "  Socket Status (0 MB RAM at idle):"
-systemctl status kasmvnc.socket --no-pager || true
+echo "  REMOTE DESKTOP (XFCE4 + KASMVNC + XRDP) INSTALLED SUCCESSFULLY"
+echo "  KasmVNC Status:"
+systemctl status "kasmvnc@${DESKTOP_USER}" --no-pager || true
 echo "========================================================================"

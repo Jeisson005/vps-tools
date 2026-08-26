@@ -11,7 +11,8 @@ PIDFile=/home/%i/.vnc/%%H:1.pid
 ExecStartPre=-/usr/bin/vncserver -kill :1
 ExecStart=/usr/bin/vncserver :1 -autokill
 ExecStop=/usr/bin/vncserver -kill :1
-TimeoutStopSec=10
+Restart=always
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
