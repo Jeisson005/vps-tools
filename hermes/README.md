@@ -1,41 +1,47 @@
 # Hermes Agent (Nous Research)
 
-Open-source autonomous AI agent by Nous Research designed for terminal-native workflows with persistent memory, tool calling, and multi-model support.
+Autonomous AI agent environment with both an interactive Terminal CLI and a Web Dashboard (React + Vite + FastAPI) developed by Nous Research.
 
----
+## Requirements
+- Ubuntu 22.04+ / Debian 12+
+- Python 3.11+ (managed via `uv`)
+- Node.js 20+
+- `ripgrep`, `ffmpeg`, `build-essential`
 
-## 1. Quick Installation
+## Structure
+- `templates/hermes-dashboard.service` — Systemd service unit template for the Web Dashboard.
+- `scripts/install.sh` — Native installation, build, and Systemd registration script.
+- `scripts/start.sh` — Start Web Dashboard service.
+- `scripts/stop.sh` — Stop Web Dashboard service.
+- `scripts/status.sh` — Check status of CLI and Web Dashboard.
+- `.env.example` — Configuration template.
 
-1. Copy `.env.example` to `.env` (optional customizations):
-```bash
-cd vps-tools/hermes
-cp .env.example .env
-```
+## Installation
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Edit `.env` with your preferred user, credentials, and ports.
+3. Run the installer with sudo:
+   ```bash
+   sudo ./scripts/install.sh
+   ```
 
-2. Run automated installer:
-```bash
-sudo bash scripts/install.sh
-```
+## Usage
+### Terminal CLI
+- Run setup wizard to configure API keys:
+  ```bash
+  hermes setup
+  ```
+- Start an interactive chat session:
+  ```bash
+  hermes chat
+  ```
+- Check system diagnostics:
+  ```bash
+  hermes doctor
+  ```
 
----
-
-## 2. Usage & Configuration
-
-```bash
-# Run interactive setup wizard (connect API keys & models)
-hermes setup
-
-# Start interactive agent session in terminal
-hermes chat
-
-# Check agent status / diagnostics
-hermes doctor
-```
-
----
-
-## 3. Status Verification
-
-```bash
-bash scripts/status.sh
-```
+### Web Dashboard
+- Accessible by default on port `9119` (or reverse proxied via Nginx at `https://agent.yourdomain.top/`).
+- Includes chat UI, sessions manager, models selector, skills manager, and environment configurations.

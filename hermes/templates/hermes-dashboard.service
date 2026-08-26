@@ -1,0 +1,16 @@
+[Unit]
+Description=Hermes Agent Web Dashboard (Nous Research)
+After=network.target
+
+[Service]
+Type=simple
+User={{HERMES_USER}}
+Group={{HERMES_USER}}
+WorkingDirectory={{HERMES_HOME}}/.hermes/hermes-agent
+Environment=PATH={{HERMES_HOME}}/.hermes/hermes-agent/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart={{HERMES_HOME}}/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main dashboard --port {{HERMES_PORT}} --host {{HERMES_HOST}} --no-open --skip-build
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
