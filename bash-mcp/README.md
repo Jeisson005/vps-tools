@@ -98,7 +98,70 @@ To expose the MCP endpoint securely over the internet:
 
 ---
 
-## 4. Security Recommendations
+### Method 4: Google Gemini / Connected Apps
+Gemini needs schema-sanitized tools and accepts the key in the URL. Install the
+proxy (see section 4) and use:
+
+`https://mcp.yourdomain.com/bash?key=your_secret_api_token_here`
+
+---
+
+## 4. Google Gemini / Connected Apps Compatibility
+
+Google's Gemini connector ("Configura una app conectada personalizada") completes the
+MCP handshake successfully but then **discards the whole tool list** if any tool schema
+contains JSON Schema constructs its strict parser does not model. `@nickw8/bash-mcp`
+publishes draft-07 schemas that trip this on every tool:
+
+| Construct | Where | Why it fails |
+| :--- | :--- | :--- |
+| `"$schema": "…draft-07/schema#"` | all 60 tools | Not a field of Gemini's `Schema` type |
+| `"additionalProperties": false` | all 60 tools | Not a field of Gemini's `Schema` type |
+| `anyOf: [string, array<string>]` | 9 tools | Mixed-type unions are unsupported |
+
+The symptom is misleading: TLS, auth and the handshake all work, the server returns a
+valid 93 KB `tools/list`, and the UI still reports *"Tuvimos problemas para conectarnos
+a este servidor."*
+
+### The sanitizing proxy
+
+`gemini_proxy.py` sits between Nginx and supergateway and rewrites `tools/list`
+responses into the subset Gemini accepts. Every other MCP method streams through
+untouched.
+
+```bash
+cd vps-tools/bash-mcp
+sudo bash scripts/install_gemini_proxy.sh   # systemd: bash-mcp-gemini-proxy
+bash scripts/test_gemini_proxy.sh           # audits the live schema output
+```
+
+What it does:
+- strips `$schema`, `additionalProperties` and other unsupported keywords
+- collapses `anyOf` / `oneOf` unions to their most expressive branch (arrays win)
+- guarantees every schema has an explicit `type` and `properties`
+- drops `outputSchema` (Gemini ignores it) — payload drops from 93 KB to 60 KB
+- answers clients that send `Accept: application/json` alone, which the raw MCP
+  transport rejects with `406 Not Acceptable`
+
+Property names are never mistaken for keywords — a tool with a property literally
+named `format` or `pattern` is preserved intact.
+
+### Endpoint layout
+
+| Route | Upstream | Use for |
+| :--- | :--- | :--- |
+| `/bash` | proxy `:8002` | Gemini, connected apps, strict clients |
+| `/bash/` | supergateway `:8001` | Claude, Cursor — full-fidelity schemas |
+
+> [!IMPORTANT]
+> Do **not** serve `/.well-known/oauth-protected-resource` unless real OAuth is in
+> use. Returning `200` with an empty `authorization_servers` array tells clients the
+> resource is OAuth-protected while offering no way to authorize it. It must `404`
+> so clients fall back to the API-key transport.
+
+---
+
+## 5. Security Recommendations
 
 > [!WARNING]
 > Running `bash-mcp` with `BASH_MCP_MODE=off` allows arbitrary command execution as root.

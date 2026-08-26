@@ -69,7 +69,7 @@ chmod 600 "$KEY_FILE"
 echo "--> API key saved to $KEY_FILE"
 
 # Prepare API Key validation snippet
-APIKEY_SNIPPET="  # API Key Authentication\n  set \$auth_apikey_ok 0;\n  if (\$http_x_api_key = \"${API_KEY}\") {\n    set \$auth_apikey_ok 1;\n  }\n  if (\$http_authorization = \"Bearer ${API_KEY}\") {\n    set \$auth_apikey_ok 1;\n  }\n  if (\$arg_key = \"${API_KEY}\") {\n    set \$auth_apikey_ok 1;\n  }\n  if (\$arg_api_key = \"${API_KEY}\") {\n    set \$auth_apikey_ok 1;\n  }\n  if (\$auth_apikey_ok = 0) {\n    add_header Content-Type application/json always;\n    return 401 '{\"error\": \"Unauthorized\", \"message\": \"Valid API Key required in X-API-Key header, Authorization Bearer, or ?key= query parameter\"}\\\\n';\n  }"
+APIKEY_SNIPPET="  # API Key Authentication\n  # default_type (not add_header) sets the error body type; add_header would\n  # emit a duplicate Content-Type next to nginx's default and break strict clients.\n  default_type application/json;\n  set \$auth_apikey_ok 0;\n  if (\$http_x_api_key = \"${API_KEY}\") {\n    set \$auth_apikey_ok 1;\n  }\n  if (\$http_authorization = \"Bearer ${API_KEY}\") {\n    set \$auth_apikey_ok 1;\n  }\n  if (\$arg_key = \"${API_KEY}\") {\n    set \$auth_apikey_ok 1;\n  }\n  if (\$arg_api_key = \"${API_KEY}\") {\n    set \$auth_apikey_ok 1;\n  }\n  if (\$auth_apikey_ok = 0) {\n    return 401 '{\"error\": \"Unauthorized\", \"message\": \"Valid API Key required in X-API-Key header, Authorization Bearer, or ?key= query parameter\"}\\\\n';\n  }"
 
 if [[ -n "$PATH_PREFIX" ]]; then
   sanitized_name="$(echo "$PATH_PREFIX" | tr '/:' '__' | tr -cs 'a-zA-Z0-9._-' '_' | sed 's/^_\+//; s/_\+$//')"
