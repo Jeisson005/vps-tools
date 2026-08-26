@@ -20,10 +20,23 @@ sudo bash scripts/install.sh
 
 ---
 
-## 2. Access & Usage
+## 2. Model Context Protocol (MCP) Servers
+
+The installer automatically installs and configures:
+- **`brave-search`** (`@brave/brave-search-mcp-server`): Real-time web search capabilities for queries and up-to-date documentation.
+- **`playwright`** (`@playwright/mcp`): Browser automation and testing capabilities with headless Chromium.
+
+To verify connected MCP servers:
+```bash
+opencode mcp list
+```
+
+---
+
+## 3. Access & Usage
 
 ### Web Interface
-- **URL**: Accessible via Nginx reverse proxy or port `4096`.
+- **URL**: Accessible via your domain (e.g., `https://opencode.your-domain.com` or `https://chat.your-domain.com`).
 - **Authentication**: Uses HTTP Basic Auth configured in `.env` (`OPENCODE_SERVER_USERNAME` and `OPENCODE_SERVER_PASSWORD`).
 - **Persistence**: Managed by systemd as `opencode-web.service` (auto-starts on boot).
 
@@ -39,7 +52,7 @@ opencode
 
 ---
 
-## 3. Service Management
+## 4. Service Management
 
 ```bash
 # Check status

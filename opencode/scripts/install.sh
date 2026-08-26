@@ -7,7 +7,7 @@ OPENCODE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${OPENCODE_DIR}"
 
 echo "========================================================================"
-echo "  INSTALLING OPENCODE AI (CLI & WEB INTERFACE)"
+echo "  INSTALLING OPENCODE AI (CLI, MCPs & WEB INTERFACE)"
 echo "========================================================================"
 
 # Check root privileges
@@ -34,6 +34,7 @@ load_env_safe() {
         OPENCODE_HOST) OPENCODE_HOST="$val" ;;
         OPENCODE_SERVER_USERNAME) OPENCODE_SERVER_USERNAME="$val" ;;
         OPENCODE_SERVER_PASSWORD) OPENCODE_SERVER_PASSWORD="$val" ;;
+        BRAVE_API_KEY) BRAVE_API_KEY="$val" ;;
         OPENCODE_LOG_LEVEL) OPENCODE_LOG_LEVEL="$val" ;;
       esac
     done < "$env_file"
@@ -47,6 +48,7 @@ OPENCODE_PORT="4096"
 OPENCODE_HOST="0.0.0.0"
 OPENCODE_SERVER_USERNAME="${OPENCODE_USER}"
 OPENCODE_SERVER_PASSWORD=""
+BRAVE_API_KEY=""
 OPENCODE_LOG_LEVEL="INFO"
 
 if [[ -f .env ]]; then
@@ -57,13 +59,19 @@ fi
 
 USER_HOME="$(eval echo ~${OPENCODE_USER})"
 
-# 1. Install prerequisites (curl, ca-certificates)
-echo "--> [1/4] Checking prerequisites..."
+# 1. Install prerequisites (curl, ca-certificates, nodejs, npm)
+echo "--> [1/5] Checking prerequisites..."
 apt-get update -qq
 apt-get install -y -qq curl ca-certificates
 
+if ! command -v node &>/dev/null; then
+  echo "--> Installing Node.js..."
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y -qq nodejs
+fi
+
 # 2. Download and install OpenCode binary natively
-echo "--> [2/4] Downloading and installing OpenCode native binary..."
+echo "--> [2/5] Downloading and installing OpenCode native binary..."
 su - "${OPENCODE_USER}" -c 'curl -fsSL https://opencode.ai/install | bash'
 
 # Locate binary and symlink to /usr/local/bin/opencode
@@ -83,8 +91,21 @@ else
   exit 1
 fi
 
-# 3. Configure Environment File for Service Authentication
-echo "--> [3/4] Configuring OpenCode authentication and environment..."
+# 3. Install MCP Servers (brave-search & playwright)
+echo "--> [3/5] Installing MCP servers (@brave/brave-search-mcp-server & @playwright/mcp)..."
+su - "${OPENCODE_USER}" -c "mkdir -p ~/.config/opencode && cd ~/.config/opencode && npm install --save-dev @brave/brave-search-mcp-server @playwright/mcp 2>&1"
+su - "${OPENCODE_USER}" -c "npx playwright install chromium 2>/dev/null || true"
+
+# Configure opencode.jsonc from template
+OPENCODE_CONF_DIR="${USER_HOME}/.config/opencode"
+sed \
+  -e "s|{{OPENCODE_CONFIG_DIR}}|${OPENCODE_CONF_DIR}|g" \
+  -e "s|{{BRAVE_API_KEY}}|${BRAVE_API_KEY}|g" \
+  "${OPENCODE_DIR}/templates/opencode.jsonc" > "${OPENCODE_CONF_DIR}/opencode.jsonc"
+chown -R "${OPENCODE_USER}:${OPENCODE_USER}" "${OPENCODE_CONF_DIR}"
+
+# 4. Configure Environment File for Service Authentication
+echo "--> [4/5] Configuring OpenCode authentication and environment..."
 ENV_DEFAULT="/etc/default/opencode-web"
 cat << EOF > "${ENV_DEFAULT}"
 OPENCODE_PORT=${OPENCODE_PORT}
@@ -95,8 +116,8 @@ OPENCODE_LOG_LEVEL=${OPENCODE_LOG_LEVEL}
 EOF
 chmod 600 "${ENV_DEFAULT}"
 
-# 4. Configure Systemd Service for OpenCode Web
-echo "--> [4/4] Registering and enabling opencode-web systemd service (auto-starts on reboot)..."
+# 5. Configure Systemd Service for OpenCode Web
+echo "--> [5/5] Registering and enabling opencode-web systemd service..."
 SERVICE_FILE="/etc/systemd/system/opencode-web.service"
 sed \
   -e "s|{{OPENCODE_USER}}|${OPENCODE_USER}|g" \
@@ -119,8 +140,10 @@ fi
 
 echo ""
 echo "========================================================================"
-echo "  OPENCODE AI & WEB INSTALLED SUCCESSFULLY"
+echo "  OPENCODE AI & MCPs INSTALLED SUCCESSFULLY"
 echo "  CLI binary: /usr/local/bin/opencode (opencode --version)"
+echo "  MCP Status:"
+su - "${OPENCODE_USER}" -c "opencode mcp list" || true
 echo "  Web status:"
 systemctl status opencode-web.service --no-pager || true
 echo "========================================================================"

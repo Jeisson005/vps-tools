@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [],
+  "mcp": {
+    "brave-search": {
+      "type": "local",
+      "command": [
+        "node",
+        "{{OPENCODE_CONFIG_DIR}}/node_modules/@brave/brave-search-mcp-server/dist/index.js"
+      ],
+      "environment": {
+        "BRAVE_API_KEY": "{{BRAVE_API_KEY}}"
+      }
+    },
+    "playwright": {
+      "type": "local",
+      "command": [
+        "node",
+        "{{OPENCODE_CONFIG_DIR}}/node_modules/@playwright/mcp/cli.js"
+      ]
+    }
+  }
+}
