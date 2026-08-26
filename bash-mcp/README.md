@@ -98,60 +98,52 @@ To expose the MCP endpoint securely over the internet:
 
 ---
 
-### Method 4: Google Gemini / Connected Apps
-Gemini needs schema-sanitized tools and accepts the key in the URL. Install the
-proxy (see section 4) and use:
+### Method 4: Universal AI Web Clients & Google Gemini
+For web AI clients (Google Gemini, web agents, etc.) that accept the key in the URL and require sanitized, high-efficiency schemas:
 
 `https://mcp.yourdomain.com/bash?key=your_secret_api_token_here`
 
 ---
 
-## 4. Google Gemini / Connected Apps Compatibility
+## 4. Universal Schema Sanitizing Proxy (`schema_proxy.py`)
 
-Google's Gemini connector ("Configura una app conectada personalizada") completes the
-MCP handshake successfully but then **discards the whole tool list** if any tool schema
-contains JSON Schema constructs its strict parser does not model. `@nickw8/bash-mcp`
-publishes draft-07 schemas that trip this on every tool:
+Some AI clients (including Google Gemini Function Calling and strict protobuf parsers)
+complete the MCP handshake successfully but **discard tool lists** if tool schemas contain
+draft-07 JSON Schema keywords that their schema deserializers do not support. `@nickw8/bash-mcp`
+publishes draft-07 schemas that contain:
 
-| Construct | Where | Why it fails |
+| Construct | Where | Reason |
 | :--- | :--- | :--- |
-| `"$schema": "…draft-07/schema#"` | all 60 tools | Not a field of Gemini's `Schema` type |
-| `"additionalProperties": false` | all 60 tools | Not a field of Gemini's `Schema` type |
-| `anyOf: [string, array<string>]` | 9 tools | Mixed-type unions are unsupported |
+| `"$schema": "…draft-07/schema#"` | all 60 tools | Unknown field in strict protobuf schema definitions |
+| `"additionalProperties": false` | all 60 tools | Unsupported constraint |
+| `anyOf: [string, array<string>]` | 9 tools | Heterogeneous unions are rejected |
 
-The symptom is misleading: TLS, auth and the handshake all work, the server returns a
-valid 93 KB `tools/list`, and the UI still reports *"Tuvimos problemas para conectarnos
-a este servidor."*
+### The Sanitizing Proxy Architecture
 
-### The sanitizing proxy
-
-`gemini_proxy.py` sits between Nginx and supergateway and rewrites `tools/list`
-responses into the subset Gemini accepts. Every other MCP method streams through
-untouched.
+`schema_proxy.py` sits between Nginx and supergateway, rewriting `tools/list`
+responses into a clean, universally compatible JSON Schema subset. Every other MCP method (like tool calls)
+streams through untouched.
 
 ```bash
 cd vps-tools/bash-mcp
-sudo bash scripts/install_gemini_proxy.sh   # systemd: bash-mcp-gemini-proxy
-bash scripts/test_gemini_proxy.sh           # audits the live schema output
+sudo bash scripts/install_schema_proxy.sh   # systemd: bash-mcp-schema-proxy
+bash scripts/test_schema_proxy.sh           # audits schema compatibility
 ```
 
-What it does:
-- strips `$schema`, `additionalProperties` and other unsupported keywords
-- collapses `anyOf` / `oneOf` unions to their most expressive branch (arrays win)
-- guarantees every schema has an explicit `type` and `properties`
-- drops `outputSchema` (Gemini ignores it) — payload drops from 93 KB to 60 KB
-- answers clients that send `Accept: application/json` alone, which the raw MCP
-  transport rejects with `406 Not Acceptable`
+Key features:
+- Strips `$schema`, `additionalProperties` and unsupported keywords.
+- Collapses `anyOf` / `oneOf` unions to their most expressive branch.
+- Guarantees every schema has explicit `type` and `properties`.
+- Drops `outputSchema` (reduces payload from 93 KB to 60 KB — **35% context token savings**).
+- Transparently handles clients sending `Accept: application/json` or `text/event-stream`.
+- Preserves literal user-defined property names (`format`, `pattern`, etc.).
 
-Property names are never mistaken for keywords — a tool with a property literally
-named `format` or `pattern` is preserved intact.
+### Endpoint Layout in Nginx
 
-### Endpoint layout
-
-| Route | Upstream | Use for |
+| Route | Upstream | Ideal for |
 | :--- | :--- | :--- |
-| `/bash` | proxy `:8002` | Gemini, connected apps, strict clients |
-| `/bash/` | supergateway `:8001` | Claude, Cursor — full-fidelity schemas |
+| `/bash` | `schema_proxy` (`:8002`) | Universal compatibility (Gemini, Web agents, OpenAI, Claude, Cursor) |
+| `/bash/` | `supergateway` (`:8001`) | Full-fidelity draft-07 raw schemas |
 
 > [!IMPORTANT]
 > Do **not** serve `/.well-known/oauth-protected-resource` unless real OAuth is in

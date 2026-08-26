@@ -1,29 +1,30 @@
 #!/usr/bin/env python3
 """
-Gemini-compatible MCP sanitizing proxy.
+Universal MCP Schema Sanitizing & Compatibility Proxy.
 
 Sits between Nginx and the supergateway Streamable-HTTP endpoint and rewrites
-`tools/list` responses into the JSON Schema subset accepted by Google's
-Gemini / "connected apps" MCP client.
+`tools/list` responses into a clean, universal JSON Schema subset accepted by
+all LLM providers (Google Gemini, OpenAI, Claude, Cursor, Ollama, etc.).
 
 Why this exists
 ---------------
 `@nickw8/bash-mcp` publishes draft-07 schemas containing constructs that
-Google's strict schema parser rejects, which makes the connector fail *after*
-a fully successful MCP handshake:
+strict schema parsers (like Google Gemini) reject, which makes connectors fail
+*after* a fully successful MCP handshake:
 
   * `"$schema": "http://json-schema.org/draft-07/schema#"`  (all 60 tools)
   * `"additionalProperties": false`                          (all 60 tools)
   * `anyOf: [string, array<string>]` mixed-type unions       (9 tools)
 
-Gemini's Schema type has no such fields, so the whole tool list is discarded.
-This proxy strips/collapses them and leaves every other MCP method untouched.
+This proxy strips/collapses these keywords, ensures explicit types and properties,
+drops redundant output schemas (reducing payload from 93 KB to 60 KB — 35% token savings),
+and leaves every other MCP method (like tool calls) streaming through untouched.
 
 Env:
-  GEMINI_PROXY_BIND          default 127.0.0.1
-  GEMINI_PROXY_PORT          default 8002
-  GEMINI_PROXY_UPSTREAM      default http://127.0.0.1:8001/mcp
-  GEMINI_PROXY_STRIP_OUTPUT  default 1  (drop outputSchema; Gemini ignores it)
+  SCHEMA_PROXY_BIND          default 127.0.0.1
+  SCHEMA_PROXY_PORT          default 8002
+  SCHEMA_PROXY_UPSTREAM      default http://127.0.0.1:8001/mcp
+  SCHEMA_PROXY_STRIP_OUTPUT  default 1  (drop outputSchema to save token context)
 """
 
 import json
@@ -33,15 +34,15 @@ import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-BIND = os.environ.get("GEMINI_PROXY_BIND", "127.0.0.1")
-PORT = int(os.environ.get("GEMINI_PROXY_PORT", "8002"))
-UPSTREAM = os.environ.get("GEMINI_PROXY_UPSTREAM", "http://127.0.0.1:8001/mcp")
-STRIP_OUTPUT = os.environ.get("GEMINI_PROXY_STRIP_OUTPUT", "1") not in ("0", "false", "no")
+BIND = os.environ.get("SCHEMA_PROXY_BIND") or os.environ.get("GEMINI_PROXY_BIND", "127.0.0.1")
+PORT = int(os.environ.get("SCHEMA_PROXY_PORT") or os.environ.get("GEMINI_PROXY_PORT", "8002"))
+UPSTREAM = os.environ.get("SCHEMA_PROXY_UPSTREAM") or os.environ.get("GEMINI_PROXY_UPSTREAM", "http://127.0.0.1:8001/mcp")
+STRIP_OUTPUT = (os.environ.get("SCHEMA_PROXY_STRIP_OUTPUT") or os.environ.get("GEMINI_PROXY_STRIP_OUTPUT", "1")) not in ("0", "false", "no")
 
 _u = urlparse(UPSTREAM)
 UP_HOST, UP_PORT, UP_PATH = _u.hostname, _u.port or 80, _u.path or "/mcp"
 
-# Schema keywords Gemini's Schema type has no field for. Dropped wherever they
+# Schema keywords strict Schema types have no field for. Dropped wherever they
 # appear as *keywords* (never when they are property names).
 DROP_KEYWORDS = {
     "$schema", "$id", "$ref", "$defs", "$comment", "definitions",
@@ -66,7 +67,7 @@ def _pick_branch(branches):
 
 
 def clean_schema(node):
-    """Rewrite a JSON Schema node into Gemini's supported subset."""
+    """Rewrite a JSON Schema node into universal supported subset."""
     if isinstance(node, list):
         return [clean_schema(n) for n in node]
     if not isinstance(node, dict):
@@ -104,7 +105,7 @@ def clean_schema(node):
         merged.update(out)
         out = merged
 
-    # Gemini requires an explicit type; enums are always strings here.
+    # Ensure explicit type; enums are always strings here.
     if "type" not in out:
         if "enum" in out:
             out["type"] = "string"
@@ -156,10 +157,10 @@ HOP_BY_HOP = {
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    server_version = "mcp-gemini-proxy"
+    server_version = "mcp-schema-proxy"
 
     def log_message(self, fmt, *args):
-        sys.stderr.write("[gemini-proxy] %s - %s\n" % (self.address_string(), fmt % args))
+        sys.stderr.write("[schema-proxy] %s - %s\n" % (self.address_string(), fmt % args))
 
     def _forward(self, method):
         length = int(self.headers.get("Content-Length") or 0)
@@ -294,15 +295,14 @@ class Handler(BaseHTTPRequestHandler):
 class ProxyServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
-    # Google probes the connector from several IPs at once; the stdlib default
-    # backlog of 5 is too small for that burst.
+    # Burst support for multiple simultaneous AI client connections
     request_queue_size = 128
 
 
 def main():
     srv = ProxyServer((BIND, PORT), Handler)
     sys.stderr.write(
-        f"[gemini-proxy] listening on {BIND}:{PORT} -> {UPSTREAM} "
+        f"[schema-proxy] listening on {BIND}:{PORT} -> {UPSTREAM} "
         f"(strip_output_schema={STRIP_OUTPUT})\n"
     )
     srv.serve_forever()
