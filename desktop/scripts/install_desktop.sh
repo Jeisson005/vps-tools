@@ -151,8 +151,8 @@ server:
   advanced:
     kasm_password_file: ${USER_HOME}/.kasmpasswd
   auto_shutdown:
-    no_user_session_timeout: 300
-    inactive_user_session_timeout: 3600
+    no_user_session_timeout: 86400
+    inactive_user_session_timeout: 86400
 
 command_line:
   prompt: false
