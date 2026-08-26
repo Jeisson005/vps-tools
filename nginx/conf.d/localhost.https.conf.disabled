@@ -1,7 +1,7 @@
 # To enable HTTPS: rename this file to .conf (see scripts/enable_https.sh)
 # Requires these files to exist:
-# - ./certbot/conf/live/local.jeisson.top/fullchain.pem
-# - ./certbot/conf/live/local.jeisson.top/privkey.pem
+# - ./certbot/conf/live/your-domain.com/fullchain.pem
+# - ./certbot/conf/live/your-domain.com/privkey.pem
 
 # HTTP -> HTTPS (except for the challenge)
 server {
