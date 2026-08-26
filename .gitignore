@@ -29,3 +29,5 @@ Thumbs.db
 # Zitadel PATs
 **/*.pat
 **/*.pat.expiry
+
+tmp

@@ -1,0 +1,18 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs
+logs/
+*.log
+!logs/.gitkeep
+
+# Backups / dumps
+backups/
+*.gz
+*.archive
+*.json
+*.bson
+!backups/.gitkeep

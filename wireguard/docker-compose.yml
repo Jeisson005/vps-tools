@@ -1,0 +1,38 @@
+services:
+  wireguard:
+    # Usamos la imagen oficial de linuxserver (lscr.io)
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: wireguard
+    
+    # Capacidades de red necesarias
+    cap_add:
+      - NET_ADMIN  # Para gestionar interfaces de red
+      - SYS_MODULE # Para cargar módulos de kernel (aunque ya lo cargamos en el host)
+      
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Bogota}
+      - SERVERURL=${SERVERURL:-auto}
+      - SERVERPORT=${SERVERPORT:-51820}
+      - PEERS=${PEERS:-3}
+      - PEERDNS=${PEERDNS:-1.1.1.1,1.0.0.1}
+      - INTERNAL_SUBNET=${INTERNAL_SUBNET:-10.13.13.0}
+      
+    volumes:
+      - ./config:/config
+      - /lib/modules:/lib/modules:ro
+      
+    ports:
+      - "${SERVERPORT:-51820}:51820/udp"
+      
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "wireguard_{{.Name}}"

@@ -16,10 +16,22 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # 3. Old Postgres Backups Cleanup (Daily at 6:30 AM UTC / 1:30 AM UTC-5)
 30 6 * * * /path/to/vps-tools/postgres/scripts/cleanup_backups.sh >> /path/to/vps-tools/postgres/logs/cleanup.log 2>&1
 
-# 4. Nginx Certificate Renewal (Daily at 7:00 AM UTC / 2:00 AM UTC-5)
+# 4. Redis Backups (Daily at 5:00 AM UTC / 12:00 AM UTC-5)
+0 5 * * * /path/to/vps-tools/redis/scripts/backup.sh >> /path/to/vps-tools/redis/logs/backup.log 2>&1
+
+# 5. Old Redis Backups Cleanup (Daily at 5:30 AM UTC / 12:30 AM UTC-5)
+30 5 * * * /path/to/vps-tools/redis/scripts/cleanup_backups.sh >> /path/to/vps-tools/redis/logs/cleanup.log 2>&1
+
+# 6. MongoDB Backups (Daily at 4:30 AM UTC / 11:30 PM UTC-5)
+30 4 * * * /path/to/vps-tools/mongodb/scripts/backup_dbs.sh >> /path/to/vps-tools/mongodb/logs/backup.log 2>&1
+
+# 7. Old MongoDB Backups Cleanup (Daily at 4:45 AM UTC / 11:45 PM UTC-5)
+45 4 * * * /path/to/vps-tools/mongodb/scripts/cleanup_backups.sh >> /path/to/vps-tools/mongodb/logs/cleanup.log 2>&1
+
+# 8. Nginx Certificate Renewal (Daily at 7:00 AM UTC / 2:00 AM UTC-5)
 0 7 * * * /path/to/vps-tools/nginx/scripts/certbot_renew.sh >> /path/to/vps-tools/nginx/logs/renew.log 2>&1
 
-# 5. Log Cleanup (Daily at 8:00 AM UTC / 3:00 AM UTC-5)
+# 9. Log Cleanup (Daily at 8:00 AM UTC / 3:00 AM UTC-5)
 # Keeps logs for 30 days by default.
 0 8 * * * /path/to/vps-tools/cron/cleanup_logs.sh >> /path/to/vps-tools/cron/logs/cleanup.log 2>&1
 
@@ -35,15 +47,21 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # Executed from the postgres folder. Logs are created with current date.
 0 6 * * * cd /path/to/vps-tools/postgres && export RETENTION_DAYS=90 && ./scripts/backup_dbs.sh >> logs/backup_$(date +\%Y\%m\%d).log 2>&1
 
-# 3. Nginx Certificate Renewal (Every 15th of the month at 7:00 AM UTC / 2:00 AM UTC-5)
+# 3. Redis Backups with 30-day retention (Daily at 5:00 AM UTC / 12:00 AM UTC-5)
+0 5 * * * cd /path/to/vps-tools/redis && export RETENTION_DAYS=30 && ./scripts/backup.sh >> logs/backup_$(date +\%Y\%m\%d).log 2>&1
+
+# 4. MongoDB Backups with 30-day retention (Daily at 4:30 AM UTC / 11:30 PM UTC-5)
+30 4 * * * cd /path/to/vps-tools/mongodb && export RETENTION_DAYS=30 && ./scripts/backup_dbs.sh >> logs/backup_$(date +\%Y\%m\%d).log 2>&1
+
+# 5. Nginx Certificate Renewal (Every 15th of the month at 7:00 AM UTC / 2:00 AM UTC-5)
 # Executed from the nginx folder.
 0 7 15 * * cd /path/to/vps-tools/nginx && ./scripts/certbot_renew.sh >> logs/renew_$(date +\%Y\%m\%d).log 2>&1
 
-# 4. Zitadel PAT Rotation (Quarterly - 1st of every 3rd month at 7:00 AM UTC / 2:00 AM UTC-5)
+# 6. Zitadel PAT Rotation (Quarterly - 1st of every 3rd month at 7:00 AM UTC / 2:00 AM UTC-5)
 # Executed from the zitadel folder using default PAT settings.
 0 7 1 */3 * cd /path/to/vps-tools/zitadel && ./scripts/rotate_pats.sh >> logs/rotate_$(date +\%Y\%m\%d).log 2>&1
 
-# 5. Log Cleanup (Daily at 8:00 AM UTC / 3:00 AM UTC-5)
+# 7. Log Cleanup (Daily at 8:00 AM UTC / 3:00 AM UTC-5)
 # Note: Cleanup is crucial when using date-based filenames to avoid disk fill-up.
 0 8 * * * cd /path/to/vps-tools/cron && export LOG_RETENTION_DAYS=30 && ./cleanup_logs.sh >> logs/cleanup.log 2>&1
 

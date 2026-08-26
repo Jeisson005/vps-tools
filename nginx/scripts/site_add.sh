@@ -13,9 +13,23 @@ Usage:
   bash scripts/site_add.sh --domain example.com --path /app --upstream host.docker.internal:9001
   bash scripts/site_add.sh --domain example.com --path /api --name api --upstream-host host.docker.internal --upstream-port 9000
 
-Notes:
-  - If you use --path, the script creates/ensures the domain base server and adds a location file.
-  - If you do NOT use --path, it creates a full vhost (HTTP + HTTPS disabled) that proxies /.
+  # Protect with API Key:
+  bash scripts/site_add.sh --domain example.com --path /mcp --upstream host.docker.internal:8001 --api-key "mysecretkey"
+
+  # Protect with Basic Auth:
+  bash scripts/site_add.sh --domain example.com --path /admin --upstream host.docker.internal:8080 --auth-user admin --auth-pass secret
+
+Options:
+  --domain <domain>         Domain name (default: localhost)
+  --path <path>             Specific URL path (e.g. /app, /mcp)
+  --name <id>               Identifier for location config snippet
+  --upstream <url>          Upstream URL (e.g. http://host.docker.internal:8001)
+  --upstream-host <host>    Upstream host (default: host.docker.internal)
+  --upstream-port <port>    Upstream port
+  --api-key <key>           Protect endpoint with API Key (X-API-Key or Bearer)
+  --auth-user <user>        Protect endpoint with HTTP Basic Auth user
+  --auth-pass <pass>        Password for HTTP Basic Auth user
+  -h, --help                Show this help message
 EOF
 }
 
@@ -25,6 +39,9 @@ NAME=""
 UPSTREAM_HOST="host.docker.internal"
 UPSTREAM_PORT=""
 UPSTREAM=""
+API_KEY=""
+AUTH_USER=""
+AUTH_PASS=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,6 +57,12 @@ while [[ $# -gt 0 ]]; do
       UPSTREAM_HOST="$2"; shift 2;;
     --upstream-port)
       UPSTREAM_PORT="$2"; shift 2;;
+    --api-key)
+      API_KEY="$2"; shift 2;;
+    --auth-user)
+      AUTH_USER="$2"; shift 2;;
+    --auth-pass)
+      AUTH_PASS="$2"; shift 2;;
     -h|--help)
       usage; exit 0;;
     *)
@@ -99,8 +122,6 @@ EOF
 }
 
 ensure_base_servers_for_path_mode() {
-  # Crea archivos base HTTP/HTTPS (disabled) si no existen.
-  # Ambos incluyen locations via glob (solo si hay locations).
   local include_glob="include /etc/nginx/conf.d/${DOMAIN}.locations.*.conf;"
 
   if [[ ! -f "$HTTP_CONF" && ! -f "$HTTP_DISABLED_CONF" ]]; then
@@ -176,11 +197,28 @@ else
   echo "OK: added domain ${DOMAIN} (/) -> ${UPSTREAM}"
 fi
 
-# Validate and reload
+# Apply Authentication if requested
+if [[ -n "$API_KEY" ]]; then
+  echo "--> Applying API Key protection..."
+  if [[ -n "$PATH_PREFIX" ]]; then
+    bash scripts/auth_apikey.sh --domain "$DOMAIN" --path "$PATH_PREFIX" --key "$API_KEY"
+  else
+    bash scripts/auth_apikey.sh --domain "$DOMAIN" --key "$API_KEY"
+  fi
+fi
 
+if [[ -n "$AUTH_USER" ]]; then
+  echo "--> Applying Basic Auth protection..."
+  if [[ -n "$PATH_PREFIX" ]]; then
+    bash scripts/auth_basic.sh --domain "$DOMAIN" --path "$PATH_PREFIX" --user "$AUTH_USER" ${AUTH_PASS:+--password "$AUTH_PASS"}
+  else
+    bash scripts/auth_basic.sh --domain "$DOMAIN" --user "$AUTH_USER" ${AUTH_PASS:+--password "$AUTH_PASS"}
+  fi
+fi
+
+# Validate and reload
 docker compose up -d core
 
 docker compose exec core nginx -t
 
 docker compose exec core nginx -s reload
-

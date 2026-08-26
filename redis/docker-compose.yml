@@ -1,0 +1,46 @@
+services:
+  redis:
+    image: "redis:7-alpine"
+    env_file:
+      - .env
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --maxmemory
+      - ${REDIS_MAXMEMORY}
+      - --maxmemory-policy
+      - ${REDIS_MAXMEMORY_POLICY}
+      - --appendonly
+      - ${REDIS_APPENDONLY}
+      - --save
+      - "60"
+      - "1"
+    ports:
+      - "0.0.0.0:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "redis_{{.Name}}"
+    deploy:
+      resources:
+        limits:
+          cpus: ${REDIS_CPUS}
+          memory: ${REDIS_MEM_LIMIT}
+        reservations:
+          cpus: ${REDIS_CPUS_RESERVATION}
+          memory: ${REDIS_MEM_RESERVATION}
+
+volumes:
+  redisdata:
