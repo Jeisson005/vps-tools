@@ -7,8 +7,6 @@ echo "========================================================================"
 
 if command -v hermes &>/dev/null; then
   echo "[+] hermes CLI is available at $(which hermes)"
-  echo "    Version / Help:"
-  hermes --version 2>/dev/null || echo "    hermes command ready"
 else
   echo "[-] hermes command not found in PATH"
 fi
