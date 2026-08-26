@@ -50,35 +50,34 @@ apt-get install -y -qq git curl ca-certificates ripgrep ffmpeg build-essential
 echo "--> [2/3] Downloading and installing Hermes Agent for user '${HERMES_USER}'..."
 su - "${HERMES_USER}" -c 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash'
 
-# 3. Create global symlink in /usr/local/bin/hermes
-echo "--> [3/3] Setting up global executable symlink..."
-HERMES_BIN=""
-for path in \
-  "${USER_HOME}/.hermes/bin/hermes" \
-  "${USER_HOME}/.local/bin/hermes" \
-  "${USER_HOME}/.hermes/hermes-agent/bin/hermes" \
-  "${USER_HOME}/.hermes/hermes-agent/venv/bin/hermes"; do
-  if [[ -f "$path" ]]; then
-    HERMES_BIN="$path"
-    break
-  fi
-done
-
-if [[ -n "$HERMES_BIN" ]]; then
-  ln -sf "$HERMES_BIN" /usr/local/bin/hermes
-  chmod +x "$HERMES_BIN" /usr/local/bin/hermes
-  echo "--> Hermes agent linked to /usr/local/bin/hermes"
-else
-  # If wrapper needed via uv/python in virtual environment
-  if [[ -d "${USER_HOME}/.hermes/hermes-agent" ]]; then
-    cat << WRAPPER > /usr/local/bin/hermes
+# 3. Create global executable in /usr/local/bin/hermes
+echo "--> [3/3] Setting up global executable wrapper in /usr/local/bin/hermes..."
+cat << 'WRAPPER' > /usr/local/bin/hermes
 #!/usr/bin/env bash
-exec su - ${HERMES_USER} -c "cd ~/.hermes/hermes-agent && uv run hermes \"\$@\""
-WRAPPER
-    chmod +x /usr/local/bin/hermes
-    echo "--> Hermes wrapper created at /usr/local/bin/hermes"
-  fi
+HERMES_DIR="${HOME}/.hermes/hermes-agent"
+if [[ ! -d "$HERMES_DIR" ]]; then
+  # Fallback to system user home if run as root or different user
+  for d in /home/*/.hermes/hermes-agent; do
+    if [[ -d "$d" ]]; then
+      HERMES_DIR="$d"
+      break
+    fi
+  done
 fi
+
+if [[ -x "${HERMES_DIR}/venv/bin/python" ]]; then
+  PYTHON_BIN="${HERMES_DIR}/venv/bin/python"
+elif command -v uv &>/dev/null; then
+  PYTHON_BIN="uv run python"
+else
+  PYTHON_BIN="python3"
+fi
+
+cd "${HERMES_DIR}" 2>/dev/null || true
+exec ${PYTHON_BIN} "${HERMES_DIR}/cli.py" "$@"
+WRAPPER
+chmod +x /usr/local/bin/hermes
+echo "--> Hermes agent wrapper installed at /usr/local/bin/hermes"
 
 echo ""
 echo "========================================================================"
