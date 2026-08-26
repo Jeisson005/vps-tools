@@ -23,10 +23,10 @@ elif [[ -f .env.example ]]; then
 fi
 
 CUSTOM_MOTD_BANNER="${CUSTOM_MOTD_BANNER:-yes}"
-MOTD_AUTHOR="${MOTD_AUTHOR:-Jeisson}"
-MOTD_WELCOME_MSG="${MOTD_WELCOME_MSG:-Welcome to Artic Jeisson server!}"
+MOTD_AUTHOR="${MOTD_AUTHOR:-Admin}"
+MOTD_WELCOME_MSG="${MOTD_WELCOME_MSG:-Welcome to your server!}"
 MOTD_SHOW_METRICS="${MOTD_SHOW_METRICS:-yes}"
-MOTD_BANNER_FILE="${MOTD_BANNER_FILE:-templates/motd_banner.txt}"
+MOTD_BANNER_FILE="${MOTD_BANNER_FILE:-}"
 
 # 1. Clear static Contabo ASCII art and text
 if [[ -f /etc/motd ]]; then
@@ -48,25 +48,33 @@ if [[ -f /etc/default/motd-news ]]; then
   sed -i 's/^ENABLED=.*/ENABLED=0/' /etc/default/motd-news 2>/dev/null || echo "ENABLED=0" >> /etc/default/motd-news
 fi
 
-# 4. Process and install external banner template to /etc/motd_banner.txt
+# 4. Resolve banner source (Local override -> banner.txt -> templates/motd_banner.txt)
+RESOLVED_BANNER_SRC=""
+if [[ -n "$MOTD_BANNER_FILE" ]] && [[ -f "$MOTD_BANNER_FILE" ]]; then
+  RESOLVED_BANNER_SRC="$MOTD_BANNER_FILE"
+elif [[ -f "banner.txt" ]]; then
+  RESOLVED_BANNER_SRC="banner.txt"
+elif [[ -f "custom_banner.txt" ]]; then
+  RESOLVED_BANNER_SRC="custom_banner.txt"
+elif [[ -f "templates/motd_banner.txt" ]]; then
+  RESOLVED_BANNER_SRC="templates/motd_banner.txt"
+fi
+
 INSTALLED_BANNER="/etc/motd_banner.txt"
 
-if [[ -f "$MOTD_BANNER_FILE" ]]; then
-  echo "--> Rendering banner template from '$MOTD_BANNER_FILE' -> $INSTALLED_BANNER..."
+if [[ -n "$RESOLVED_BANNER_SRC" ]]; then
+  echo "--> Rendering banner template from '$RESOLVED_BANNER_SRC' -> $INSTALLED_BANNER..."
   sed -e "s/{{MOTD_AUTHOR}}/$MOTD_AUTHOR/g" \
       -e "s/{{MOTD_WELCOME_MSG}}/$MOTD_WELCOME_MSG/g" \
-      "$MOTD_BANNER_FILE" > "$INSTALLED_BANNER"
+      "$RESOLVED_BANNER_SRC" > "$INSTALLED_BANNER"
 else
-  echo "--> Note: Template '$MOTD_BANNER_FILE' not found. Creating default $INSTALLED_BANNER..."
+  echo "--> Creating fallback default $INSTALLED_BANNER..."
   cat <<EOF > "$INSTALLED_BANNER"
-    /\\      ___   _     _   ___ 
-   /  \\    |  _| | |_  ( ) |  _|
-  /    \\   | |   |  _| | | | |  
- /    / \\  | |   | |_  | | | |_ 
-/____/___\\ |_|   |___| |_| |___|
+========================================================================
                       By $MOTD_AUTHOR
 
 $MOTD_WELCOME_MSG
+========================================================================
 EOF
 fi
 

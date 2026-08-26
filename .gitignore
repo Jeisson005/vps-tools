@@ -1,8 +1,11 @@
-# Environment / secrets
+# Environment / secrets / local overrides
 **/.env
 **/.env.*
 !**/.env.example
 !**/.env.*.example
+**/*.local.*
+**/banner.txt
+**/custom_banner.txt
 
 # Logs
 **/logs/*
