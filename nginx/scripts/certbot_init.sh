@@ -3,13 +3,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [[ -f .env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
+  CERTBOT_EMAIL="${CERTBOT_EMAIL:-$(grep -E '^CERTBOT_EMAIL=' .env 2>/dev/null | cut -d= -f2- | tr -d '\"'\'' ')}"
 fi
 
-: "${CERTBOT_EMAIL:?Missing CERTBOT_EMAIL in .env}"
+: "${CERTBOT_EMAIL:?Missing CERTBOT_EMAIL in .env or environment}"
 
 DOMAIN="${1:-}"
 if [[ -z "${DOMAIN}" ]]; then
@@ -20,8 +17,6 @@ fi
 mkdir -p certbot/www certbot/conf certbot/logs
 
 # Ensure Nginx is up on HTTP to respond to the challenge
-# Note: the challenge is served from the HTTP/HTTPS vhosts that include
-# /.well-known/acme-challenge/ apuntando a /var/www/certbot.
 docker compose up -d core
 
 # Obtain certificate using HTTP-01 (webroot)
