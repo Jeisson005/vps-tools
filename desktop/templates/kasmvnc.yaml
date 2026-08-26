@@ -19,6 +19,11 @@ logging:
   log_dest: logfile
   level: 30
 
+security:
+  brute_force_protection:
+    blacklist_threshold: 0
+    blacklist_timeout: 0
+
 data_loss_prevention:
   clipboard:
     server_to_client:
