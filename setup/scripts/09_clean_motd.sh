@@ -1,17 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$(dirname "$0")/.."
 
-echo "==> [09/11] Cleaning MOTD ads and setting up custom Artic server banner..."
+echo "==> [09/11] Cleaning MOTD ads and configuring custom banner from template..."
 
 if [[ $EUID -ne 0 ]]; then
   echo "Error: This script must be run as root or with sudo." >&2
   exit 1
 fi
 
+# Load .env if present
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+elif [[ -f .env.example ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env.example
+  set +a
+fi
+
 CUSTOM_MOTD_BANNER="${CUSTOM_MOTD_BANNER:-yes}"
 MOTD_AUTHOR="${MOTD_AUTHOR:-Jeisson}"
 MOTD_WELCOME_MSG="${MOTD_WELCOME_MSG:-Welcome to Artic Jeisson server!}"
 MOTD_SHOW_METRICS="${MOTD_SHOW_METRICS:-yes}"
+MOTD_BANNER_FILE="${MOTD_BANNER_FILE:-templates/motd_banner.txt}"
 
 # 1. Clear static Contabo ASCII art and text
 if [[ -f /etc/motd ]]; then
@@ -33,67 +48,91 @@ if [[ -f /etc/default/motd-news ]]; then
   sed -i 's/^ENABLED=.*/ENABLED=0/' /etc/default/motd-news 2>/dev/null || echo "ENABLED=0" >> /etc/default/motd-news
 fi
 
-# 4. Create dynamic dashboard banner with Artic ASCII Art
+# 4. Process and install external banner template to /etc/motd_banner.txt
+INSTALLED_BANNER="/etc/motd_banner.txt"
+
+if [[ -f "$MOTD_BANNER_FILE" ]]; then
+  echo "--> Rendering banner template from '$MOTD_BANNER_FILE' -> $INSTALLED_BANNER..."
+  sed -e "s/{{MOTD_AUTHOR}}/$MOTD_AUTHOR/g" \
+      -e "s/{{MOTD_WELCOME_MSG}}/$MOTD_WELCOME_MSG/g" \
+      "$MOTD_BANNER_FILE" > "$INSTALLED_BANNER"
+else
+  echo "--> Note: Template '$MOTD_BANNER_FILE' not found. Creating default $INSTALLED_BANNER..."
+  cat <<EOF > "$INSTALLED_BANNER"
+    /\\      ___   _     _   ___ 
+   /  \\    |  _| | |_  ( ) |  _|
+  /    \\   | |   |  _| | | | |  
+ /    / \\  | |   | |_  | | | |_ 
+/____/___\\ |_|   |___| |_| |___|
+                      By $MOTD_AUTHOR
+
+$MOTD_WELCOME_MSG
+EOF
+fi
+
+# 5. Create dynamic dashboard script /etc/update-motd.d/99-server-info
 if [[ "$CUSTOM_MOTD_BANNER" == "yes" ]]; then
   mkdir -p /etc/update-motd.d
   BANNER_SCRIPT="/etc/update-motd.d/99-server-info"
 
-  cat <<EOF > "$BANNER_SCRIPT"
+  cat <<'EOF' > "$BANNER_SCRIPT"
 #!/bin/bash
-# Artic Server Status & Welcome Banner
+# Dynamic Artic MOTD Banner & Metrics Dashboard
 
 CYAN="\e[36m"
 GREEN="\e[32m"
-YELLOW="\e[33m"
 BLUE="\e[34m"
-MAGENTA="\e[35m"
 BOLD="\e[1m"
 RESET="\e[0m"
 
+BANNER_FILE="/etc/motd_banner.txt"
+
 echo ""
-echo -e "\${BOLD}\${CYAN}    /\\      ___   _     _   ___ \${RESET}"
-echo -e "\${BOLD}\${CYAN}   /  \\    |  _| | |_  ( ) |  _|\${RESET}"
-echo -e "\${BOLD}\${CYAN}  /    \\   | |   |  _| | | | |  \${RESET}"
-echo -e "\${BOLD}\${CYAN} /    / \\  | |   | |_  | | | |_ \${RESET}"
-echo -e "\${BOLD}\${CYAN}/____/___\\ |_|   |___| |_| |___|\${RESET}"
-echo -e "\${BOLD}\${BLUE}                      By $MOTD_AUTHOR\${RESET}"
-echo ""
-echo -e "\${BOLD}\${GREEN}$MOTD_WELCOME_MSG\${RESET}"
-echo ""
-
-if [[ "$MOTD_SHOW_METRICS" == "yes" ]]; then
-  hostname="\$(hostname)"
-  os_name="\$(grep -oP '(?<=PRETTY_NAME=).+' /etc/os-release 2>/dev/null | tr -d '\"' || uname -sr)"
-  kernel="\$(uname -r)"
-  uptime_str="\$(uptime -p 2>/dev/null | sed 's/up //' || uptime)"
-
-  # System Metrics
-  load_avg="\$(cut -d' ' -f1-3 /proc/loadavg)"
-  cpu_cores="\$(nproc 2>/dev/null || echo 1)"
-  
-  read -r _ total used _ < <(free -m | grep -i mem)
-  mem_pct=\$(( used * 100 / total ))
-  mem_info="\${used}/\${total} MB (\${mem_pct}%)"
-
-  read -r _ d_total d_used _ d_pct _ < <(df -h / | tail -n 1)
-  disk_info="\${d_used}/\${d_total} (\${d_pct})"
-
-  main_ip="\$(ip route get 1.1.1.1 2>/dev/null | awk '{print \$7; exit}' || hostname -I | awk '{print \$1}')"
-
-  echo -e "\${BOLD}\${BLUE}==============================================================================\${RESET}"
-  echo -e "\${BOLD}\${GREEN}  SYSTEM STATUS : \${hostname} (\${os_name})\${RESET}"
-  echo -e "\${BOLD}\${BLUE}==============================================================================\${RESET}"
-  printf "  \${BOLD}%-16s\${RESET} : %s (Kernel: %s)\n" "OS & Kernel" "\$os_name" "\$kernel"
-  printf "  \${BOLD}%-16s\${RESET} : %s\n" "Uptime" "\$uptime_str"
-  printf "  \${BOLD}%-16s\${RESET} : %s (%s Cores)\n" "CPU Load" "\$load_avg" "\$cpu_cores"
-  printf "  \${BOLD}%-16s\${RESET} : %s\n" "Memory Usage" "\$mem_info"
-  printf "  \${BOLD}%-16s\${RESET} : %s\n" "Disk Usage (/)" "\$disk_info"
-  printf "  \${BOLD}%-16s\${RESET} : %s\n" "Server IP" "\$main_ip"
-  echo -e "\${BOLD}\${BLUE}==============================================================================\${RESET}"
-  echo ""
+# Read and colorize the external banner file
+if [[ -f "$BANNER_FILE" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ By[[:space:]]+ ]]; then
+      echo -e "${BOLD}${BLUE}${line}${RESET}"
+    elif [[ "$line" =~ Welcome|server!|Welcome[[:space:]]to ]]; then
+      echo -e "${BOLD}${GREEN}${line}${RESET}"
+    else
+      echo -e "${BOLD}${CYAN}${line}${RESET}"
+    fi
+  done < "$BANNER_FILE"
 fi
+echo ""
+
+# System Metrics Dashboard
+hostname="$(hostname)"
+os_name="$(grep -oP '(?<=PRETTY_NAME=).+' /etc/os-release 2>/dev/null | tr -d '\"' || uname -sr)"
+kernel="$(uname -r)"
+uptime_str="$(uptime -p 2>/dev/null | sed 's/up //' || uptime)"
+
+load_avg="$(cut -d' ' -f1-3 /proc/loadavg)"
+cpu_cores="$(nproc 2>/dev/null || echo 1)"
+
+read -r _ total used _ < <(free -m | grep -i mem)
+mem_pct=$(( used * 100 / total ))
+mem_info="${used}/${total} MB (${mem_pct}%)"
+
+read -r _ d_total d_used _ d_pct _ < <(df -h / | tail -n 1)
+disk_info="${d_used}/${d_total} (${d_pct})"
+
+main_ip="$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')"
+
+echo -e "${BOLD}${BLUE}==============================================================================${RESET}"
+echo -e "${BOLD}${GREEN}  SYSTEM STATUS : ${hostname} (${os_name})${RESET}"
+echo -e "${BOLD}${BLUE}==============================================================================${RESET}"
+printf "  ${BOLD}%-16s${RESET} : %s (Kernel: %s)\n" "OS & Kernel" "$os_name" "$kernel"
+printf "  ${BOLD}%-16s${RESET} : %s\n" "Uptime" "$uptime_str"
+printf "  ${BOLD}%-16s${RESET} : %s (%s Cores)\n" "CPU Load" "$load_avg" "$cpu_cores"
+printf "  ${BOLD}%-16s${RESET} : %s\n" "Memory Usage" "$mem_info"
+printf "  ${BOLD}%-16s${RESET} : %s\n" "Disk Usage (/)" "$disk_info"
+printf "  ${BOLD}%-16s${RESET} : %s\n" "Server IP" "$main_ip"
+echo -e "${BOLD}${BLUE}==============================================================================${RESET}"
+echo ""
 EOF
 
   chmod +x "$BANNER_SCRIPT"
-  echo "--> Artic dynamic MOTD banner created at $BANNER_SCRIPT"
+  echo "--> Dynamic MOTD configured to read from $INSTALLED_BANNER"
 fi
