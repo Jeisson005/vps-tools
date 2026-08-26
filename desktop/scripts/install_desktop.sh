@@ -143,13 +143,17 @@ server:
     httpd_directory: /usr/share/kasmvnc/www
   advanced:
     kasm_password_file: ${USER_HOME}/.kasmpasswd
+
+command_line:
+  prompt: false
 YAML
 
 # Configure password if provided
 if [[ -n "$DESKTOP_PASSWORD" ]]; then
   echo "--> Setting KasmVNC credentials for user '$DESKTOP_USER'..."
-  # Write password to ~/.kasmpasswd and ~/.vnc/.kasmpasswd
-  echo -e "${DESKTOP_PASSWORD}\n${DESKTOP_PASSWORD}\n" | kasmvncpasswd -u "$DESKTOP_USER" -o "${USER_HOME}/.kasmpasswd" -a "${USER_HOME}/.kasmpasswd" 2>/dev/null || true
+  # Write password to ~/.kasmpasswd using -w -o
+  rm -f "${USER_HOME}/.kasmpasswd" "${USER_HOME}/.vnc/.kasmpasswd"
+  echo -e "${DESKTOP_PASSWORD}\n${DESKTOP_PASSWORD}\n" | kasmvncpasswd -u "$DESKTOP_USER" -w -o "${USER_HOME}/.kasmpasswd" 2>/dev/null || true
   cp -f "${USER_HOME}/.kasmpasswd" "${USER_HOME}/.vnc/.kasmpasswd" 2>/dev/null || true
   chown "${DESKTOP_USER}:${DESKTOP_USER}" "${USER_HOME}/.kasmpasswd" "${USER_HOME}/.vnc/.kasmpasswd" 2>/dev/null || true
   chmod 600 "${USER_HOME}/.kasmpasswd" "${USER_HOME}/.vnc/.kasmpasswd" 2>/dev/null || true
