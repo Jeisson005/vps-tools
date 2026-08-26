@@ -1,0 +1,11 @@
+[Unit]
+Description=KasmVNC On-Demand Activation Socket
+PartOf=kasmvnc-proxy.service
+
+[Socket]
+ListenStream=0.0.0.0:8444
+Service=kasmvnc-proxy.service
+NoDelay=true
+
+[Install]
+WantedBy=sockets.target

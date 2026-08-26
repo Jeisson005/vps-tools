@@ -42,7 +42,10 @@ This script:
 2. Downloads and installs **KasmVNC Server** deb package.
 3. Configures XFCE session startup (`~/.vnc/xstartup` and `~/.xsession`).
 4. Sets up KasmVNC password and permissions for `DESKTOP_USER`.
-5. Enables and starts the `kasmvnc@<username>` systemd service.
+5. Configures **Systemd Socket Activation** (`kasmvnc.socket` + `kasmvnc-proxy.service`):
+   - **0 MB RAM at idle**: Systemd listens on port 8444 with negligible kernel overhead.
+   - **Auto-wake on connect**: When you open your browser (`https://vnc.yourdomain.com`), Systemd immediately spins up KasmVNC + XFCE.
+   - **Auto-shutdown**: When you log out or disconnect for >5 minutes, KasmVNC shuts down and releases all RAM.
 6. Configures UFW firewall (allows Docker bridge to access KasmVNC port, blocks public XRDP).
 
 ---

@@ -1,0 +1,7 @@
+[Unit]
+Description=KasmVNC On-Demand Socket Proxy
+Requires=kasmvnc@jeisson.service
+After=kasmvnc@jeisson.service
+
+[Service]
+ExecStart=/lib/systemd/systemd-socket-proxyd 127.0.0.1:8445
