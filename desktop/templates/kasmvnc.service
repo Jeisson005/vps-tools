@@ -7,8 +7,9 @@ Type=forking
 User=%i
 Environment=HOME=/home/%i
 Environment=USER=%i
+PIDFile=/home/%i/.vnc/%%H:1.pid
 ExecStartPre=-/usr/bin/vncserver -kill :1
-ExecStart=/usr/bin/vncserver :1 -websocketPort 8444 -httpPort 8444 -interface 0.0.0.0
+ExecStart=/usr/bin/vncserver :1 -select-de xfce
 ExecStop=/usr/bin/vncserver -kill :1
 Restart=on-failure
 RestartSec=5

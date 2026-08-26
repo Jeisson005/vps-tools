@@ -166,7 +166,7 @@ chown -R "${DESKTOP_USER}:${DESKTOP_USER}" "${USER_HOME}/.vnc"
 
 # 5. Configure Systemd Service for KasmVNC
 echo "--> [5/6] Registering KasmVNC systemd service..."
-cat << UNIT > "/etc/systemd/system/kasmvnc@.service"
+cat << 'UNIT' > "/etc/systemd/system/kasmvnc@.service"
 [Unit]
 Description=KasmVNC HTML5 Remote Desktop Server for %i
 After=network.target
@@ -176,9 +176,10 @@ Type=forking
 User=%i
 Environment=HOME=/home/%i
 Environment=USER=%i
-ExecStartPre=-/usr/bin/vncserver -kill :${KASMVNC_DISPLAY}
-ExecStart=/usr/bin/vncserver :${KASMVNC_DISPLAY} -websocketPort ${KASMVNC_PORT} -httpPort ${KASMVNC_PORT} -interface ${KASMVNC_BIND}
-ExecStop=/usr/bin/vncserver -kill :${KASMVNC_DISPLAY}
+PIDFile=/home/%i/.vnc/%H:1.pid
+ExecStartPre=-/usr/bin/vncserver -kill :1
+ExecStart=/usr/bin/vncserver :1 -select-de xfce
+ExecStop=/usr/bin/vncserver -kill :1
 Restart=on-failure
 RestartSec=5
 
