@@ -1,47 +1,55 @@
-# Hermes Agent (Nous Research)
+# Hermes AI Agent (Nous Research)
 
-Autonomous AI agent environment with both an interactive Terminal CLI and a Web Dashboard (React + Vite + FastAPI) developed by Nous Research.
+Hermes Agent is a powerful, autonomous AI agent framework with Web Dashboard, CLI, and multi-platform messaging capabilities (Telegram, Discord, Slack, WhatsApp).
 
-## Requirements
-- Ubuntu 22.04+ / Debian 12+
-- Python 3.11+ (managed via `uv`)
-- Node.js 20+
-- `ripgrep`, `ffmpeg`, `build-essential`
+---
 
-## Structure
-- `templates/hermes-dashboard.service` — Systemd service unit template for the Web Dashboard.
-- `scripts/install.sh` — Native installation, build, and Systemd registration script.
-- `scripts/start.sh` — Start Web Dashboard service.
-- `scripts/stop.sh` — Stop Web Dashboard service.
-- `scripts/status.sh` — Check status of CLI and Web Dashboard.
-- `.env.example` — Configuration template.
+## 1. Quick Installation
 
-## Installation
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-2. Edit `.env` with your preferred user, credentials, and ports.
-3. Run the installer with sudo:
-   ```bash
-   sudo ./scripts/install.sh
-   ```
+1. Copy `.env.example` to `.env` and set your credentials:
+```bash
+cd vps-tools/hermes
+cp .env.example .env
+nano .env
+```
 
-## Usage
-### Terminal CLI
-- Run setup wizard to configure API keys:
-  ```bash
-  hermes setup
-  ```
-- Start an interactive chat session:
-  ```bash
-  hermes chat
-  ```
-- Check system diagnostics:
-  ```bash
-  hermes doctor
-  ```
+2. Run the automated installer:
+```bash
+sudo bash scripts/install.sh
+```
 
-### Web Dashboard
-- Accessible by default on port `9119` (or reverse proxied via Nginx at `https://agent.yourdomain.top/`).
-- Includes chat UI, sessions manager, models selector, skills manager, and environment configurations.
+---
+
+## 2. Services Architecture
+
+Hermes runs two systemd background services:
+1. **`hermes-dashboard.service`**: Web UI dashboard running on port `9119` (FastAPI + React 19).
+2. **`hermes-gateway.service`**: Messaging gateway listening for Telegram / Discord incoming messages via long polling.
+
+---
+
+## 3. Telegram Integration
+
+1. Get a Bot Token from [@BotFather](https://t.me/BotFather) on Telegram.
+2. In `.env`:
+   - Set `TELEGRAM_BOT_TOKEN=your_token`
+   - Set `TELEGRAM_ALLOWED_USERS=your_telegram_username` (e.g. `jeisson`)
+3. Restart the gateway service:
+```bash
+bash scripts/start.sh
+```
+
+---
+
+## 4. Service Management
+
+```bash
+# Check status of both Dashboard and Gateway
+bash scripts/status.sh
+
+# Start services
+bash scripts/start.sh
+
+# Stop services
+bash scripts/stop.sh
+```

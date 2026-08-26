@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "--> Stopping hermes-dashboard.service..."
-sudo systemctl stop hermes-dashboard.service
-echo "[+] Hermes Web Dashboard stopped."
+echo "--> Stopping Hermes services (dashboard & gateway)..."
+sudo systemctl stop hermes-dashboard.service || true
+sudo systemctl stop hermes-gateway.service || true
+echo "[+] Hermes services stopped."

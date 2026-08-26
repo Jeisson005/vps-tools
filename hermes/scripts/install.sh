@@ -6,7 +6,7 @@ HERMES_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${HERMES_DIR}"
 
 echo "========================================================================"
-echo "  INSTALLING HERMES AGENT (NOUS RESEARCH)"
+echo "  INSTALLING HERMES AGENT & SERVICES (NOUS RESEARCH)"
 echo "========================================================================"
 
 if [[ $EUID -ne 0 ]]; then
@@ -31,6 +31,9 @@ load_env_safe() {
         HERMES_DASHBOARD_HOST) HERMES_DASHBOARD_HOST="$val" ;;
         HERMES_DASHBOARD_USERNAME) HERMES_DASHBOARD_USERNAME="$val" ;;
         HERMES_DASHBOARD_PASSWORD) HERMES_DASHBOARD_PASSWORD="$val" ;;
+        HERMES_GATEWAY_ENABLED) HERMES_GATEWAY_ENABLED="$val" ;;
+        TELEGRAM_BOT_TOKEN) TELEGRAM_BOT_TOKEN="$val" ;;
+        TELEGRAM_ALLOWED_USERS) TELEGRAM_ALLOWED_USERS="$val" ;;
       esac
     done < "$env_file"
   fi
@@ -42,6 +45,9 @@ HERMES_DASHBOARD_PORT="9119"
 HERMES_DASHBOARD_HOST="0.0.0.0"
 HERMES_DASHBOARD_USERNAME="jeisson"
 HERMES_DASHBOARD_PASSWORD=""
+HERMES_GATEWAY_ENABLED="true"
+TELEGRAM_BOT_TOKEN=""
+TELEGRAM_ALLOWED_USERS=""
 
 if [[ -f .env ]]; then
   load_env_safe .env
@@ -94,13 +100,12 @@ if [[ -d "${HERMES_AGENT_PATH}/web" ]]; then
   su - "${HERMES_USER}" -c "cd '${HERMES_AGENT_PATH}/web' && npm run build"
 fi
 
-# 5. Configure Web Dashboard & Systemd Service
-if [[ "${HERMES_DASHBOARD_ENABLED}" == "true" ]]; then
-  echo "--> [5/5] Configuring Hermes Dashboard Systemd service on port ${HERMES_DASHBOARD_PORT}..."
-  
-  # Configure basic_auth in config.yaml if password provided
-  if [[ -n "${HERMES_DASHBOARD_PASSWORD}" ]]; then
-    su - "${HERMES_USER}" -c "cd '${HERMES_AGENT_PATH}' && venv/bin/python - << 'PY'
+# 5. Configure Web Dashboard & Gateway Services
+echo "--> [5/5] Configuring Hermes Dashboard and Gateway Systemd services..."
+
+# Configure basic_auth in config.yaml if password provided
+if [[ -n "${HERMES_DASHBOARD_PASSWORD}" ]]; then
+  su - "${HERMES_USER}" -c "cd '${HERMES_AGENT_PATH}' && venv/bin/python - << 'PY'
 import sys, yaml, os
 sys.path.insert(0, '.')
 try:
@@ -123,9 +128,29 @@ try:
 except Exception as e:
     print(f'[-] Error configuring basic_auth: {e}')
 PY"
-  fi
+fi
 
-  # Generate systemd unit file
+# Configure Telegram env vars if provided
+if [[ -n "${TELEGRAM_BOT_TOKEN}" ]]; then
+  HERMES_ENV="${USER_HOME}/.hermes/.env"
+  touch "${HERMES_ENV}"
+  chmod 600 "${HERMES_ENV}"
+  if ! grep -q "^TELEGRAM_BOT_TOKEN=" "${HERMES_ENV}" 2>/dev/null; then
+    echo "TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}" >> "${HERMES_ENV}"
+  else
+    sed -i "s|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}|" "${HERMES_ENV}"
+  fi
+  if [[ -n "${TELEGRAM_ALLOWED_USERS}" ]]; then
+    if ! grep -q "^TELEGRAM_ALLOWED_USERS=" "${HERMES_ENV}" 2>/dev/null; then
+      echo "TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}" >> "${HERMES_ENV}"
+    else
+      sed -i "s|^TELEGRAM_ALLOWED_USERS=.*|TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}|" "${HERMES_ENV}"
+    fi
+  fi
+fi
+
+# Generate dashboard systemd unit
+if [[ "${HERMES_DASHBOARD_ENABLED}" == "true" ]]; then
   sed -e "s|{{HERMES_USER}}|${HERMES_USER}|g" \
       -e "s|{{HERMES_HOME}}|${USER_HOME}|g" \
       -e "s|{{HERMES_PORT}}|${HERMES_DASHBOARD_PORT}|g" \
@@ -138,9 +163,28 @@ PY"
   echo "[+] hermes-dashboard.service enabled and started"
 fi
 
+# Generate gateway systemd unit
+if [[ "${HERMES_GATEWAY_ENABLED}" == "true" ]]; then
+  sed -e "s|{{HERMES_USER}}|${HERMES_USER}|g" \
+      -e "s|{{HERMES_HOME}}|${USER_HOME}|g" \
+      "${HERMES_DIR}/templates/hermes-gateway.service" > /etc/systemd/system/hermes-gateway.service
+
+  systemctl daemon-reload
+  systemctl enable hermes-gateway.service
+  systemctl restart hermes-gateway.service
+  echo "[+] hermes-gateway.service enabled and started"
+fi
+
+# Firewall configuration if UFW is active
+if command -v ufw &>/dev/null && ufw status | grep -qw "active"; then
+  echo "--> Allowing Docker bridge subnets (172.16.0.0/12) to Hermes Dashboard port ${HERMES_DASHBOARD_PORT}..."
+  ufw allow from 172.16.0.0/12 to any port "${HERMES_DASHBOARD_PORT}" proto tcp comment "Docker to Hermes Dashboard" >/dev/null || true
+fi
+
 echo ""
 echo "========================================================================"
-echo "  HERMES AGENT & DASHBOARD INSTALLED SUCCESSFULLY"
+echo "  HERMES AGENT, DASHBOARD & GATEWAY INSTALLED SUCCESSFULLY"
 echo "  CLI: Run 'hermes setup' or 'hermes chat'"
-echo "  Web: http://${HERMES_DASHBOARD_HOST}:${HERMES_DASHBOARD_PORT}"
+echo "  Web Dashboard: http://${HERMES_DASHBOARD_HOST}:${HERMES_DASHBOARD_PORT}"
+echo "  Gateway Service: Running (Telegram/Discord listener)"
 echo "========================================================================"
