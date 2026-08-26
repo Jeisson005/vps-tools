@@ -97,7 +97,13 @@ WorkingDirectory=/root
 WantedBy=multi-user.target
 EOF
 
-# 5. Enable and start service
+# 5. Configure firewall for internal Docker bridge access if UFW is active
+if command -v ufw &>/dev/null && ufw status | grep -qw "active"; then
+  echo "--> Allowing Docker bridge subnets (172.16.0.0/12) to access port ${MCP_PORT} in UFW..."
+  ufw allow from 172.16.0.0/12 to any port "${MCP_PORT}" proto tcp comment "Docker to Bash-MCP" >/dev/null || true
+fi
+
+# 6. Enable and start service
 echo "--> Reloading systemd and enabling service..."
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}"
