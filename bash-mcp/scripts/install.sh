@@ -27,6 +27,9 @@ MCP_BIND="${MCP_BIND:-127.0.0.1}"
 BASH_MCP_MODE="${BASH_MCP_MODE:-off}"
 SERVICE_USER="${SERVICE_USER:-root}"
 SERVICE_NAME="${SERVICE_NAME:-bash-mcp-http}"
+# Idle session lifetime (ms). Stateful mode reuses one child MCP process per
+# session instead of forking (and leaking) one per HTTP request.
+MCP_SESSION_TIMEOUT="${MCP_SESSION_TIMEOUT:-1800000}"
 
 # 1. Check / Install Node.js and npm
 if ! command -v node &>/dev/null || ! command -v npm &>/dev/null; then
@@ -87,11 +90,18 @@ Type=simple
 Environment=BASH_MCP_MODE=${BASH_MCP_MODE}
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment=HOME=/root
-ExecStart=$(command -v supergateway) --stdio "${TARGET_CMD}" --outputTransport streamableHttp --port ${MCP_PORT} --host ${MCP_BIND} --logLevel info
+ExecStart=$(command -v supergateway) --stdio "${TARGET_CMD}" --outputTransport streamableHttp --port ${MCP_PORT} --host ${MCP_BIND} --stateful --sessionTimeout ${MCP_SESSION_TIMEOUT} --logLevel info
 Restart=on-failure
 RestartSec=3
 User=${SERVICE_USER}
 WorkingDirectory=/root
+
+# Guardrails. Each MCP session is a node child of ~85 MB; a handful is normal.
+# These cap the blast radius if a future transport regression starts leaking
+# child processes again instead of letting it consume the whole box.
+TasksMax=512
+MemoryHigh=768M
+MemoryMax=1G
 
 [Install]
 WantedBy=multi-user.target

@@ -30,6 +30,7 @@ Env:
 import json
 import os
 import sys
+import threading
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -41,6 +42,95 @@ STRIP_OUTPUT = (os.environ.get("SCHEMA_PROXY_STRIP_OUTPUT") or os.environ.get("G
 
 _u = urlparse(UPSTREAM)
 UP_HOST, UP_PORT, UP_PATH = _u.hostname, _u.port or 80, _u.path or "/mcp"
+
+# --- Upstream session pinning -------------------------------------------------
+# supergateway in stateless mode forks a fresh MCP server process for EVERY HTTP
+# request and never reaps it (~84 MB each), so memory grows without bound. Run it
+# with --stateful and one child is reused per session -- but then every request
+# must carry Mcp-Session-Id or it gets a 400, which clients like Gemini never do.
+# So the proxy owns a single long-lived upstream session and injects the header
+# itself; callers still see a plain stateless endpoint.
+SESSION_HEADER = "Mcp-Session-Id"
+
+_session_id = None
+_session_lock = threading.Lock()
+
+_SYNTHETIC_INIT = json.dumps({
+    "jsonrpc": "2.0", "id": "proxy-init", "method": "initialize",
+    "params": {
+        "protocolVersion": "2025-06-18",
+        "capabilities": {},
+        "clientInfo": {"name": "mcp-schema-proxy", "version": "1"},
+    },
+}).encode("utf-8")
+
+_INITIALIZED_NOTE = json.dumps({
+    "jsonrpc": "2.0", "method": "notifications/initialized",
+}).encode("utf-8")
+
+
+def _handshake_headers(body_len):
+    h = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "Host": f"{UP_HOST}:{UP_PORT}",
+    }
+    if body_len:
+        h["Content-Length"] = str(body_len)
+    return h
+
+
+def _open_session():
+    """Handshake upstream; returns a session id, or None if upstream is stateless."""
+    conn = http.client.HTTPConnection(UP_HOST, UP_PORT, timeout=60)
+    try:
+        conn.request("POST", UP_PATH, body=_SYNTHETIC_INIT,
+                     headers=_handshake_headers(len(_SYNTHETIC_INIT)))
+        resp = conn.getresponse()
+        sid = resp.getheader(SESSION_HEADER)
+        resp.read()
+    finally:
+        conn.close()
+
+    if not sid:
+        return None
+
+    # Finish the lifecycle so the server will accept real calls on this session.
+    conn = http.client.HTTPConnection(UP_HOST, UP_PORT, timeout=60)
+    try:
+        headers = _handshake_headers(len(_INITIALIZED_NOTE))
+        headers[SESSION_HEADER] = sid
+        conn.request("POST", UP_PATH, body=_INITIALIZED_NOTE, headers=headers)
+        conn.getresponse().read()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+    sys.stderr.write(f"[schema-proxy] opened upstream session {sid}\n")
+    return sid
+
+
+def _get_session(force_new=False):
+    global _session_id
+    with _session_lock:
+        if force_new:
+            _session_id = None
+        if _session_id is None:
+            _session_id = _open_session()
+        return _session_id
+
+
+def _rpc_method(body):
+    """Best-effort JSON-RPC method name from a request body."""
+    try:
+        msg = json.loads(body)
+    except (ValueError, TypeError):
+        return None
+    if isinstance(msg, list):
+        msg = msg[0] if msg else None
+    return msg.get("method") if isinstance(msg, dict) else None
+
 
 # Schema keywords strict Schema types have no field for. Dropped wherever they
 # appear as *keywords* (never when they are property names).
@@ -180,16 +270,52 @@ class Handler(BaseHTTPRequestHandler):
         headers["Host"] = f"{UP_HOST}:{UP_PORT}"
         if body:
             headers["Content-Length"] = str(len(body))
+        # The proxy is the sole owner of the upstream session.
+        headers.pop(SESSION_HEADER, None)
+        for k in [k for k in headers if k.lower() == SESSION_HEADER.lower()]:
+            headers.pop(k)
 
-        conn = http.client.HTTPConnection(UP_HOST, UP_PORT, timeout=300)
+        rpc_method = _rpc_method(body) if body else None
+        is_init = rpc_method == "initialize"
+
+        conn = None
         try:
-            conn.request(method, UP_PATH, body=body, headers=headers)
-            resp = conn.getresponse()
+            # `initialize` creates the session; everything else rides an existing
+            # one. A stale session (upstream restart, idle timeout) answers 400,
+            # so retry once against a freshly opened session.
+            for attempt in (0, 1):
+                sid = None if is_init else _get_session(force_new=(attempt == 1))
+                if sid:
+                    headers[SESSION_HEADER] = sid
+                else:
+                    headers.pop(SESSION_HEADER, None)
+
+                conn = http.client.HTTPConnection(UP_HOST, UP_PORT, timeout=300)
+                conn.request(method, UP_PATH, body=body, headers=headers)
+                resp = conn.getresponse()
+
+                if resp.status == 400 and sid and attempt == 0:
+                    resp.read()
+                    conn.close()
+                    conn = None
+                    continue
+                break
+
+            # Adopt the session upstream just handed us, and keep it internal so
+            # callers never have to track it.
+            new_sid = resp.getheader(SESSION_HEADER)
+            if new_sid:
+                global _session_id
+                with _session_lock:
+                    _session_id = new_sid
+
             ctype = (resp.getheader("Content-Type") or "").lower()
 
             passthrough = {
                 k: v for k, v in resp.getheaders()
-                if k.lower() not in HOP_BY_HOP and k.lower() != "content-type"
+                if k.lower() not in HOP_BY_HOP
+                and k.lower() != "content-type"
+                and k.lower() != SESSION_HEADER.lower()
             }
 
             if "text/event-stream" in ctype:
@@ -223,7 +349,8 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
 
     def _relay_sse(self, resp, passthrough, wants_sse):
         """Stream SSE events through the sanitizer, event by event."""

@@ -153,6 +153,41 @@ Key features:
 
 ---
 
+### Process leak: why memory grew to 6 GB
+
+`supergateway` in its default **stateless** mode forks a brand-new MCP server
+child (`sh` -> `node`, ~85 MB RSS) for **every HTTP request** and never reaps it.
+Measured on a live server: 190 orphaned children, 1519 tasks, **5.9 GB** resident.
+
+```
+antes: 7 requests -> 7 procesos (permanentes)
+```
+
+The fix is `--stateful --sessionTimeout <ms>`, which reuses one child per
+session. The catch: stateful mode then rejects any request without an
+`Mcp-Session-Id` header with `400`, and clients like Gemini never send one.
+
+So the proxy owns the session. It performs the upstream handshake, caches the
+session id, injects it into every forwarded request, and strips it from
+responses — callers still see a plain stateless endpoint. A stale session
+(idle timeout, upstream restart) returns `400`, which the proxy detects and
+retries once against a freshly opened session, transparently.
+
+```
+despues: 33 requests -> 1 proceso, 94 MB
+```
+
+`install.sh` also sets `TasksMax=512`, `MemoryHigh=768M` and `MemoryMax=1G` on
+the unit, so any future transport regression is capped instead of consuming the
+whole box.
+
+> [!NOTE]
+> With stateful mode on, the raw `/bash/` route requires clients to track
+> `Mcp-Session-Id` — correct MCP behaviour, which Claude and Cursor implement.
+> Only the sanitized `/bash` route is session-free.
+
+---
+
 ## 5. Security Recommendations
 
 > [!WARNING]
