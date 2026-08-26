@@ -19,6 +19,7 @@ Modular suite to provision, secure, and optimize a brand new Linux VPS (Ubuntu/D
 | **`09_clean_motd.sh`** | Suppresses Contabo/Ubuntu ESM promotional text and sets up a clean, dynamic status dashboard with system metrics. |
 | **`10_sysctl_bbr.sh`** | Enables Google BBR TCP congestion control and optimizes kernel file descriptor / connection limits. |
 | **`11_docker_install.sh`** | Installs official Docker Engine and Docker Compose v2 plugin and adds user to the `docker` group. |
+| **`12_passwordless_sudo.sh`** | Configures passwordless sudo for a specified administrative user with syntax validation via `visudo`. |
 
 ---
 

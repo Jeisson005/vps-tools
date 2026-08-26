@@ -101,6 +101,7 @@ mkdir -p "${USER_HOME}/.vnc"
 # xstartup for KasmVNC
 cp templates/xstartup "${USER_HOME}/.vnc/xstartup"
 chmod +x "${USER_HOME}/.vnc/xstartup"
+echo "xfce" > "${USER_HOME}/.vnc/.de-was-selected"
 
 # kasmvnc.yaml configuration
 mkdir -p "${USER_HOME}/.vnc"
@@ -183,10 +184,10 @@ Environment=HOME=/home/%i
 Environment=USER=%i
 PIDFile=/home/%i/.vnc/%H:1.pid
 ExecStartPre=-/usr/bin/vncserver -kill :1
-ExecStart=/usr/bin/vncserver :1 -select-de xfce
+ExecStart=/usr/bin/vncserver :1 -autokill
 ExecStop=/usr/bin/vncserver -kill :1
-Restart=on-failure
-RestartSec=5
+Restart=always
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target

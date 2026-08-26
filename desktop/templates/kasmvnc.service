@@ -9,10 +9,10 @@ Environment=HOME=/home/%i
 Environment=USER=%i
 PIDFile=/home/%i/.vnc/%%H:1.pid
 ExecStartPre=-/usr/bin/vncserver -kill :1
-ExecStart=/usr/bin/vncserver :1 -select-de xfce
+ExecStart=/usr/bin/vncserver :1 -autokill
 ExecStop=/usr/bin/vncserver -kill :1
-Restart=on-failure
-RestartSec=5
+Restart=always
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
