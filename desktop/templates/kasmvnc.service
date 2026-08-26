@@ -1,0 +1,17 @@
+[Unit]
+Description=KasmVNC HTML5 Remote Desktop Server for %i
+After=network.target
+
+[Service]
+Type=forking
+User=%i
+Environment=HOME=/home/%i
+Environment=USER=%i
+ExecStartPre=-/usr/bin/vncserver -kill :1
+ExecStart=/usr/bin/vncserver :1 -websocketPort 8444 -httpPort 8444 -interface 0.0.0.0
+ExecStop=/usr/bin/vncserver -kill :1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

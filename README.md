@@ -4,6 +4,7 @@ Project to configure a VPS with multiple tools ready to use with Docker Compose.
 
 Contains:
 - [setup/](setup/) — Initial VPS provisioning, security hardening, swap, and Docker installation
+- [desktop/](desktop/) — Remote Desktop (XFCE4, KasmVNC HTML5 Web Desktop, XRDP)
 - [nginx/](nginx/) — Nginx reverse proxy, TLS (Certbot), and API Key/Basic Auth protection
 - [bash-mcp/](bash-mcp/) — Host-native Model Context Protocol (MCP) server for AI assistants
 - [postgres/](postgres/) — Postgres database + PgBouncer

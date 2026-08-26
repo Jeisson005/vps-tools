@@ -1,0 +1,23 @@
+# KasmVNC Server Configuration
+desktop:
+  resolution:
+    width: 1920
+    height: 1080
+  allow_resize: true
+
+network:
+  interface: 0.0.0.0
+  websocket_port: 8444
+  ssl:
+    require_ssl: false
+
+logging:
+  level: 100
+
+data_loss_prevention:
+  allow_clipboard_down: true
+  allow_clipboard_up: true
+  allow_file_transfer: true
+
+runtime_configuration:
+  allow_dynamic_configuration: true
