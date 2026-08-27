@@ -101,8 +101,14 @@ chown -R "${OPENCODE_USER}:${OPENCODE_USER}" "${USER_HOME}/.config/steel" 2>/dev
 su - "${OPENCODE_USER}" -c "mkdir -p ~/.config/opencode && cd ~/.config/opencode && npm install --save-dev @brave/brave-search-mcp-server @playwright/mcp 2>&1"
 su - "${OPENCODE_USER}" -c "npx playwright install chromium 2>/dev/null || true"
 
-# Configure opencode.jsonc from template
+# Configure opencode.jsonc and instructions from template
 OPENCODE_CONF_DIR="${USER_HOME}/.config/opencode"
+
+if [[ -f "${OPENCODE_DIR}/templates/INSTRUCTIONS.md" ]]; then
+  cp "${OPENCODE_DIR}/templates/INSTRUCTIONS.md" "${OPENCODE_CONF_DIR}/INSTRUCTIONS.md"
+  chown "${OPENCODE_USER}:${OPENCODE_USER}" "${OPENCODE_CONF_DIR}/INSTRUCTIONS.md"
+fi
+
 sed \
   -e "s|{{OPENCODE_CONFIG_DIR}}|${OPENCODE_CONF_DIR}|g" \
   -e "s|{{USER_HOME}}|${USER_HOME}|g" \

@@ -46,11 +46,17 @@ else
   exit 1
 fi
 
-# 4. Install Global CLI Wrapper for MCP agents (OpenCode, Hermes, etc.)
+# 4. Install Global CLI Wrappers & Helpers for MCP agents (OpenCode, Hermes, etc.)
 if [[ -f "${SCRIPT_DIR}/steel-mcp-wrapper.js" ]]; then
   chmod +x "${SCRIPT_DIR}/steel-mcp-wrapper.js"
   ln -sf "${SCRIPT_DIR}/steel-mcp-wrapper.js" /usr/local/bin/steel-mcp
   echo "--> Global Steel MCP wrapper linked to /usr/local/bin/steel-mcp"
+fi
+
+if [[ -f "${SCRIPT_DIR}/steel-session.js" ]]; then
+  chmod +x "${SCRIPT_DIR}/steel-session.js"
+  ln -sf "${SCRIPT_DIR}/steel-session.js" /usr/local/bin/steel-session
+  echo "--> Global Steel Session helper linked to /usr/local/bin/steel-session"
 fi
 
 # 5. Configure firewall for Docker bridge if UFW is active
