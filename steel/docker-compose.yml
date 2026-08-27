@@ -12,6 +12,8 @@ services:
       - STEEL_API_KEY=${STEEL_API_KEY:-}
       - PORT=3000
       - CDP_PORT=9223
+      - USE_SSL=true
+      - DOMAIN=${STEEL_DOMAIN:-steel.jeisson.top}
       - NODE_ENV=production
       - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
       - TIMEOUT_MS=${STEEL_TIMEOUT_MS:-300000}
