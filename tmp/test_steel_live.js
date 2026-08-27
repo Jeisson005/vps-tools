@@ -9,6 +9,14 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+
+// Setup module search paths if needed
+const homeDir = process.env.HOME || '/home/jeisson';
+const opencodeModules = path.join(homeDir, '.config/opencode/node_modules');
+if (fs.existsSync(opencodeModules) && !module.paths.includes(opencodeModules)) {
+  module.paths.unshift(opencodeModules);
+}
+
 const { chromium } = require('playwright');
 
 // 1. Resolve STEEL_API_KEY
@@ -71,7 +79,7 @@ async function main() {
   const sessionId = session.id;
   const liveViewerUrl = `https://steel.jeisson.top/v1/sessions/debug?sessionId=${sessionId}`;
   const liveViewerAltUrl = `https://browser.jeisson.top/v1/sessions/debug?sessionId=${sessionId}`;
-  const cdpWsUrl = `ws://127.0.0.1:9223?apiKey=${steelApiKey}`;
+  const cdpWsUrl = `ws://127.0.0.1:3000/?sessionId=${sessionId}&apiKey=${steelApiKey}`;
 
   console.log('\n┌──────────────────────────────────────────────────────────────────────┐');
   console.log('│  🌐 ¡SESIÓN EN VIVO CREADA CON ÉXITO!                                 │');
@@ -93,18 +101,18 @@ async function main() {
   console.log('\n[Paso 1/4] Navegando a Wikipedia...');
   await page.goto('https://www.wikipedia.org', { waitUntil: 'domcontentloaded' });
   console.log('  ✓ Página cargada: Wikipedia');
-  console.log('  ⏳ Pausa de 5s para que puedas observarlo en el visor...');
-  await sleep(5000);
+  console.log('  ⏳ Pausa de 6s para que puedas observar la pantalla en vivo...');
+  await sleep(6000);
 
   // Step 2: Search term
   console.log('\n[Paso 2/4] Escribiendo búsqueda: "Artificial Intelligence"...');
   await page.fill('input#searchInput', 'Artificial Intelligence');
-  await sleep(1500);
+  await sleep(2000);
   await page.press('input#searchInput', 'Enter');
   await page.waitForLoadState('domcontentloaded');
   console.log('  ✓ Búsqueda completada.');
-  console.log('  ⏳ Pausa de 5s...');
-  await sleep(5000);
+  console.log('  ⏳ Pausa de 6s...');
+  await sleep(6000);
 
   // Step 3: Scroll smoothly
   console.log('\n[Paso 3/4] Haciendo scroll hacia abajo en el artículo...');
