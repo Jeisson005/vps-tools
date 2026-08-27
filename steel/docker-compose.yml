@@ -16,9 +16,9 @@ services:
       - DOMAIN=${STEEL_DOMAIN:-browser.localhost}
       - NODE_ENV=production
       - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
-      - TIMEOUT_MS=${STEEL_TIMEOUT_MS:-300000}
-      - CONCURRENCY=${STEEL_CONCURRENCY:-10}
-    shm_size: "2gb"
+      - TIMEOUT_MS=${STEEL_TIMEOUT_MS:-3600000}
+      - CONCURRENCY=${STEEL_CONCURRENCY:-5}
+    shm_size: ${STEEL_SHM_SIZE:-1gb}
     cap_add:
       - SYS_ADMIN
     deploy:
