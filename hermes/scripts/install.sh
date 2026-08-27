@@ -94,8 +94,27 @@ exec ${PYTHON_BIN} "${HERMES_DIR}/cli.py" "$@"
 WRAPPER
 chmod +x /usr/local/bin/hermes
 
-# 4. Build Web Dashboard Frontend
-echo "--> [4/5] Building Hermes Web Dashboard frontend..."
+# 4. Install Custom Skills & Configure Steel Integration
+echo "--> [4/5] Installing custom skills and setting up browser integrations..."
+STEEL_DOMAIN="browser.localhost"
+if [[ -f "${HERMES_DIR}/../steel/.env" ]]; then
+  STEEL_DOMAIN_FROM_ENV=$(grep "^STEEL_DOMAIN=" "${HERMES_DIR}/../steel/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+  if [[ -n "$STEEL_DOMAIN_FROM_ENV" ]]; then
+    STEEL_DOMAIN="$STEEL_DOMAIN_FROM_ENV"
+  fi
+fi
+
+mkdir -p "${USER_HOME}/.config/steel/profiles/persistent"
+mkdir -p "${USER_HOME}/.hermes/skills/browser/steel-browser"
+chown -R "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.config/steel" 2>/dev/null || true
+
+if [[ -f "${HERMES_DIR}/skills/steel-browser/SKILL.md" ]]; then
+  sed -e "s|{{STEEL_DOMAIN}}|${STEEL_DOMAIN}|g" \
+      "${HERMES_DIR}/skills/steel-browser/SKILL.md" > "${USER_HOME}/.hermes/skills/browser/steel-browser/SKILL.md"
+  chown -R "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.hermes/skills/browser"
+fi
+
+# Build Web Dashboard Frontend
 if [[ -d "${HERMES_AGENT_PATH}/web" ]]; then
   su - "${HERMES_USER}" -c "cd '${HERMES_AGENT_PATH}/web' && npm run build"
 fi
