@@ -8,6 +8,7 @@ services:
       - "${STEEL_CDP_PORT:-9223}:9223"
     volumes:
       - ./data/steel-cache:/app/.cache
+      - ./data/steel-chrome:/tmp/steel-chrome
     environment:
       - STEEL_API_KEY=${STEEL_API_KEY:-}
       - PORT=3000
