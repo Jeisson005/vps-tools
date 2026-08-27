@@ -1,33 +1,33 @@
 ---
-name: steel-browser
-description: "Cloud/local browser automation via Steel Browser sandbox: isolated scraping, persistent user sessions, and proactive live session viewing for Captchas/2FA/Human-in-the-loop."
-version: 1.0.0
+name: browser-automation
+description: "Web browser automation, web scraping, logins, and live screen sessions via Steel Browser sandbox: isolated clean scraping, persistent user sessions, and proactive live interactive viewing for Captchas/2FA/Human-in-the-loop."
+version: 2.0.0
 author: VPS Tools
 license: MIT
 metadata:
   hermes:
-    tags: [browser, steel, automation, scraping, playwright, cdp, live-viewer, 2fa, captcha]
+    tags: [browser, web, automation, scraping, playwright, cdp, live-viewer, 2fa, captcha, navigation]
     category: browser
-    related_skills: [visual-session-control, computer-use]
+    related_skills: [desktop-gui-control]
 ---
 
-# Steel Browser Skill
+# Browser Automation Skill (Web & Cloud Sandbox)
 
-Automates and controls web browsing inside the sandboxed **Steel Browser** container with built-in live streaming, isolated testing, and persistent user profile capabilities.
+Automates and controls web browsing, web scraping, user authentication, and interactive live viewing inside the sandboxed **Steel Browser** container.
 
-## 🧭 Decision Matrix: Which Browser Mode to Use
+## 🧭 Autonomous Browser Mode Selection
 
-The user will usually not specify technical terms. You must autonomously choose the correct flow:
+The user will usually not specify technical terms like "isolated" or "persistent". Autonomously select the correct mode based on the user's task:
 
 ### 1. Isolated Mode (Ephemeral / Clean Browsing)
-* **When to use:** Testing websites, frontend development, public data scraping, verifying links, security inspection, checking website uptime.
+* **When to use:** Testing websites, frontend/API debugging, public web scraping, reading documentation, verifying links, checking site uptime.
 * **How to run:**
   ```bash
   steel-session create "<url>"
   # Or via Playwright MCP:
   steel-mcp --isolated
   ```
-* **Behavior:** Fresh in-memory session. No cookies or cache are persisted after the session is released.
+* **Behavior:** Fresh in-memory session. No cookies, cache, or logins are stored after the session is released.
 
 ### 2. Persistent Mode (User Identity & Saved Logins)
 * **When to use:** Accessing user accounts, SaaS portals (GitHub, AWS, Google, CRM), social media, banking, utility bills, or multi-step tasks where cookies and session tokens must be preserved across prompts.
@@ -37,9 +37,9 @@ The user will usually not specify technical terms. You must autonomously choose 
   ```
 * **Behavior:** All cookies, `localStorage`, and session states are safely retained in `/home/jeisson/.config/steel/profiles/persistent`.
 
-### 3. User GUI Desktop (KasmVNC on `DISPLAY=:1`)
-* **When to use:** Only when the user explicitly asks to interact with their real visible desktop or open a browser on their graphical monitor (`https://desktop.jeisson.top`).
-* **Skill to use:** Load the `visual-session-control` skill.
+### 3. User GUI Desktop Control
+* **When to use:** Only when the user explicitly asks to interact with their real visible desktop monitor or open an application inside their X11 screen (`https://desktop.jeisson.top`).
+* **Skill to use:** Load the **`desktop-gui-control`** skill instead.
 
 ---
 

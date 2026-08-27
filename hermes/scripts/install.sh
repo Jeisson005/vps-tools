@@ -94,8 +94,8 @@ exec ${PYTHON_BIN} "${HERMES_DIR}/cli.py" "$@"
 WRAPPER
 chmod +x /usr/local/bin/hermes
 
-# 4. Install Custom Skills & Configure Steel Integration
-echo "--> [4/5] Installing custom skills and setting up browser integrations..."
+# 4. Install Custom Skills & Configure Browser/Desktop Integrations
+echo "--> [4/5] Installing custom skills and setting up browser/desktop integrations..."
 STEEL_DOMAIN="browser.localhost"
 if [[ -f "${HERMES_DIR}/../steel/.env" ]]; then
   STEEL_DOMAIN_FROM_ENV=$(grep "^STEEL_DOMAIN=" "${HERMES_DIR}/../steel/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
@@ -105,14 +105,24 @@ if [[ -f "${HERMES_DIR}/../steel/.env" ]]; then
 fi
 
 mkdir -p "${USER_HOME}/.config/steel/profiles/persistent"
-mkdir -p "${USER_HOME}/.hermes/skills/browser/steel-browser"
+mkdir -p "${USER_HOME}/.hermes/skills/browser/browser-automation"
+mkdir -p "${USER_HOME}/.hermes/skills/computer-use/desktop-gui-control"
 chown -R "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.config/steel" 2>/dev/null || true
 
-if [[ -f "${HERMES_DIR}/skills/steel-browser/SKILL.md" ]]; then
+# Remove old deprecated skills if present
+rm -rf "${USER_HOME}/.hermes/skills/browser/steel-browser" 2>/dev/null || true
+rm -rf "${USER_HOME}/.hermes/skills/computer-use/visual-session-control" 2>/dev/null || true
+
+if [[ -f "${HERMES_DIR}/skills/browser-automation/SKILL.md" ]]; then
   sed -e "s|{{STEEL_DOMAIN}}|${STEEL_DOMAIN}|g" \
-      "${HERMES_DIR}/skills/steel-browser/SKILL.md" > "${USER_HOME}/.hermes/skills/browser/steel-browser/SKILL.md"
-  chown -R "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.hermes/skills/browser"
+      "${HERMES_DIR}/skills/browser-automation/SKILL.md" > "${USER_HOME}/.hermes/skills/browser/browser-automation/SKILL.md"
 fi
+
+if [[ -f "${HERMES_DIR}/skills/desktop-gui-control/SKILL.md" ]]; then
+  cp "${HERMES_DIR}/skills/desktop-gui-control/SKILL.md" "${USER_HOME}/.hermes/skills/computer-use/desktop-gui-control/SKILL.md"
+fi
+
+chown -R "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.hermes/skills"
 
 # Build Web Dashboard Frontend
 if [[ -d "${HERMES_AGENT_PATH}/web" ]]; then
