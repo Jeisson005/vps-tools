@@ -140,6 +140,15 @@ async function createSession(targetUrl) {
 
 async function listSessions() {
   const result = await apiRequest('/v1/sessions', 'GET');
+  if (result && Array.isArray(result.sessions)) {
+    result.sessions = result.sessions.map(s => ({
+      id: s.id,
+      status: s.status,
+      liveViewerUrl: `${PROTOCOL}://${STEEL_PUBLIC_DOMAIN}/v1/sessions/debug?sessionId=${s.id}`,
+      createdAt: s.createdAt,
+      dimensions: s.dimensions
+    }));
+  }
   console.log(JSON.stringify(result, null, 2));
 }
 

@@ -46,8 +46,9 @@ Whenever you are interacting via **Telegram, Discord, Web Dashboard, or any chat
    steel-session create "<url>"
    ```
 2. Extract the `liveViewerUrl` from the output (e.g. `https://{{STEEL_DOMAIN}}/v1/sessions/debug?sessionId=<ID>`).
-3. Send the link directly to the user with a courteous instruction:
-   > *"He abierto una sesión interactiva en vivo para ti: [Enlace del Visor]. Por favor abre el enlace, digita tus credenciales/2FA y avísame por aquí cuando hayas ingresado para continuar con tu consulta."*
+3. Send the link directly to the user as a clickable markdown link containing the full `liveViewerUrl` parameter:
+   > *"He abierto una sesión interactiva en vivo para ti: [Abrir Sesión en Vivo](https://{{STEEL_DOMAIN}}/v1/sessions/debug?sessionId=<SESSION_ID>)\nPor favor abre el enlace, digita tus credenciales/2FA y avísame por aquí cuando hayas ingresado para continuar con tu consulta."*
+   ⚠️ **CRITICAL:** Always include the full URL with the `?sessionId=<ID>` parameter. Never send the bare root domain.
 4. **PAUSE and WAIT** for the user's confirmation message in chat before calling any further tools.
 5. Once the task is completed, release the session:
    ```bash
