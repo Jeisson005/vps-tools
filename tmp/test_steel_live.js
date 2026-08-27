@@ -19,16 +19,27 @@ if (fs.existsSync(opencodeModules) && !module.paths.includes(opencodeModules)) {
 
 const { chromium } = require('playwright');
 
-// 1. Resolve STEEL_API_KEY
+// 1. Resolve STEEL_API_KEY and STEEL_DOMAIN
 let steelApiKey = process.env.STEEL_API_KEY || '';
+let steelDomain = process.env.STEEL_DOMAIN || '';
+let useSsl = process.env.USE_SSL === 'false' ? false : true;
+
 const envPath = path.resolve(__dirname, '../steel/.env');
-if (!steelApiKey && fs.existsSync(envPath)) {
+if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf8');
-  const match = envContent.match(/^STEEL_API_KEY=(.*)$/m);
-  if (match) steelApiKey = match[1].trim().replace(/^["']|["']$/g, '');
+  if (!steelApiKey) {
+    const matchKey = envContent.match(/^STEEL_API_KEY=(.*)$/m);
+    if (matchKey) steelApiKey = matchKey[1].trim().replace(/^["']|["']$/g, '');
+  }
+  if (!steelDomain) {
+    const matchDomain = envContent.match(/^STEEL_DOMAIN=(.*)$/m);
+    if (matchDomain) steelDomain = matchDomain[1].trim().replace(/^["']|["']$/g, '');
+  }
 }
 
-const STEEL_API_URL = process.env.STEEL_API_URL || 'https://steel.jeisson.top';
+const STEEL_PUBLIC_DOMAIN = steelDomain || 'browser.localhost';
+const PROTOCOL = useSsl ? 'https' : 'http';
+const STEEL_API_URL = process.env.STEEL_API_URL || `${PROTOCOL}://${STEEL_PUBLIC_DOMAIN}`;
 
 async function requestJson(url, options = {}, postData = null) {
   return new Promise((resolve, reject) => {
@@ -77,7 +88,7 @@ async function main() {
   }
 
   const sessionId = session.id;
-  const liveViewerUrl = `https://steel.jeisson.top/v1/sessions/debug?sessionId=${sessionId}`;
+  const liveViewerUrl = `${PROTOCOL}://${STEEL_PUBLIC_DOMAIN}/v1/sessions/debug?sessionId=${sessionId}`;
   const cdpWsUrl = `ws://127.0.0.1:3000/?sessionId=${sessionId}&apiKey=${steelApiKey}`;
 
   console.log('\n┌────────────────────────────────────────────────────────────────────────┐');

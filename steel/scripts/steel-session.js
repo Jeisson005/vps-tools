@@ -20,22 +20,38 @@ if (fs.existsSync(opencodeModules) && !module.paths.includes(opencodeModules)) {
   module.paths.unshift(opencodeModules);
 }
 
-// Resolve STEEL_API_KEY
+// 1. Resolve environment variables from steel/.env or system environment
 let steelApiKey = process.env.STEEL_API_KEY || '';
+let steelDomain = process.env.STEEL_DOMAIN || '';
+let useSsl = process.env.USE_SSL === 'false' ? false : true;
+
 const possibleEnvPaths = [
-  '/home/jeisson/vps-tools/steel/.env',
-  path.join(__dirname, '../.env')
+  path.join(homeDir, 'vps-tools/steel/.env'),
+  path.resolve(__dirname, '../.env'),
+  path.resolve(__dirname, '../../steel/.env')
 ];
+
 for (const envPath of possibleEnvPaths) {
-  if (!steelApiKey && fs.existsSync(envPath)) {
+  if (fs.existsSync(envPath)) {
     const envContent = fs.readFileSync(envPath, 'utf8');
-    const match = envContent.match(/^STEEL_API_KEY=(.*)$/m);
-    if (match) steelApiKey = match[1].trim().replace(/^["']|["']$/g, '');
+    if (!steelApiKey) {
+      const matchKey = envContent.match(/^STEEL_API_KEY=(.*)$/m);
+      if (matchKey) steelApiKey = matchKey[1].trim().replace(/^["']|["']$/g, '');
+    }
+    if (!steelDomain) {
+      const matchDomain = envContent.match(/^STEEL_DOMAIN=(.*)$/m);
+      if (matchDomain) steelDomain = matchDomain[1].trim().replace(/^["']|["']$/g, '');
+    }
+    const matchSsl = envContent.match(/^USE_SSL=(.*)$/m);
+    if (matchSsl) {
+      useSsl = matchSsl[1].trim().toLowerCase() !== 'false';
+    }
   }
 }
 
+const STEEL_PUBLIC_DOMAIN = steelDomain || 'browser.localhost';
 const STEEL_API_PORT = process.env.STEEL_PORT || '3000';
-const STEEL_PUBLIC_DOMAIN = process.env.STEEL_DOMAIN || 'steel.jeisson.top';
+const PROTOCOL = useSsl ? 'https' : 'http';
 
 async function apiRequest(endpoint, method = 'GET', data = null) {
   return new Promise((resolve, reject) => {
@@ -73,7 +89,7 @@ async function createSession(targetUrl) {
     process.exit(1);
   }
 
-  const liveViewerUrl = `https://${STEEL_PUBLIC_DOMAIN}/v1/sessions/debug?sessionId=${session.id}`;
+  const liveViewerUrl = `${PROTOCOL}://${STEEL_PUBLIC_DOMAIN}/v1/sessions/debug?sessionId=${session.id}`;
   const cdpWsUrl = `ws://127.0.0.1:${STEEL_API_PORT}/?sessionId=${session.id}&apiKey=${steelApiKey}`;
 
   if (targetUrl) {
@@ -92,7 +108,6 @@ async function createSession(targetUrl) {
     success: true,
     sessionId: session.id,
     liveViewerUrl: liveViewerUrl,
-    altLiveViewerUrl: `https://browser.jeisson.top/v1/sessions/debug?sessionId=${session.id}`,
     cdpWsUrl: cdpWsUrl,
     targetUrl: targetUrl || null
   }, null, 2));

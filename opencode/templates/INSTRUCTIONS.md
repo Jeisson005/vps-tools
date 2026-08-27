@@ -16,6 +16,6 @@ This server has **Steel Browser** installed and integrated with OpenCode.
 When the user asks for a **live link**, **live view**, or wants to **watch/interact with the browser in real-time**:
 - You have the CLI tool `steel-session` available in the system:
   - Run `steel-session create "<url>"` to launch an interactive session and open the requested URL.
-  - It will return a JSON object containing `liveViewerUrl` (e.g., `https://steel.jeisson.top/v1/sessions/debug?sessionId=...` or `https://browser.jeisson.top/...`).
+  - It will return a JSON object containing `liveViewerUrl` (e.g., `https://{{STEEL_DOMAIN}}/v1/sessions/debug?sessionId=...`).
   - Provide this link directly to the user so they can watch the session live and interact with the page (mouse/keyboard).
   - When finished, you can release the session with `steel-session release <sessionId>`.

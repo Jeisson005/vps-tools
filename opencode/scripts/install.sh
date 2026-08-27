@@ -104,8 +104,19 @@ su - "${OPENCODE_USER}" -c "npx playwright install chromium 2>/dev/null || true"
 # Configure opencode.jsonc and instructions from template
 OPENCODE_CONF_DIR="${USER_HOME}/.config/opencode"
 
+# Resolve STEEL_DOMAIN if available
+STEEL_DOMAIN="browser.localhost"
+if [[ -f "${OPENCODE_DIR}/../steel/.env" ]]; then
+  STEEL_DOMAIN_FROM_ENV=$(grep "^STEEL_DOMAIN=" "${OPENCODE_DIR}/../steel/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+  if [[ -n "$STEEL_DOMAIN_FROM_ENV" ]]; then
+    STEEL_DOMAIN="$STEEL_DOMAIN_FROM_ENV"
+  fi
+fi
+
 if [[ -f "${OPENCODE_DIR}/templates/INSTRUCTIONS.md" ]]; then
-  cp "${OPENCODE_DIR}/templates/INSTRUCTIONS.md" "${OPENCODE_CONF_DIR}/INSTRUCTIONS.md"
+  sed \
+    -e "s|{{STEEL_DOMAIN}}|${STEEL_DOMAIN}|g" \
+    "${OPENCODE_DIR}/templates/INSTRUCTIONS.md" > "${OPENCODE_CONF_DIR}/INSTRUCTIONS.md"
   chown "${OPENCODE_USER}:${OPENCODE_USER}" "${OPENCODE_CONF_DIR}/INSTRUCTIONS.md"
 fi
 
