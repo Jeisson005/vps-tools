@@ -42,7 +42,7 @@ load_env_safe() {
 }
 
 # Defaults
-OPENCODE_USER="${SUDO_USER:-jeisson}"
+OPENCODE_USER="${SUDO_USER:-$(id -un)}"
 OPENCODE_WORKSPACE="/home/${OPENCODE_USER}"
 OPENCODE_PORT="4096"
 OPENCODE_HOST="0.0.0.0"

@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-DESKTOP_USER="jeisson"
+DESKTOP_USER="${SUDO_USER:-$(id -un)}"
 
 load_env_safe() {
   local env_file="$1"

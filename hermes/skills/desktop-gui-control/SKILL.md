@@ -14,7 +14,7 @@ metadata:
 
 # Desktop GUI & On-Screen Control Skill
 
-Provides complete, authoritative control over the user's **real graphical X11 desktop environment and visible applications** (running on `DISPLAY=:1`, accessible via KasmVNC at `https://desktop.jeisson.top` or via direct VNC client over WireGuard VPN at `10.x.x.x:5901`).
+Provides complete, authoritative control over the user's **real graphical X11 desktop environment and visible applications** (running on `DISPLAY=:1`, accessible via KasmVNC at `https://desktop.your-domain.com` or via direct VNC client over WireGuard VPN at `10.x.x.x:5901`).
 
 > **Note on Web Automation:** For background/isolated web scraping, headless tasks, or persistent web browsing outside the user's graphical screen, use the **`browser-automation`** skill. Use this skill ONLY when the user wants actions performed directly on their visible desktop screen.
 

@@ -31,7 +31,7 @@ elif [[ -f .env.example ]]; then
   load_env .env.example
 fi
 
-DESKTOP_USER="${DESKTOP_USER:-jeisson}"
+DESKTOP_USER="${DESKTOP_USER:-${SUDO_USER:-$(id -un)}}"
 DESKTOP_PASSWORD="${DESKTOP_PASSWORD:-}"
 KASMVNC_PORT="${KASMVNC_PORT:-8444}"
 KASMVNC_BIND="${KASMVNC_BIND:-0.0.0.0}"

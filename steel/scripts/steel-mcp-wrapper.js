@@ -47,8 +47,8 @@ async function getCDPEndpoint() {
 function resolveMcpCli() {
   const possiblePaths = [
     path.join(__dirname, '../node_modules/@playwright/mcp/cli.js'),
-    path.join(process.env.HOME || '/home/jeisson', '.config/opencode/node_modules/@playwright/mcp/cli.js'),
-    path.join('/usr/local/lib/node_modules/@playwright/mcp/cli.js')
+    path.join(os.homedir(), '.config/opencode/node_modules/@playwright/mcp/cli.js'),
+    path.join(os.homedir(), '.npm-global/lib/node_modules/@playwright/mcp/cli.js'),
   ];
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) return p;

@@ -35,10 +35,10 @@ The user will usually not specify technical terms like "isolated" or "persistent
   ```bash
   steel-mcp --user-data-dir ~/.config/steel/profiles/persistent --shared-browser-context
   ```
-* **Behavior:** All cookies, `localStorage`, and session states are safely retained in `/home/jeisson/.config/steel/profiles/persistent`.
+* **Behavior:** All cookies, `localStorage`, and session states are safely retained in `~/.config/steel/profiles/persistent`.
 
 ### 3. User GUI Desktop Control
-* **When to use:** Only when the user explicitly asks to interact with their real visible desktop monitor or open an application inside their X11 screen (`https://desktop.jeisson.top`).
+* **When to use:** Only when the user explicitly asks to interact with their real visible desktop monitor or open an application inside their graphical X11 screen (`https://desktop.your-domain.com`).
 * **Skill to use:** Load the **`desktop-gui-control`** skill instead.
 
 ---

@@ -18,7 +18,7 @@ The user will usually **not** specify technical terms like "persistent" or "isol
 ### 💾 Use `playwright-persistent` (Stateful / Persistent Mode) when:
 - **User Identity & Logins:** Logging in with user credentials, accessing user dashboards, SaaS platforms (GitHub, AWS, Google, CRM), social media, or company portals.
 - **Sensitive / Personal Services:** Banking, government portals, utilities, e-commerce checkouts, and tasks that emulate real personal user activity.
-- **Multi-Step Workflows:** Tasks where the user expects to stay logged in across multiple prompts, retaining cookies, tokens, and `localStorage` in `/home/jeisson/.config/steel/profiles/persistent`.
+- **Multi-Step Workflows:** Tasks where the user expects to stay logged in across multiple prompts, retaining cookies, tokens, and `localStorage` in `~/.config/steel/profiles/persistent`.
 
 ---
 
