@@ -46,7 +46,14 @@ else
   exit 1
 fi
 
-# Firewall configuration if UFW is active
+# 4. Install Global CLI Wrapper for MCP agents (OpenCode, Hermes, etc.)
+if [[ -f "${SCRIPT_DIR}/steel-mcp-wrapper.js" ]]; then
+  chmod +x "${SCRIPT_DIR}/steel-mcp-wrapper.js"
+  ln -sf "${SCRIPT_DIR}/steel-mcp-wrapper.js" /usr/local/bin/steel-mcp
+  echo "--> Global Steel MCP wrapper linked to /usr/local/bin/steel-mcp"
+fi
+
+# 5. Configure firewall for Docker bridge if UFW is active
 if command -v ufw &>/dev/null && sudo ufw status 2>/dev/null | grep -qw "active"; then
   echo "--> Allowing Docker bridge subnets (172.16.0.0/12) to Steel ports..."
   sudo ufw allow from 172.16.0.0/12 to any port 3000 proto tcp comment "Docker to Steel Browser API" >/dev/null || true

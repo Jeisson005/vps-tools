@@ -15,8 +15,17 @@
     "playwright": {
       "type": "local",
       "command": [
-        "node",
-        "{{OPENCODE_CONFIG_DIR}}/steel-mcp-wrapper.js"
+        "steel-mcp",
+        "--isolated"
+      ]
+    },
+    "playwright-persistent": {
+      "type": "local",
+      "command": [
+        "steel-mcp",
+        "--user-data-dir",
+        "{{USER_HOME}}/.config/steel/profiles/persistent",
+        "--shared-browser-context"
       ]
     }
   }
