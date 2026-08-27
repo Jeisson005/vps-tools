@@ -13,6 +13,13 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 
+// Setup module search paths if needed
+const homeDir = process.env.HOME || '/home/jeisson';
+const opencodeModules = path.join(homeDir, '.config/opencode/node_modules');
+if (fs.existsSync(opencodeModules) && !module.paths.includes(opencodeModules)) {
+  module.paths.unshift(opencodeModules);
+}
+
 // Resolve STEEL_API_KEY
 let steelApiKey = process.env.STEEL_API_KEY || '';
 const possibleEnvPaths = [
