@@ -11,6 +11,7 @@
 const http = require('http');
 const { spawn } = require('child_process');
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 
 const CDP_HOST = process.env.STEEL_CDP_HOST || '127.0.0.1';

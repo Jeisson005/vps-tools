@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const http = require('http');
 const https = require('https');
 
@@ -93,14 +94,38 @@ async function createSession(targetUrl) {
   const cdpWsUrl = `ws://127.0.0.1:${STEEL_API_PORT}/?sessionId=${session.id}&apiKey=${steelApiKey}`;
 
   if (targetUrl) {
-    try {
-      const { chromium } = require('playwright');
-      const browser = await chromium.connectOverCDP(cdpWsUrl);
-      const context = browser.contexts()[0] || await browser.newContext();
-      const page = context.pages()[0] || await context.newPage();
-      await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
-    } catch (e) {
-      console.error('[!] Sesión creada pero falló la navegación inicial:', e.message);
+    let navigated = false;
+    const possiblePlaywright = [
+      'playwright',
+      'playwright-core',
+      path.join(homeDir, '.config/opencode/node_modules/playwright-core'),
+      path.join(homeDir, '.config/opencode/node_modules/playwright')
+    ];
+    for (const pkg of possiblePlaywright) {
+      try {
+        const { chromium } = require(pkg);
+        const browser = await chromium.connectOverCDP(cdpWsUrl);
+        const context = browser.contexts()[0] || await browser.newContext();
+        const page = context.pages()[0] || await context.newPage();
+        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        navigated = true;
+        break;
+      } catch (e) {}
+    }
+
+    if (!navigated && typeof WebSocket !== 'undefined') {
+      await new Promise((resolve) => {
+        try {
+          const ws = new WebSocket(cdpWsUrl);
+          const timeout = setTimeout(() => { try { ws.close(); } catch(e){} resolve(); }, 8000);
+          ws.onopen = () => {
+            ws.send(JSON.stringify({ id: 1, method: 'Page.enable' }));
+            ws.send(JSON.stringify({ id: 2, method: 'Page.navigate', params: { url: targetUrl } }));
+            setTimeout(() => { try { ws.close(); } catch(e){} clearTimeout(timeout); resolve(); }, 1500);
+          };
+          ws.onerror = () => { clearTimeout(timeout); resolve(); };
+        } catch (e) { resolve(); }
+      });
     }
   }
 
