@@ -1,54 +1,74 @@
 ---
 name: visual-session-control
-description: "Control the user's real graphical desktop session (KasmVNC / X11 on DISPLAY=:1) via cua-driver: mouse, keyboard, windows, and desktop applications."
-version: 2.0.0
+description: "Control the user's active graphical desktop and visible browser (X11 / VNC / KasmVNC / WireGuard on DISPLAY=:1) via cua-driver and Chrome CDP: mouse, keyboard, window management, and on-screen browser interaction."
+version: 2.1.0
 author: VPS Tools
 license: MIT
 platforms: [linux]
 metadata:
   hermes:
-    tags: [desktop, kasmvnc, gui, x11, cua-driver, computer-use]
+    tags: [desktop, vnc, kasmvnc, wireguard, x11, cua-driver, chrome-cdp, computer-use]
     category: computer-use
     related_skills: [steel-browser, computer-use]
 ---
 
-# Visual Session Control Skill (User Desktop GUI)
+# Visual Session Control Skill (User Desktop & On-Screen Browser)
 
-Controls the user's **real graphical desktop session** (KasmVNC on `DISPLAY=:1`, accessible via `https://desktop.jeisson.top` / `https://vnc.jeisson.top`).
+Controls the user's **real graphical X11 desktop session and visible browser** (running on `DISPLAY=:1`, reachable via KasmVNC at `https://desktop.jeisson.top` or via direct VNC client over WireGuard VPN at `10.x.x.x:5901`).
 
-> **Note on Web Browsing:** For isolated scraping, testing, or headless/persistent web automation, use the **`steel-browser`** skill. Use this skill ONLY when the user wants actions performed directly on their visible desktop screen.
+---
 
-## When to Use
+## 🎯 When to Use This Skill
 
-- The user says *"controla mi equipo / mi pantalla / mi escritorio / en mi VNC"*.
-- You need to interact with graphical desktop applications (file managers, terminals, desktop IDEs, local GUI apps).
-- The user wants you to perform visible actions on their active monitor screen.
+Use this skill whenever the user wants actions performed **directly on their visible screen**:
+1. *"Controla mi equipo / mi pantalla / mi escritorio / en mi VNC"*.
+2. *"Abre el navegador en mi escritorio para que yo lo vea aquí"*.
+3. Interacting with local desktop applications (terminals, text editors, file managers, local GUI apps).
 
-## Prerequisites
+> **Note on Web Automation:** For background/isolated web scraping, automated testing, or persistent headless browsing outside the user's graphical screen, use the **`steel-browser`** skill instead.
 
-- Active KasmVNC / X11 desktop session running on `DISPLAY=:1`.
-- `cua-driver` installed at `/home/jeisson/.local/bin/cua-driver`.
+---
 
-## How to Drive the User Desktop
+## 🖥️ How It Works (Protocol Agnostic)
 
-Always export the user's active display before executing commands:
+Whether the user connects through **KasmVNC** (web browser) or a **native VNC client over WireGuard** (TigerVNC, RealVNC, Remmina), the underlying graphical environment is the **same Linux X11 server on `DISPLAY=:1`**.
+
+You can interact with the user's visual session on two levels:
+
+### Level 1: Desktop OS & Window Control (cua-driver)
+Control any desktop window, move the mouse, click, drag, and send keystrokes:
 
 ```bash
-# 1. Verify the user's live desktop session is running
 export DISPLAY=:1
-xdpyinfo >/dev/null 2>&1 && echo "Desktop session alive"
 
-# 2. Capture screenshot of the user's monitor
+# 1. Verify the X11 session is active
+xdpyinfo >/dev/null 2>&1 && echo "Desktop alive"
+
+# 2. Capture and inspect desktop screenshot
 cua-driver call get_desktop_state | jq -r .base64_image | base64 -d > /tmp/screen.png
 vision_analyze image=/tmp/screen.png
 
-# 3. Perform mouse / keyboard actions
+# 3. Mouse and keyboard interactions
 cua-driver call mouse_click x=500 y=300 button=left
-cua-driver call key_press key="Return"
 cua-driver call type_text text="Hello World"
+cua-driver call key_press key="Return"
 ```
 
-## Guidelines
+### Level 2: On-Screen Visible Browser Control (Google Chrome in X11)
+Launch or attach to Google Chrome displayed directly on the user's monitor:
 
-- Never kill or reset the user's X11 desktop session.
-- Report all actions clearly to the user after interacting with their screen.
+```bash
+export DISPLAY=:1
+
+# 1. Launch Chrome visible on the user's screen with CDP debugging enabled
+google-chrome --remote-debugging-port=9222 --user-data-dir=~/.config/google-chrome-vnc "https://example.com" &
+
+# 2. Drive the visible browser via CDP / Playwright or cua-driver
+# You can interact via DOM inspection or direct visual clicks while the user watches in real-time.
+```
+
+---
+
+## 🛡️ Guidelines
+- **Preserve User Session:** Never kill or restart the user's X11/VNC display server (`:1`).
+- **Confirmation:** Always report actions performed on the user's screen so they can track what was done.
