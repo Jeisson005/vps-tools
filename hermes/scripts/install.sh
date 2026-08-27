@@ -159,6 +159,35 @@ except Exception as e:
 PY"
 fi
 
+# Configure quiet Telegram display mode and Steel Browser CDP in config.yaml
+su - "${HERMES_USER}" -c "cd '${HERMES_AGENT_PATH}' && venv/bin/python - << 'PY'
+import sys, yaml, os
+try:
+    config_path = os.path.expanduser('~/.hermes/config.yaml')
+    cfg = {}
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
+            cfg = yaml.safe_load(f) or {}
+    if 'display' not in cfg:
+        cfg['display'] = {}
+    if 'platforms' not in cfg['display']:
+        cfg['display']['platforms'] = {}
+    cfg['display']['platforms']['telegram'] = {
+        'tool_progress': 'off',
+        'busy_ack_detail': False,
+        'interim_assistant_messages': False
+    }
+    if 'browser' not in cfg:
+        cfg['browser'] = {}
+    cfg['browser']['backend'] = 'off'
+    cfg['browser']['cdp_url'] = 'ws://127.0.0.1:9223'
+    with open(config_path, 'w') as f:
+        yaml.dump(cfg, f, default_flow_style=False, sort_keys=True)
+    print('[+] Configured quiet Telegram display and Steel CDP in ~/.hermes/config.yaml')
+except Exception as e:
+    print(f'[-] Error configuring display/browser settings: {e}')
+PY"
+
 # Configure Telegram env vars if provided
 if [[ -n "${TELEGRAM_BOT_TOKEN}" ]]; then
   HERMES_ENV="${USER_HOME}/.hermes/.env"
