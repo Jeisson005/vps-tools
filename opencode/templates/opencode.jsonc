@@ -16,7 +16,7 @@
       "type": "local",
       "command": [
         "node",
-        "{{OPENCODE_CONFIG_DIR}}/node_modules/@playwright/mcp/cli.js"
+        "{{OPENCODE_CONFIG_DIR}}/steel-mcp-wrapper.js"
       ]
     }
   }

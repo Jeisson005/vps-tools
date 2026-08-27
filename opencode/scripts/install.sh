@@ -93,6 +93,15 @@ fi
 
 # 3. Install MCP Servers (brave-search & playwright)
 echo "--> [3/5] Installing MCP servers (@brave/brave-search-mcp-server & @playwright/mcp)..."
+OPENCODE_CONFIG_DIR="${USER_HOME}/.config/opencode"
+mkdir -p "${OPENCODE_CONFIG_DIR}"
+
+if [[ -f "${OPENCODE_DIR}/templates/steel-mcp-wrapper.js" ]]; then
+  cp "${OPENCODE_DIR}/templates/steel-mcp-wrapper.js" "${OPENCODE_CONFIG_DIR}/steel-mcp-wrapper.js"
+  chown "${OPENCODE_USER}:${OPENCODE_USER}" "${OPENCODE_CONFIG_DIR}/steel-mcp-wrapper.js"
+  chmod +x "${OPENCODE_CONFIG_DIR}/steel-mcp-wrapper.js"
+fi
+
 su - "${OPENCODE_USER}" -c "mkdir -p ~/.config/opencode && cd ~/.config/opencode && npm install --save-dev @brave/brave-search-mcp-server @playwright/mcp 2>&1"
 su - "${OPENCODE_USER}" -c "npx playwright install chromium 2>/dev/null || true"
 
