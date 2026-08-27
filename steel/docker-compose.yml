@@ -1,0 +1,25 @@
+services:
+  steel:
+    image: ghcr.io/steel-dev/steel-browser:latest
+    container_name: steel-browser
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${STEEL_PORT:-3000}:3000"
+      - "127.0.0.1:${STEEL_CDP_PORT:-9223}:9223"
+    volumes:
+      - ./data/steel-cache:/app/.cache
+    environment:
+      - STEEL_API_KEY=${STEEL_API_KEY:-}
+      - PORT=3000
+      - CDP_PORT=9223
+      - NODE_ENV=production
+      - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
+      - TIMEOUT_MS=${STEEL_TIMEOUT_MS:-300000}
+      - CONCURRENCY=${STEEL_CONCURRENCY:-10}
+    shm_size: "2gb"
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        limits:
+          memory: 2.5G
