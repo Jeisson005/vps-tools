@@ -16,7 +16,9 @@
       "type": "local",
       "command": [
         "node",
-        "{{OPENCODE_CONFIG_DIR}}/node_modules/@playwright/mcp/cli.js"
+        "{{OPENCODE_CONFIG_DIR}}/node_modules/@playwright/mcp/cli.js",
+        "--cdp-endpoint",
+        "ws://127.0.0.1:9223?apiKey={{STEEL_API_KEY}}"
       ]
     }
   }
