@@ -6,4 +6,8 @@ cd "${SCRIPT_DIR}/.."
 
 echo "--> Starting Steel Browser container..."
 docker compose up -d
+
+echo "--> Applying security patches..."
+python3 "${SCRIPT_DIR}/patch-steel.py"
+
 docker compose ps
