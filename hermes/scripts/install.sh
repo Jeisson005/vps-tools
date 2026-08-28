@@ -177,6 +177,11 @@ try:
         'busy_ack_detail': False,
         'interim_assistant_messages': False
     }
+    cfg['display']['platforms']['whatsapp'] = {
+        'tool_progress': 'off',
+        'busy_ack_detail': False,
+        'interim_assistant_messages': False
+    }
     if 'browser' not in cfg:
         cfg['browser'] = {}
     cfg['browser']['backend'] = 'off'
