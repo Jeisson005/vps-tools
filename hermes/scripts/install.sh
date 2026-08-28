@@ -247,8 +247,8 @@ fi
 
 # Firewall configuration if UFW is active
 if command -v ufw &>/dev/null && ufw status | grep -qw "active"; then
-  echo "--> Allowing Docker bridge subnets (172.16.0.0/12) to Hermes Dashboard port ${HERMES_DASHBOARD_PORT}..."
   ufw allow from 172.16.0.0/12 to any port "${HERMES_DASHBOARD_PORT}" proto tcp comment "Docker to Hermes Dashboard" >/dev/null || true
+  ufw allow from 172.16.0.0/12 to any port 8642 proto tcp comment "Docker to Hermes API server" >/dev/null || true
 fi
 
 echo ""
