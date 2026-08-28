@@ -1,23 +1,36 @@
 #!/usr/bin/env python3
 """
-Patch Hermes Agent API Server to route intermediate tool execution text
-to OpenAI-compatible reasoning_content for Open WebUI / reasoning-capable clients.
+Patch Manager for Hermes Agent in vps-tools.
+
+Applies necessary custom patches to upstream hermes-agent:
+1. api_server.py: Routes intermediate tool execution narration to OpenAI-compatible
+   `reasoning_content` so Open WebUI cleanly nests it in the "Thinking" dropdown.
+2. browser_tool.py: Preserves custom CDP port when discovering remote Steel browser WebSocket URLs.
+
+Validates target signatures before applying and issues explicit warnings if upstream
+code has changed.
 """
 import sys
 import os
+import shutil
 
-def patch_api_server(base_dir: str):
+def patch_api_server(base_dir: str) -> bool:
     path = os.path.join(base_dir, "gateway/platforms/api_server.py")
     if not os.path.isfile(path):
-        print(f"[-] {path} not found.")
-        return
+        print(f"[-] [api_server] File not found: {path}")
+        return False
 
     with open(path, "r", encoding="utf-8") as f:
         code = f.read()
 
-    if "_pending_iteration_text" in code:
-        print("[+] API server already patched with reasoning_content routing.")
-        return
+    if "_pending_iteration_text" in code and "__thought__" in code:
+        print("[+] [api_server] Patch already applied.")
+        return True
+
+    # Backup original
+    backup_path = path + ".orig"
+    if not os.path.exists(backup_path):
+        shutil.copyfile(path, backup_path)
 
     target_on_delta = """            def _on_delta(delta):
                 # Filter out None — the agent fires stream_delta_callback(None)
@@ -82,9 +95,19 @@ def patch_api_server(base_dir: str):
                     await response.write(_sse_frame(thought_chunk))
                 else:"""
 
-    if target_on_delta not in code or target_done not in code or target_emit not in code:
-        print("[-] Target signatures not matched in api_server.py.")
-        return
+    missing = []
+    if target_on_delta not in code:
+        missing.append("target_on_delta")
+    if target_done not in code:
+        missing.append("target_done")
+    if target_emit not in code:
+        missing.append("target_emit")
+
+    if missing:
+        print(f"[!] [WARNING] [api_server] Upstream code has changed! Cannot find signatures: {', '.join(missing)}")
+        print("    The patch was NOT applied to avoid breaking Hermes.")
+        print("    Hermes will continue to work with upstream's native stream behavior.")
+        return False
 
     new_code = code.replace(target_on_delta, replacement_on_delta, 1)
     new_code = new_code.replace(target_done, replacement_done, 1)
@@ -93,8 +116,55 @@ def patch_api_server(base_dir: str):
     with open(path, "w", encoding="utf-8") as f:
         f.write(new_code)
 
-    print("[+] Successfully patched api_server.py with reasoning_content bridge!")
+    print("[+] [api_server] Reasoning content patch applied successfully.")
+    return True
+
+def patch_browser_tool(base_dir: str) -> bool:
+    path = os.path.join(base_dir, "tools/browser_tool.py")
+    if not os.path.isfile(path):
+        print(f"[-] [browser_tool] File not found: {path}")
+        return False
+
+    with open(path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    if "p_raw.netloc and p_ws.netloc" in code:
+        print("[+] [browser_tool] CDP port preservation patch already applied.")
+        return True
+
+    target = """    ws_url = str(payload.get("webSocketDebuggerUrl") or "").strip()
+    if ws_url:
+        logger.info("""
+
+    replacement = """    ws_url = str(payload.get("webSocketDebuggerUrl") or "").strip()
+    if ws_url:
+        from urllib.parse import urlparse
+        p_raw = urlparse(discovery_url)
+        p_ws = urlparse(ws_url)
+        if p_raw.netloc and p_ws.netloc and ":" in p_raw.netloc and ":" not in p_ws.netloc:
+            ws_url = ws_url.replace(f"://{p_ws.netloc}/", f"://{p_raw.netloc}/", 1)
+        logger.info("""
+
+    if target not in code:
+        print("[!] [WARNING] [browser_tool] Upstream CDP signature changed in browser_tool.py.")
+        return False
+
+    new_code = code.replace(target, replacement, 1)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_code)
+
+    print("[+] [browser_tool] CDP port preservation patch applied successfully.")
+    return True
+
+def main():
+    target_dir = sys.argv[1] if len(sys.argv) > 1 else "/home/jeisson/.hermes/hermes-agent"
+    print(f"[*] Checking and applying custom Hermes patches on: {target_dir}")
+    ok1 = patch_api_server(target_dir)
+    ok2 = patch_browser_tool(target_dir)
+    if ok1 and ok2:
+        print("[+] All custom patches verified and active.")
+    else:
+        print("[!] Note: One or more patches could not be auto-applied due to upstream changes.")
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "/home/jeisson/.hermes/hermes-agent"
-    patch_api_server(target)
+    main()
