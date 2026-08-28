@@ -84,7 +84,7 @@ async function apiRequest(endpoint, method = 'GET', data = null) {
 }
 
 async function createSession(targetUrl) {
-  const session = await apiRequest('/v1/sessions', 'POST', { useProxy: false });
+  const session = await apiRequest('/v1/sessions', 'POST', { useProxy: false, timeout: 1800000 });
   if (!session || !session.id) {
     console.error('[-] Error al crear sesión en Steel Browser:', session);
     process.exit(1);
