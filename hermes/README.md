@@ -52,4 +52,21 @@ bash scripts/start.sh
 
 # Stop services
 bash scripts/stop.sh
+
+# Safely update Hermes and re-apply custom patches
+bash scripts/update.sh
 ```
+
+---
+
+## 5. Updates & Patch Management
+
+Hermes Agent is cloned directly from upstream Nous Research. To support seamless integration with other `vps-tools` components (Steel Browser, Open WebUI), `vps-tools` maintains targeted patches:
+* **`api_server.py`**: Routes intermediate execution narration to OpenAI `reasoning_content` so Open WebUI renders it in the collapsible "Thinking" dropdown.
+* **`browser_tool.py`**: Preserves custom CDP ports when discovering remote Steel browser endpoints.
+
+To ensure upstream updates never corrupt files or break silently, `scripts/update.sh` and `scripts/patch-hermes.py`:
+1. Stash any temporary changes before pulling from upstream.
+2. Validate AST and signature blocks before applying patches.
+3. If upstream Nous Research modifies those functions in a new release, an explicit warning `[!] [WARNING]` is emitted instead of forcing a broken patch.
+4. Automatically rebuild the dashboard frontend and reload services.
