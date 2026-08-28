@@ -72,4 +72,16 @@ bash scripts/start.sh
 
 # Stop container
 bash scripts/stop.sh
+
+# Safely update image and re-apply security patches
+bash scripts/update.sh
 ```
+
+---
+
+## 5. Updates & Security Patches
+
+To eliminate unauthenticated browser hijackings and prevent unauthorized access through nonexistent session IDs, `vps-tools` enforces strict session isolation on Steel Browser:
+* **`patch-steel.py`**: Validates code signatures inside the container and patches `sessions.controller.js` and `cdp.routes.js`. Any request with an expired, non-existent, or unassigned session ID returns an immediate **`404 Not Found`** instead of handing out devtools access to Chromium.
+* **`update.sh`**: Pulls the latest upstream image, recreates the container, and automatically re-applies verified patches with error guards.
+* **Network Isolation**: Ports `3000` and `9223` are bound exclusively to `127.0.0.1`, and Nginx communicates directly with Steel through the internal `nginx_default` Docker bridge network.
