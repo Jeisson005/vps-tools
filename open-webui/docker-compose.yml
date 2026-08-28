@@ -12,9 +12,12 @@ services:
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-}
       - WEBUI_AUTH=${WEBUI_AUTH:-true}
       - ENABLE_SIGNUP=${ENABLE_SIGNUP:-true}
-      - WEBUI_NAME=${WEBUI_NAME:-Sofía AI Workspace}
+      - WEBUI_NAME=${WEBUI_NAME:-Open WebUI}
+      - ENABLE_OPENAI_API=${ENABLE_OPENAI_API:-true}
       - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-http://host.docker.internal:8642/v1}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_BASE_URLS=${OPENAI_API_BASE_URLS:-http://host.docker.internal:8642/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-hermes-api-secret-2026}
+      - OPENAI_API_KEYS=${OPENAI_API_KEYS:-hermes-api-secret-2026}
       - DEFAULT_MODELS=${DEFAULT_MODELS:-hermes-agent}
       - RAG_FULL_CONTEXT=${RAG_FULL_CONTEXT:-true}
       - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
