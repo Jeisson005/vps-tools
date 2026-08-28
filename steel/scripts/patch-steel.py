@@ -128,6 +128,23 @@ def main():
 
     ok2 = patch_file_in_container(ctrl_path, target_live, replacement_live, "sessions-live-404")
 
+    target_stream = """export const handleGetSessionStream = async (server, request, reply) => {
+    const { showControls, theme, interactive, pageId, pageIndex } = request.query;"""
+
+    replacement_stream = """export const handleGetSessionStream = async (server, request, reply) => {
+    const requestedSessionId = request.query?.sessionId;
+    const active = server.sessionService.activeSession;
+    if (!active || active.status !== "live" || (requestedSessionId && requestedSessionId !== active.id)) {
+        return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Session not found or has expired",
+        });
+    }
+    const { showControls, theme, interactive, pageId, pageIndex } = request.query;"""
+
+    ok3 = patch_file_in_container(ctrl_path, target_stream, replacement_stream, "sessions-debug-stream-404")
+
     # 2. Patch cdp.routes.js
     cdp_path = "/app/api/build/modules/cdp/cdp.routes.js"
     target_cdp = """    }, async (request, reply) => {
@@ -150,12 +167,29 @@ def main():
             .replace("ws:", "")}`);
     });"""
 
-    ok3 = patch_file_in_container(cdp_path, target_cdp, replacement_cdp, "cdp-inspector-404")
+    ok4 = patch_file_in_container(cdp_path, target_cdp, replacement_cdp, "cdp-inspector-404")
 
-    if ok1 and ok2 and ok3:
-        print("[+] All Steel security patches verified. Restarting container to apply...")
-        subprocess.run(["docker", "restart", CONTAINER_NAME], check=True)
-        print("[+] Container steel-browser restarted cleanly with strict 404 session protection.")
+    # 3. Patch casting.handler.js (WebSocket stream)
+    cast_path = "/app/api/build/plugins/browser-socket/casting.handler.js"
+    target_cast = """    const session = await sessionService.activeSession;
+    if (!session) {
+        console.error(`Cast Session ${id} not found`);
+        socket.destroy();
+        return;
+    }"""
+
+    replacement_cast = """    const session = await sessionService.activeSession;
+    if (!session || session.status !== "live") {
+        console.error(`Cast Session ${id} not found or not live`);
+        socket.destroy();
+        return;
+    }"""
+
+    ok5 = patch_file_in_container(cast_path, target_cast, replacement_cast, "websocket-cast-live-check")
+
+    all_ok = ok1 and ok2 and ok3 and ok4 and ok5
+    if all_ok:
+        print("[+] All Steel security patches verified and active.")
     else:
         print("[!] Note: One or more patches could not be auto-applied. Check warnings above.")
 
