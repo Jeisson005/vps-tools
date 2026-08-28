@@ -8,7 +8,8 @@ Contains:
 - [opencode/](opencode/) — OpenCode AI coding assistant (CLI & Systemd Web service)
 - [hermes/](hermes/) — Hermes autonomous AI agent by Nous Research (CLI)
 - [nginx/](nginx/) — Nginx reverse proxy, TLS (Certbot), and API Key/Basic Auth protection
-- [bash-mcp/](bash-mcp/) — Host-native Model Context Protocol (MCP) server for AI assistants
+- [steel/](steel/) — Steel Browser Sandbox (isolated headless Chromium with Live Session Viewer & MCP)
+- [open-webui/](open-webui/) — Open WebUI ChatGPT/Claude-like interface with multi-user auth and RAG
 - [postgres/](postgres/) — Postgres database + PgBouncer
 - [redis/](redis/) — Redis in-memory cache and key-value store
 - [mongodb/](mongodb/) — MongoDB document database

@@ -1,0 +1,67 @@
+# ==============================================================================
+# OPEN WEBUI NGINX REVERSE PROXY TEMPLATE
+# ==============================================================================
+# Template variables:
+#   {{OPEN_WEBUI_DOMAIN}}       -> Full domain (e.g., chat.yourdomain.com)
+#   {{OPEN_WEBUI_PORT}}         -> Local container port (default: 8080)
+#   {{CERT_DOMAIN}}             -> Certificate folder name under Let's Encrypt
+# ==============================================================================
+
+# HTTP to HTTPS redirect
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{OPEN_WEBUI_DOMAIN}};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS Main Server Block
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {{OPEN_WEBUI_DOMAIN}};
+
+    ssl_certificate /etc/letsencrypt/live/{{CERT_DOMAIN}}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{CERT_DOMAIN}}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # Maximum upload size for large PDFs, datasets, videos, and code archives
+    client_max_body_size 256M;
+
+    # Security Headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:{{OPEN_WEBUI_PORT}};
+        proxy_http_version 1.1;
+
+        # WebSocket & Server-Sent Events (SSE) streaming support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Disable buffering for real-time token streaming
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}
