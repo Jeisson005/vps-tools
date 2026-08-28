@@ -127,6 +127,10 @@ if [[ -f "${HERMES_DIR}/templates/SOUL.md" ]]; then
   chown "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.hermes/SOUL.md"
 fi
 
+if [[ -f "${HERMES_DIR}/scripts/patch-api-server-reasoning.py" ]]; then
+  python3 "${HERMES_DIR}/scripts/patch-api-server-reasoning.py" "${HERMES_AGENT_PATH}"
+fi
+
 chown -R "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.hermes/skills"
 
 # Build Web Dashboard Frontend
