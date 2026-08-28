@@ -1,19 +1,19 @@
 ---
 name: webui-workspace
-description: "Autonomously handle files and scripts attached via Open WebUI, read from the shared volume and uploads repository, and execute, modify, or transfer them on the VPS."
-version: 1.1.0
+description: "Autonomously handle files and scripts attached via Open WebUI, read from shared storage, execute scripts, and register generated files for instant native download in chat."
+version: 1.2.0
 author: VPS Tools
 license: MIT
 metadata:
   hermes:
-    tags: [webui, open-webui, workspace, uploads, execution, scripts, scp, transfers, files]
+    tags: [webui, open-webui, workspace, uploads, execution, scripts, scp, transfers, files, downloads]
     category: tools
     related_skills: [browser-automation]
 ---
 
 # Open WebUI Workspace & File Lifecycle Skill
 
-Dedicated skill for handling files, attached scripts, and datasets submitted through the **Open WebUI** interface.
+Dedicated skill for handling files, attached scripts, and datasets submitted through the **Open WebUI** interface (`https://chat.jeisson.top`).
 
 ---
 
@@ -49,7 +49,24 @@ When a user attaches code in Open WebUI (indicated by headers like `### Attached
 
 ---
 
-### 2. 📤 Remote Transfers from WebUI
+### 2. 📥 Native File Delivery & Download Cards
+When you generate a new file, report, processed image, or modified document (e.g. PDF, CSV, Excel, ZIP) for the user in Open WebUI:
+
+1. **Save to Workspace:** Save the file into `~/vps-tools/open-webui/data/workspace/<filename>`.
+2. **Register File in Open WebUI:** Run the bridge command:
+   ```bash
+   webui-file-upload ~/vps-tools/open-webui/data/workspace/<filename>
+   ```
+3. **Provide Download Card:** Extract the returned download markdown link (e.g. `[📄 <filename>](/api/v1/files/<file_id>/content)`) and present it clearly to the user in your message:
+   ```markdown
+   Aquí tienes tu archivo listo para descargar o previsualizar:
+   [📄 <filename>](/api/v1/files/<file_id>/content)
+   ```
+   *This generates an authenticated, native Open WebUI file card that allows the user to preview or download the file with 1 click.*
+
+---
+
+### 3. 📤 Remote Transfers from WebUI
 When the user asks to **transfer an attached file to another server**:
 
 1. Save the file in `~/vps-tools/open-webui/data/workspace/<filename>`.
@@ -61,7 +78,7 @@ When the user asks to **transfer an attached file to another server**:
 
 ---
 
-### 3. 🔍 Locating Raw Uploads
+### 4. 🔍 Locating Raw Uploads
 If the user references an uploaded binary file, database, or document stored in Open WebUI:
 
 1. Search directly inside the Open WebUI uploads repository:
@@ -69,11 +86,3 @@ If the user references an uploaded binary file, database, or document stored in 
    find ~/vps-tools/open-webui/data/open-webui/uploads/ -name "*<filename>*" 2>/dev/null
    ```
 2. Process or inspect the located file as requested.
-
----
-
-### 4. 💾 Output Files for WebUI Users
-When generating reports, charts, or modified files:
-
-1. Save the file into `~/vps-tools/open-webui/data/workspace/<filename>`.
-2. Inform the user of the filename and path so it remains accessible in the shared workspace.

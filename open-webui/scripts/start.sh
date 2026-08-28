@@ -13,6 +13,7 @@ if [ ! -f .env ]; then
 fi
 
 echo "[*] Starting Open WebUI container..."
+chmod -R 777 "${MODULE_DIR}/data" 2>/dev/null || true
 docker compose --env-file .env up -d
 
 echo "[+] Open WebUI started successfully!"

@@ -32,6 +32,17 @@ WORKSPACE_DIR="${MODULE_DIR}/data/workspace"
 mkdir -p "${DATA_DIR}" "${WORKSPACE_DIR}"
 chmod -R 775 "${MODULE_DIR}/data"
 
+# 4. Install webui-file-upload bridge CLI
+if [ -f "${SCRIPT_DIR}/webui-file-upload.py" ]; then
+    echo "[*] Installing webui-file-upload tool to /usr/local/bin/..."
+    chmod +x "${SCRIPT_DIR}/webui-file-upload.py"
+    if [ "$EUID" -eq 0 ]; then
+        cp "${SCRIPT_DIR}/webui-file-upload.py" /usr/local/bin/webui-file-upload
+    else
+        sudo cp "${SCRIPT_DIR}/webui-file-upload.py" /usr/local/bin/webui-file-upload || true
+    fi
+fi
+
 echo "[+] Data directories created:"
 echo "    - Storage:   ${DATA_DIR}"
 echo "    - Workspace: ${WORKSPACE_DIR}"
