@@ -226,6 +226,32 @@ if [[ -n "${TELEGRAM_BOT_TOKEN}" ]]; then
       sed -i "s|^TELEGRAM_ALLOWED_USERS=.*|TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS}|" "${HERMES_ENV}"
     fi
   fi
+  if [[ -n "${TELEGRAM_DM_POLICY:-}" ]]; then
+    if ! grep -q "^TELEGRAM_DM_POLICY=" "${HERMES_ENV}" 2>/dev/null; then
+      echo "TELEGRAM_DM_POLICY=${TELEGRAM_DM_POLICY}" >> "${HERMES_ENV}"
+    else
+      sed -i "s|^TELEGRAM_DM_POLICY=.*|TELEGRAM_DM_POLICY=${TELEGRAM_DM_POLICY}|" "${HERMES_ENV}"
+    fi
+  fi
+fi
+
+# Configure WhatsApp env vars if provided
+if [[ -n "${WHATSAPP_ALLOWED_USERS:-}" ]]; then
+  HERMES_ENV="${USER_HOME}/.hermes/.env"
+  touch "${HERMES_ENV}"
+  chmod 600 "${HERMES_ENV}"
+  if ! grep -q "^WHATSAPP_ALLOWED_USERS=" "${HERMES_ENV}" 2>/dev/null; then
+    echo "WHATSAPP_ALLOWED_USERS=${WHATSAPP_ALLOWED_USERS}" >> "${HERMES_ENV}"
+  else
+    sed -i "s|^WHATSAPP_ALLOWED_USERS=.*|WHATSAPP_ALLOWED_USERS=${WHATSAPP_ALLOWED_USERS}|" "${HERMES_ENV}"
+  fi
+  if [[ -n "${WHATSAPP_DM_POLICY:-}" ]]; then
+    if ! grep -q "^WHATSAPP_DM_POLICY=" "${HERMES_ENV}" 2>/dev/null; then
+      echo "WHATSAPP_DM_POLICY=${WHATSAPP_DM_POLICY}" >> "${HERMES_ENV}"
+    else
+      sed -i "s|^WHATSAPP_DM_POLICY=.*|WHATSAPP_DM_POLICY=${WHATSAPP_DM_POLICY}|" "${HERMES_ENV}"
+    fi
+  fi
 fi
 
 # Generate dashboard systemd unit
