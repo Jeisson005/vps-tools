@@ -182,13 +182,20 @@ try:
         'busy_ack_detail': False,
         'interim_assistant_messages': False
     }
+    if 'platforms' not in cfg:
+        cfg['platforms'] = {}
+    cfg['platforms']['api_server'] = {
+        'enabled': True,
+        'host': '0.0.0.0',
+        'port': 8642
+    }
     if 'browser' not in cfg:
         cfg['browser'] = {}
     cfg['browser']['backend'] = 'off'
     cfg['browser']['cdp_url'] = 'ws://127.0.0.1:9223'
     with open(config_path, 'w') as f:
         yaml.dump(cfg, f, default_flow_style=False, sort_keys=True)
-    print('[+] Configured quiet Telegram display and Steel CDP in ~/.hermes/config.yaml')
+    print('[+] Configured quiet Telegram display, Steel CDP, and API server in ~/.hermes/config.yaml')
 except Exception as e:
     print(f'[-] Error configuring display/browser settings: {e}')
 PY"
