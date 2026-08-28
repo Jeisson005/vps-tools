@@ -16,10 +16,10 @@ services:
       - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-http://host.docker.internal:9119/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - DEFAULT_MODELS=${DEFAULT_MODELS:-hermes}
+      - RAG_FULL_CONTEXT=${RAG_FULL_CONTEXT:-true}
       - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
-      - ENABLE_RAG_WEB_SEARCH=${ENABLE_RAG_WEB_SEARCH:-false}
-      - RAG_WEB_SEARCH_ENGINE=${RAG_WEB_SEARCH_ENGINE:-brave}
-      - RAG_WEB_SEARCH_API_KEY=${RAG_WEB_SEARCH_API_KEY:-}
+      - ENABLE_RAG_WEB_SEARCH=false
+      - ENABLE_COMMUNITY_SHARING=false
       - UPLOAD_DIR=/app/backend/data/uploads
     extra_hosts:
       - "host.docker.internal:host-gateway"
