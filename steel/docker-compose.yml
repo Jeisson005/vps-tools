@@ -4,8 +4,8 @@ services:
     container_name: steel-browser
     restart: unless-stopped
     ports:
-      - "${STEEL_PORT:-3000}:3000"
-      - "${STEEL_CDP_PORT:-9223}:9223"
+      - "127.0.0.1:${STEEL_PORT:-3000}:3000"
+      - "127.0.0.1:${STEEL_CDP_PORT:-9223}:9223"
     volumes:
       - ./data/steel-cache:/app/.cache
     environment:
@@ -25,3 +25,11 @@ services:
       resources:
         limits:
           memory: 2.5G
+    networks:
+      - default
+      - nginx_default
+
+networks:
+  default:
+  nginx_default:
+    external: true
