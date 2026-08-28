@@ -122,6 +122,11 @@ if [[ -f "${HERMES_DIR}/skills/desktop-gui-control/SKILL.md" ]]; then
   cp "${HERMES_DIR}/skills/desktop-gui-control/SKILL.md" "${USER_HOME}/.hermes/skills/computer-use/desktop-gui-control/SKILL.md"
 fi
 
+if [[ -f "${HERMES_DIR}/templates/SOUL.md" ]]; then
+  cp "${HERMES_DIR}/templates/SOUL.md" "${USER_HOME}/.hermes/SOUL.md"
+  chown "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.hermes/SOUL.md"
+fi
+
 chown -R "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.hermes/skills"
 
 # Build Web Dashboard Frontend
