@@ -98,7 +98,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - STEEL_API_KEY=${STEEL_API_KEY:-}
-      - IDLE_TIMEOUT_SEC=${STEEL_IDLE_TIMEOUT_SEC:-180}
+      - IDLE_TIMEOUT_SEC=${STEEL_IDLE_TIMEOUT_SEC:-3600}
       - PORT=3000
     depends_on:
       - steel-1
