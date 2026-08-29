@@ -6,7 +6,7 @@ from .tools import PASSBOLT_TOOLS
 class PassboltService(BaseMcpService):
     service_id: str = "passbolt"
     name: str = "Passbolt Password Manager"
-    description: str = "Team password manager with OpenPGP client-side encryption and GPG challenge-response"
+    description: str = "Team password manager with OpenPGP client-side encryption, TOTP 2FA, and full CRUD support."
 
     def __init__(self, config: Dict[str, Any], secrets: Dict[str, str], enabled: bool = True):
         super().__init__(config, secrets, enabled)
@@ -54,9 +54,56 @@ class PassboltService(BaseMcpService):
                 raise ValueError("Argument 'resource_id' is required for passbolt_get_secret.")
             return await self.client.get_secret(resource_id=resource_id)
 
+        elif tool_name == "passbolt_create_resource":
+            name = arguments.get("name")
+            password = arguments.get("password")
+            if not name or not password:
+                raise ValueError("Arguments 'name' and 'password' are required for passbolt_create_resource.")
+            return await self.client.create_resource(
+                name=name,
+                password=password,
+                username=arguments.get("username", ""),
+                uri=arguments.get("uri", ""),
+                description=arguments.get("description", ""),
+                folder_id=arguments.get("folder_id"),
+                totp_secret=arguments.get("totp_secret"),
+                custom_fields=arguments.get("custom_fields")
+            )
+
+        elif tool_name == "passbolt_update_resource":
+            resource_id = arguments.get("resource_id")
+            if not resource_id:
+                raise ValueError("Argument 'resource_id' is required for passbolt_update_resource.")
+            return await self.client.update_resource(
+                resource_id=resource_id,
+                name=arguments.get("name"),
+                password=arguments.get("password"),
+                username=arguments.get("username"),
+                uri=arguments.get("uri"),
+                description=arguments.get("description"),
+                folder_id=arguments.get("folder_id"),
+                totp_secret=arguments.get("totp_secret"),
+                custom_fields=arguments.get("custom_fields")
+            )
+
+        elif tool_name == "passbolt_delete_resource":
+            resource_id = arguments.get("resource_id")
+            if not resource_id:
+                raise ValueError("Argument 'resource_id' is required for passbolt_delete_resource.")
+            return await self.client.delete_resource(resource_id=resource_id)
+
         elif tool_name == "passbolt_list_folders":
             parent_id = arguments.get("parent_id")
             return await self.client.list_folders(parent_id=parent_id)
+
+        elif tool_name == "passbolt_create_folder":
+            name = arguments.get("name")
+            if not name:
+                raise ValueError("Argument 'name' is required for passbolt_create_folder.")
+            return await self.client.create_folder(
+                name=name,
+                parent_id=arguments.get("parent_id")
+            )
 
         else:
             raise ValueError(f"Unknown Passbolt tool: '{tool_name}'")
