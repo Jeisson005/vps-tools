@@ -274,6 +274,7 @@ async def _sse_stream_generator(scope: str, session_id: str, request: Request):
 async def passbolt_http_post(request: Request):
     return await _process_mcp_http_post(scope="passbolt", request=request)
 
+@app.get("/passbolt")
 @app.get("/passbolt/sse")
 async def passbolt_sse_get(request: Request):
     verify_client_mcp_auth(request)
@@ -288,6 +289,15 @@ async def passbolt_sse_get(request: Request):
             "Mcp-Session-Id": session_id
         }
     )
+
+@app.delete("/passbolt")
+@app.delete("/passbolt/mcp")
+async def passbolt_http_delete(request: Request):
+    verify_client_mcp_auth(request)
+    session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId")
+    if session_id and session_id in _active_sse_queues:
+        _active_sse_queues.pop(session_id, None)
+    return Response(status_code=204)
 
 @app.post("/passbolt/message")
 @app.post("/passbolt/sse")
@@ -320,6 +330,7 @@ async def passbolt_sse_message(request: Request, sessionId: Optional[str] = Quer
 async def unified_http_post(request: Request):
     return await _process_mcp_http_post(scope="unified", request=request)
 
+@app.get("/unified")
 @app.get("/unified/sse")
 @app.get("/sse")
 async def unified_sse_get(request: Request):
@@ -335,6 +346,15 @@ async def unified_sse_get(request: Request):
             "Mcp-Session-Id": session_id
         }
     )
+
+@app.delete("/unified")
+@app.delete("/mcp")
+async def unified_http_delete(request: Request):
+    verify_client_mcp_auth(request)
+    session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId")
+    if session_id and session_id in _active_sse_queues:
+        _active_sse_queues.pop(session_id, None)
+    return Response(status_code=204)
 
 @app.post("/unified/message")
 @app.post("/unified/sse")
