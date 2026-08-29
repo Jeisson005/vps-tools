@@ -1,0 +1,340 @@
+import os
+import json
+import uuid
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from typing import Dict, Any, Optional
+
+from fastapi import FastAPI, Request, Response, HTTPException, Depends, Header, Query
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from .core.db import init_db, get_recent_activity, log_activity
+from .core.registry import registry
+from .core.mcp_protocol import McpProtocolHandler
+from .services.passbolt.client import PassboltClient
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger("mcp.main")
+
+ADMIN_PASSWORD = os.environ.get("MCP_ADMIN_PASSWORD", "admin")
+MCP_API_KEY = os.environ.get("MCP_API_KEY", "").strip()
+
+# Active SSE sessions: session_id -> asyncio.Queue
+_active_sse_queues: Dict[str, asyncio.Queue] = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Initializing MCP Gateway database and services...")
+    init_db()
+    registry.initialize()
+    logger.info("MCP Gateway ready.")
+    yield
+    logger.info("Shutting down MCP Gateway.")
+
+app = FastAPI(title="VPS MCP Gateway", lifespan=lifespan)
+
+# Allow CORS for Web UI and client connections
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files for Admin Web UI
+web_dir = os.path.join(os.path.dirname(__file__), "web")
+if os.path.exists(web_dir):
+    app.mount("/static", StaticFiles(directory=web_dir), name="static")
+
+# --- Security & Auth Helpers ---
+
+def verify_admin_token(authorization: Optional[str] = Header(None)) -> bool:
+    """Verify bearer token for Admin Panel API requests."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+    parts = authorization.split(" ")
+    token = parts[1] if len(parts) == 2 else parts[0]
+    if token != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    return True
+
+def verify_client_mcp_auth(request: Request):
+    """Verify API Key for LLM clients accessing MCP endpoints."""
+    if not MCP_API_KEY:
+        return True  # Open if no API key configured
+
+    # 1. Check Authorization header
+    auth_header = request.headers.get("Authorization")
+    if auth_header:
+        parts = auth_header.split(" ")
+        key = parts[1] if len(parts) == 2 else parts[0]
+        if key == MCP_API_KEY:
+            return True
+
+    # 2. Check X-API-Key header
+    if request.headers.get("X-API-Key") == MCP_API_KEY:
+        return True
+
+    # 3. Check query param ?api_key=...
+    if request.query_params.get("api_key") == MCP_API_KEY:
+        return True
+
+    raise HTTPException(status_code=401, detail="Unauthorized: Invalid MCP API Key")
+
+# --- Admin Web UI Routes ---
+
+@app.get("/", response_class=HTMLResponse)
+@app.get("/admin", response_class=HTMLResponse)
+async def serve_admin_dashboard():
+    index_path = os.path.join(web_dir, "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read(), status_code=200)
+    return HTMLResponse("<h1>MCP Gateway</h1><p>Web UI files not found.</p>", status_code=404)
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "healthy",
+        "service": "mcp-gateway",
+        "services": registry.list_services_status()
+    }
+
+# --- Admin API Routes ---
+
+class LoginPayload(BaseModel):
+    password: str
+
+@app.post("/api/admin/login")
+async def admin_login(payload: LoginPayload):
+    if payload.password == ADMIN_PASSWORD:
+        return {"ok": True, "token": ADMIN_PASSWORD}
+    raise HTTPException(status_code=401, detail="Contraseña incorrecta")
+
+@app.get("/api/admin/services")
+async def get_admin_services(auth: bool = Depends(verify_admin_token)):
+    return registry.list_services_status()
+
+class ToggleServicePayload(BaseModel):
+    enabled: bool
+
+@app.post("/api/admin/services/{service_id}/toggle")
+async def toggle_service(service_id: str, payload: ToggleServicePayload, auth: bool = Depends(verify_admin_token)):
+    service = registry.get_service(service_id)
+    if not service:
+        raise HTTPException(status_code=404, detail=f"Service '{service_id}' not found")
+    
+    registry.update_service(service_id, enabled=payload.enabled, config=service.config, secrets=service.secrets)
+    return {"ok": True, "enabled": payload.enabled}
+
+class SaveServicePayload(BaseModel):
+    enabled: bool = True
+    config: Dict[str, Any] = {}
+    secrets: Dict[str, str] = {}
+
+@app.post("/api/admin/services/{service_id}")
+async def save_service(service_id: str, payload: SaveServicePayload, auth: bool = Depends(verify_admin_token)):
+    registry.update_service(
+        service_id=service_id,
+        enabled=payload.enabled,
+        config=payload.config,
+        secrets=payload.secrets
+    )
+    return {"ok": True, "message": f"Service '{service_id}' updated"}
+
+class PassboltTestPayload(BaseModel):
+    base_url: str
+    user_email: Optional[str] = ""
+    fingerprint: Optional[str] = ""
+    passphrase: Optional[str] = ""
+    private_key: Optional[str] = ""
+
+@app.post("/api/admin/services/passbolt/test")
+async def test_passbolt_connection(payload: PassboltTestPayload, auth: bool = Depends(verify_admin_token)):
+    # Fallback to existing secrets if not passed in form
+    service = registry.get_service("passbolt")
+    private_key = payload.private_key or (service.secrets.get("private_key") if service else "")
+    passphrase = payload.passphrase or (service.secrets.get("passphrase") if service else "")
+    
+    test_client = PassboltClient(
+        base_url=payload.base_url,
+        private_key_armored=private_key,
+        passphrase=passphrase,
+        user_email=payload.user_email or "",
+        fingerprint=payload.fingerprint or ""
+    )
+    return await test_client.test_connection()
+
+@app.get("/api/admin/tools")
+async def get_admin_tools(scope: str = Query("unified"), auth: bool = Depends(verify_admin_token)):
+    tools = registry.get_tools_for_scope(scope)
+    return {"tools": tools}
+
+class TesterCallPayload(BaseModel):
+    scope: str = "unified"
+    tool: str
+    arguments: Dict[str, Any] = {}
+
+@app.post("/api/admin/tester/call")
+async def admin_tester_call(payload: TesterCallPayload, auth: bool = Depends(verify_admin_token)):
+    handler = McpProtocolHandler(scope=payload.scope)
+    rpc_payload = {
+        "jsonrpc": "2.0",
+        "id": "tester-" + str(uuid.uuid4())[:8],
+        "method": "tools/call",
+        "params": {
+            "name": payload.tool,
+            "arguments": payload.arguments
+        }
+    }
+    response, _ = await handler.handle_request(rpc_payload)
+    return response
+
+@app.get("/api/admin/logs")
+async def get_admin_logs(auth: bool = Depends(verify_admin_token)):
+    return get_recent_activity(limit=100)
+
+# --- MCP JSON-RPC Protocol Endpoints (Streamable-HTTP & SSE) ---
+
+async def _process_mcp_http_post(scope: str, request: Request):
+    """Handles Streamable-HTTP POST request."""
+    verify_client_mcp_auth(request)
+    session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId")
+    
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON-RPC payload")
+
+    handler = McpProtocolHandler(scope=scope)
+    response_data, effective_sid = await handler.handle_request(body, session_id=session_id)
+
+    headers = {
+        "Mcp-Session-Id": effective_sid,
+        "Content-Type": "application/json"
+    }
+
+    if response_data is None:
+        return Response(status_code=204, headers=headers)
+        
+    return JSONResponse(content=response_data, headers=headers)
+
+async def _sse_stream_generator(scope: str, session_id: str, request: Request):
+    """Event stream generator for MCP SSE transport."""
+    q: asyncio.Queue = asyncio.Queue()
+    _active_sse_queues[session_id] = q
+
+    # Send endpoint event immediately
+    endpoint_url = f"/{scope}/message?sessionId={session_id}"
+    yield f"event: endpoint\ndata: {endpoint_url}\n\n"
+
+    try:
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                # Wait for outgoing message with timeout to send keep-alive comment
+                msg = await asyncio.wait_for(q.get(), timeout=15.0)
+                yield f"event: message\ndata: {json.dumps(msg)}\n\n"
+            except asyncio.TimeoutError:
+                # SSE keep-alive ping
+                yield ": ping\n\n"
+    finally:
+        _active_sse_queues.pop(session_id, None)
+
+# Subroute: Passbolt isolated endpoint
+@app.post("/passbolt")
+@app.post("/passbolt/mcp")
+async def passbolt_http_post(request: Request):
+    return await _process_mcp_http_post(scope="passbolt", request=request)
+
+@app.get("/passbolt/sse")
+async def passbolt_sse_get(request: Request):
+    verify_client_mcp_auth(request)
+    session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId") or str(uuid.uuid4())
+    return StreamingResponse(
+        _sse_stream_generator(scope="passbolt", session_id=session_id, request=request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Mcp-Session-Id": session_id
+        }
+    )
+
+@app.post("/passbolt/message")
+@app.post("/passbolt/sse")
+async def passbolt_sse_message(request: Request, sessionId: Optional[str] = Query(None)):
+    verify_client_mcp_auth(request)
+    session_id = sessionId or request.headers.get("Mcp-Session-Id") or "default-session"
+    
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON-RPC payload")
+
+    handler = McpProtocolHandler(scope="passbolt")
+    response_data, effective_sid = await handler.handle_request(body, session_id=session_id)
+
+    # If an SSE stream is active for this session, push event to the stream
+    q = _active_sse_queues.get(effective_sid)
+    if q and response_data:
+        await q.put(response_data)
+        return Response(status_code=202, headers={"Mcp-Session-Id": effective_sid})
+
+    if response_data is None:
+        return Response(status_code=204, headers={"Mcp-Session-Id": effective_sid})
+
+    return JSONResponse(content=response_data, headers={"Mcp-Session-Id": effective_sid})
+
+# Subroute: Unified aggregator endpoint (/unified, /mcp, /sse)
+@app.post("/unified")
+@app.post("/mcp")
+async def unified_http_post(request: Request):
+    return await _process_mcp_http_post(scope="unified", request=request)
+
+@app.get("/unified/sse")
+@app.get("/sse")
+async def unified_sse_get(request: Request):
+    verify_client_mcp_auth(request)
+    session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId") or str(uuid.uuid4())
+    return StreamingResponse(
+        _sse_stream_generator(scope="unified", session_id=session_id, request=request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Mcp-Session-Id": session_id
+        }
+    )
+
+@app.post("/unified/message")
+@app.post("/unified/sse")
+async def unified_sse_message(request: Request, sessionId: Optional[str] = Query(None)):
+    verify_client_mcp_auth(request)
+    session_id = sessionId or request.headers.get("Mcp-Session-Id") or "default-session"
+    
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON-RPC payload")
+
+    handler = McpProtocolHandler(scope="unified")
+    response_data, effective_sid = await handler.handle_request(body, session_id=session_id)
+
+    q = _active_sse_queues.get(effective_sid)
+    if q and response_data:
+        await q.put(response_data)
+        return Response(status_code=202, headers={"Mcp-Session-Id": effective_sid})
+
+    if response_data is None:
+        return Response(status_code=204, headers={"Mcp-Session-Id": effective_sid})
+
+    return JSONResponse(content=response_data, headers={"Mcp-Session-Id": effective_sid})

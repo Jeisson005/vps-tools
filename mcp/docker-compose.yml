@@ -1,0 +1,35 @@
+services:
+  mcp-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcp-gateway:latest
+    container_name: mcp-gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MCP_PORT:-8005}:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - MCP_PORT=8000
+      - MCP_DATA_DIR=/app/data
+      - MCP_ADMIN_PASSWORD=${MCP_ADMIN_PASSWORD:-admin}
+      - MCP_API_KEY=${MCP_API_KEY:-}
+      - MCP_MASTER_KEY=${MCP_MASTER_KEY:-}
+      - PASSBOLT_URL=${PASSBOLT_URL:-}
+      - PASSBOLT_PASSPHRASE=${PASSBOLT_PASSPHRASE:-}
+      - PASSBOLT_USER_EMAIL=${PASSBOLT_USER_EMAIL:-}
+      - PASSBOLT_FINGERPRINT=${PASSBOLT_FINGERPRINT:-}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - default
+      - nginx_network
+
+networks:
+  default:
+  nginx_network:
+    name: ${NGINX_NETWORK:-nginx_default}
+    external: true
