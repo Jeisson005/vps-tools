@@ -39,7 +39,6 @@ sleep 3
 
 if docker compose ps --status=running | grep -q "steel"; then
   echo "[+] Steel Browser container is RUNNING."
-  python3 "${SCRIPT_DIR}/patch-steel.py"
   docker compose ps
 else
   echo "[-] ERROR: Steel Browser failed to start." >&2

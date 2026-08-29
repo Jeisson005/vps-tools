@@ -19,9 +19,6 @@ docker compose pull
 echo "[*] Recreating container with latest image..."
 docker compose up -d
 
-echo "[*] Applying and validating security patches..."
-python3 "${SCRIPT_DIR}/patch-steel.py"
-
 echo "================================================================="
-echo "[+] Steel Browser updated and protected successfully!"
+echo "[+] Steel Browser updated successfully!"
 echo "================================================================="
