@@ -147,39 +147,52 @@ async def save_service(service_id: str, payload: SaveServicePayload, auth: bool 
     )
     return {"ok": True, "message": f"Service '{service_id}' updated"}
 
-class PassboltTestPayload(BaseModel):
-    base_url: str
-    user_email: Optional[str] = ""
-    fingerprint: Optional[str] = ""
-    passphrase: Optional[str] = ""
-    private_key: Optional[str] = ""
+@app.post("/api/admin/services/{service_id}/test")
+async def test_existing_service(service_id: str, auth: bool = Depends(verify_admin_token)):
+    service = registry.get_service(service_id)
+    if not service:
+        raise HTTPException(status_code=404, detail=f"Service '{service_id}' not found")
+    res = await service.test_connection()
+    return res
 
-@app.post("/api/admin/services/passbolt/test")
-async def test_passbolt_connection(payload: PassboltTestPayload, auth: bool = Depends(verify_admin_token)):
-    # Fallback to existing secrets if not passed in form
-    service = registry.get_service("passbolt")
-    private_key = payload.private_key or (service.secrets.get("private_key") if service else "")
-    passphrase = payload.passphrase or (service.secrets.get("passphrase") if service else "")
+class TestConfigPayload(BaseModel):
+    config: Dict[str, Any] = {}
+    secrets: Dict[str, str] = {}
+
+@app.post("/api/admin/services/{service_id}/test-config")
+async def test_service_draft_config(service_id: str, payload: TestConfigPayload, auth: bool = Depends(verify_admin_token)):
+    service = registry.get_service(service_id)
+    cfg = payload.config or (service.config if service else {})
+    sec = payload.secrets or {}
     
-    test_client = PassboltClient(
-        base_url=payload.base_url,
-        private_key_armored=private_key,
-        passphrase=passphrase,
-        user_email=payload.user_email or "",
-        fingerprint=payload.fingerprint or ""
-    )
-    return await test_client.test_connection()
+    if service:
+        for k, v in service.secrets.items():
+            if k not in sec or not sec[k]:
+                sec[k] = v
+
+    if service_id == "passbolt":
+        test_client = PassboltClient(
+            base_url=cfg.get("base_url", ""),
+            private_key_armored=sec.get("private_key", ""),
+            passphrase=sec.get("passphrase", ""),
+            user_email=cfg.get("user_email", ""),
+            fingerprint=cfg.get("fingerprint", "")
+        )
+        return await test_client.test_connection()
+    
+    return {"ok": False, "message": f"Tester not implemented for {service_id}"}
 
 @app.get("/api/admin/tools")
 async def get_admin_tools(scope: str = Query("unified"), auth: bool = Depends(verify_admin_token)):
     tools = registry.get_tools_for_scope(scope)
-    return {"tools": tools}
+    return tools
 
 class TesterCallPayload(BaseModel):
     scope: str = "unified"
     tool: str
     arguments: Dict[str, Any] = {}
 
+@app.post("/api/admin/tools/execute")
 @app.post("/api/admin/tester/call")
 async def admin_tester_call(payload: TesterCallPayload, auth: bool = Depends(verify_admin_token)):
     handler = McpProtocolHandler(scope=payload.scope)
@@ -194,6 +207,14 @@ async def admin_tester_call(payload: TesterCallPayload, auth: bool = Depends(ver
     }
     response, _ = await handler.handle_request(rpc_payload)
     return response
+
+@app.get("/api/admin/gateway-info")
+async def get_gateway_info(auth: bool = Depends(verify_admin_token)):
+    return {
+        "api_key": MCP_API_KEY or "mcp_sec_4d692f955b2f868126e6e5f5d026e22ab930",
+        "unified_endpoint": "/unified",
+        "services": registry.list_services_status()
+    }
 
 @app.get("/api/admin/logs")
 async def get_admin_logs(auth: bool = Depends(verify_admin_token)):

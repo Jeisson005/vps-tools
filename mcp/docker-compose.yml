@@ -10,6 +10,7 @@ services:
       - "127.0.0.1:${MCP_PORT:-8005}:8000"
     volumes:
       - ./data:/app/data
+      - ./src:/app/src
     environment:
       - MCP_PORT=8000
       - MCP_DATA_DIR=/app/data
