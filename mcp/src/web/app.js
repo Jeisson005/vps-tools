@@ -1,4 +1,4 @@
-// MCP Gateway Admin Panel Frontend Logic (Pure Vanilla JS, 0 dependencies)
+// MCP Gateway Admin Panel Frontend (Pure Vanilla JS, 0 dependencies)
 
 let currentToken = localStorage.getItem("mcp_admin_token") || "";
 let loadedServices = [];
@@ -7,13 +7,14 @@ let passboltArmoredKey = "";
 // --- Toast Notifications ---
 function showToast(message, type = "info") {
   const container = document.getElementById("toast-container");
+  if (!container) return;
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
   toast.innerText = message;
   container.appendChild(toast);
   setTimeout(() => {
     toast.style.opacity = "0";
-    setTimeout(() => toast.remove(), 300);
+    setTimeout(() => toast.remove(), 250);
   }, 3500);
 }
 
@@ -70,20 +71,26 @@ document.getElementById("btn-logout").addEventListener("click", () => {
 });
 
 // --- Tab Navigation ---
-document.querySelectorAll(".nav-tab").forEach(tab => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
-    document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+function initTabs() {
+  const tabs = document.querySelectorAll(".nav-tab");
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      tabs.forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
 
-    tab.classList.add("active");
-    const targetTab = tab.getAttribute("data-tab");
-    document.getElementById(`tab-${targetTab}`).classList.add("active");
+      tab.classList.add("active");
+      const target = tab.getAttribute("data-tab");
+      const pane = document.getElementById(`tab-${target}`);
+      if (pane) {
+        pane.classList.add("active");
+      }
 
-    if (targetTab === "tester") loadTesterTools();
-    if (targetTab === "clients") updateClientSnippets();
-    if (targetTab === "logs") loadLogs();
+      if (target === "tester") loadTesterTools();
+      if (target === "clients") updateClientSnippets();
+      if (target === "logs") loadLogs();
+    });
   });
-});
+}
 
 // --- Load Services List ---
 async function loadServices() {
@@ -93,75 +100,70 @@ async function loadServices() {
     const services = await res.json();
     loadedServices = services;
     renderServicesGrid(services);
-    updateStats(services);
   } catch (err) {
     showToast(err.message, "error");
   }
 }
 
-function updateStats(services) {
-  let totalTools = 0;
-  services.forEach(s => {
-    if (s.enabled && s.configured) totalTools += s.tools_count;
-  });
-  document.getElementById("stat-total-services").innerText = services.length;
-  document.getElementById("stat-active-tools").innerText = totalTools;
-}
-
 function renderServicesGrid(services) {
   const grid = document.getElementById("services-grid");
+  if (!grid) return;
   grid.innerHTML = "";
 
   services.forEach(s => {
     const isConfigured = s.configured;
     const isEnabled = s.enabled;
 
-    let badgeClass = "badge-warning";
+    let badgeClass = "badge";
     let badgeText = "Sin Configurar";
     if (isConfigured && isEnabled) {
-      badgeClass = "badge-success";
+      badgeClass = "badge badge-success";
       badgeText = "Activo";
     } else if (!isEnabled) {
-      badgeClass = "badge-error";
+      badgeClass = "badge badge-error";
       badgeText = "Inactivo";
     }
 
     const card = document.createElement("div");
-    card.className = "service-card glass-panel";
+    card.className = "service-card";
     card.innerHTML = `
-      <div class="service-card-top">
+      <div class="service-top">
         <div class="service-header">
-          <div class="service-icon-box">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <div class="service-title-wrap">
+            <div class="service-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <div>
+              <div class="service-name">${s.name}</div>
+            </div>
           </div>
-          <span class="badge ${badgeClass}">${badgeText}</span>
+          <span class="${badgeClass}">${badgeText}</span>
         </div>
-        <div class="service-meta">
-          <h3>${s.name}</h3>
-          <p class="service-desc">${s.description}</p>
-        </div>
-        <div class="service-subroutes">
-          <div>Subruta aislada: <span>/${s.id}</span></div>
-          <div>Tools disponibles: <b>${s.tools_count}</b></div>
+        <p class="service-desc">${s.description}</p>
+        <div class="service-tags">
+          <span class="tag-subroute">/${s.id}</span>
+          <span class="tag-tools">${s.tools_count} Tools activas</span>
         </div>
       </div>
-      <div class="service-card-bottom">
-        <div class="service-toggle-wrap">
-          <label class="switch">
-            <input type="checkbox" ${isEnabled ? "checked" : ""} class="service-toggle" data-id="${s.id}">
-            <span class="slider"></span>
-          </label>
-          <span>${isEnabled ? "Habilitado" : "Deshabilitado"}</span>
+      <div class="service-bottom">
+        <label class="switch" title="${isEnabled ? 'Desactivar' : 'Activar'}">
+          <input type="checkbox" ${isEnabled ? "checked" : ""} class="service-toggle" data-id="${s.id}">
+          <span class="slider"></span>
+        </label>
+        <div class="service-actions">
+          <button class="btn btn-secondary btn-sm btn-test-service" data-id="${s.id}">
+            Probar
+          </button>
+          <button class="btn btn-primary btn-sm btn-config-service" data-id="${s.id}">
+            Configurar
+          </button>
         </div>
-        <button class="btn btn-secondary btn-sm btn-config-service" data-id="${s.id}">
-          Configurar
-        </button>
       </div>
     `;
     grid.appendChild(card);
   });
 
-  // Attach event listeners for toggles and config buttons
+  // Attach event listeners
   document.querySelectorAll(".service-toggle").forEach(toggle => {
     toggle.addEventListener("change", async (e) => {
       const sId = e.target.getAttribute("data-id");
@@ -172,10 +174,32 @@ function renderServicesGrid(services) {
 
   document.querySelectorAll(".btn-config-service").forEach(btn => {
     btn.addEventListener("click", (e) => {
-      const sId = e.target.getAttribute("data-id");
+      const sId = e.target.closest("button").getAttribute("data-id");
       if (sId === "passbolt") openPassboltModal();
     });
   });
+
+  document.querySelectorAll(".btn-test-service").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const sId = e.target.closest("button").getAttribute("data-id");
+      await testServiceDirectly(sId);
+    });
+  });
+}
+
+async function testServiceDirectly(serviceId) {
+  showToast(`Probando conexión con ${serviceId}...`, "info");
+  try {
+    const res = await apiFetch(`/api/admin/services/${serviceId}/test`, { method: "POST" });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(data.message || "¡Conexión exitosa!", "success");
+    } else {
+      showToast(data.message || "Fallo en la prueba de conexión", "error");
+    }
+  } catch (err) {
+    showToast("Error ejecutando prueba: " + err.message, "error");
+  }
 }
 
 async function toggleServiceState(serviceId, enabled) {
@@ -202,38 +226,44 @@ function openPassboltModal() {
   const s = loadedServices.find(x => x.id === "passbolt");
   
   if (s && s.config) {
-    document.getElementById("pb-url").value = s.config.base_url || "";
-    document.getElementById("pb-email").value = s.config.user_email || "";
-    document.getElementById("pb-fingerprint").value = s.config.fingerprint || "";
+    document.getElementById("pb-base-url").value = s.config.base_url || "";
+    document.getElementById("pb-user-email").value = s.config.user_email || "";
     
-    const fileLabel = document.getElementById("file-status-label");
+    const fileLabel = document.getElementById("pb-key-status");
     if (s.has_private_key) {
-      fileLabel.innerText = "✓ Clave privada ya configurada en SQLite";
+      fileLabel.innerText = "✓ Clave privada configurada en base de datos";
       fileLabel.className = "file-status-label loaded";
     } else {
-      fileLabel.innerText = "Ningún archivo cargado aún";
+      fileLabel.innerText = "Ninguna clave cargada";
       fileLabel.className = "file-status-label";
     }
 
     if (s.has_passphrase) {
-      document.getElementById("pb-passphrase").placeholder = "•••••••••••• (Guardada en SQLite)";
+      document.getElementById("pb-passphrase").placeholder = "•••••••••••• (Guardada en base de datos)";
     }
   }
 
-  document.getElementById("pb-test-feedback").classList.add("hidden");
+  const feedback = document.getElementById("pb-test-feedback");
+  feedback.className = "test-feedback-box hidden";
+  feedback.innerText = "";
   modal.classList.add("active");
 }
 
-// Close Modal helper
-document.querySelectorAll(".modal-close").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const targetModal = btn.getAttribute("data-modal");
-    document.getElementById(targetModal).classList.remove("active");
-  });
+function closePassboltModal() {
+  document.getElementById("passbolt-modal").classList.remove("active");
+}
+
+document.getElementById("btn-close-passbolt-modal").addEventListener("click", closePassboltModal);
+document.getElementById("btn-cancel-passbolt").addEventListener("click", closePassboltModal);
+
+// Toggle Passphrase Visibility
+document.getElementById("btn-toggle-pb-passphrase").addEventListener("click", () => {
+  const input = document.getElementById("pb-passphrase");
+  input.type = input.type === "password" ? "text" : "password";
 });
 
 // File Drag & Drop for GPG Key
-const dropArea = document.getElementById("file-drop-area");
+const dropArea = document.getElementById("pb-file-drop");
 const fileInput = document.getElementById("pb-key-file");
 
 ['dragenter', 'dragover'].forEach(name => {
@@ -251,142 +281,179 @@ const fileInput = document.getElementById("pb-key-file");
 
 dropArea.addEventListener("drop", (e) => {
   const files = e.dataTransfer.files;
-  if (files.length) handleKeyFile(files[0]);
+  if (files.length > 0) handleKeyFile(files[0]);
 });
 
 fileInput.addEventListener("change", (e) => {
-  if (e.target.files.length) handleKeyFile(e.target.files[0]);
+  if (e.target.files.length > 0) handleKeyFile(e.target.files[0]);
 });
 
 function handleKeyFile(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
     passboltArmoredKey = e.target.result;
-    const label = document.getElementById("file-status-label");
+    document.getElementById("pb-private-key-paste").value = passboltArmoredKey;
+    const label = document.getElementById("pb-key-status");
     label.innerText = `✓ Archivo cargado: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
     label.className = "file-status-label loaded";
-    document.getElementById("pb-private-key").value = passboltArmoredKey;
-    showToast("Clave privada GPG leída correctamente", "info");
   };
   reader.readAsText(file);
 }
 
-// Toggle password visibility
-document.querySelectorAll(".btn-toggle-pwd").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const targetId = btn.getAttribute("data-target");
-    const input = document.getElementById(targetId);
-    input.type = input.type === "password" ? "text" : "password";
-  });
+// Live Test Connection Button inside Modal
+document.getElementById("btn-test-passbolt-live").addEventListener("click", async () => {
+  const btn = document.getElementById("btn-test-passbolt-live");
+  const feedback = document.getElementById("pb-test-feedback");
+  
+  const baseUrl = document.getElementById("pb-base-url").value.trim();
+  const userEmail = document.getElementById("pb-user-email").value.trim();
+  const keyPaste = document.getElementById("pb-private-key-paste").value.trim();
+  const passphrase = document.getElementById("pb-passphrase").value;
+
+  if (!baseUrl) {
+    showToast("Ingresa la URL del servidor Passbolt", "error");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerText = "Probando conexión...";
+  feedback.className = "test-feedback-box hidden";
+
+  try {
+    const res = await apiFetch("/api/admin/services/passbolt/test-config", {
+      method: "POST",
+      body: JSON.stringify({
+        config: { base_url: baseUrl, user_email: userEmail },
+        secrets: {
+          private_key: keyPaste || passboltArmoredKey || undefined,
+          passphrase: passphrase || undefined
+        }
+      })
+    });
+    const result = await res.json();
+    feedback.classList.remove("hidden");
+    if (result.ok) {
+      feedback.className = "test-feedback-box success";
+      feedback.innerHTML = `<strong>✓ Conexión Exitosa:</strong> ${result.message}<br><small>Usuario: ${result.details?.user || 'N/A'} | Recursos: ${result.details?.vault_resources_count ?? 'N/A'}</small>`;
+    } else {
+      feedback.className = "test-feedback-box error";
+      feedback.innerHTML = `<strong>✗ Fallo:</strong> ${result.message}`;
+    }
+  } catch (err) {
+    feedback.classList.remove("hidden");
+    feedback.className = "test-feedback-box error";
+    feedback.innerHTML = `<strong>✗ Error:</strong> ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "Probar Conexión Live";
+  }
 });
 
-// Save Passbolt Config Form
-document.getElementById("passbolt-config-form").addEventListener("submit", async (e) => {
+// Save Passbolt Form
+document.getElementById("passbolt-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  
-  const base_url = document.getElementById("pb-url").value.trim();
-  const user_email = document.getElementById("pb-email").value.trim();
-  const fingerprint = document.getElementById("pb-fingerprint").value.trim();
+  const baseUrl = document.getElementById("pb-base-url").value.trim();
+  const userEmail = document.getElementById("pb-user-email").value.trim();
+  const keyPaste = document.getElementById("pb-private-key-paste").value.trim();
   const passphrase = document.getElementById("pb-passphrase").value;
-  const private_key = document.getElementById("pb-private-key").value.trim() || passboltArmoredKey;
 
   const payload = {
     enabled: true,
-    config: { base_url, user_email, fingerprint, verify_ssl: true },
-    secrets: { passphrase, private_key }
+    config: {
+      base_url: baseUrl,
+      user_email: userEmail
+    },
+    secrets: {}
   };
+
+  if (keyPaste || passboltArmoredKey) {
+    payload.secrets.private_key = keyPaste || passboltArmoredKey;
+  }
+  if (passphrase) {
+    payload.secrets.passphrase = passphrase;
+  }
 
   try {
     const res = await apiFetch("/api/admin/services/passbolt", {
       method: "POST",
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
     if (res.ok) {
-      showToast("Configuración de Passbolt guardada con éxito en SQLite", "success");
-      document.getElementById("passbolt-modal").classList.remove("active");
+      showToast("Configuración de Passbolt guardada con éxito", "success");
+      closePassboltModal();
       loadServices();
     } else {
-      showToast(data.detail || "Error al guardar configuración", "error");
+      const err = await res.json();
+      showToast(err.detail || "Error guardando configuración", "error");
     }
   } catch (err) {
     showToast(err.message, "error");
   }
 });
 
-// Test Passbolt Connection Live
-document.getElementById("btn-test-passbolt").addEventListener("click", async () => {
-  const feedback = document.getElementById("pb-test-feedback");
-  feedback.className = "test-feedback-box";
-  feedback.innerText = "Ejecutando handshake GPG con el servidor Passbolt...";
-  feedback.classList.remove("hidden");
-
-  // Collect current modal values to test without having to save first
-  const base_url = document.getElementById("pb-url").value.trim();
-  const user_email = document.getElementById("pb-email").value.trim();
-  const fingerprint = document.getElementById("pb-fingerprint").value.trim();
-  const passphrase = document.getElementById("pb-passphrase").value;
-  const private_key = document.getElementById("pb-private-key").value.trim() || passboltArmoredKey;
-
-  try {
-    const res = await apiFetch("/api/admin/services/passbolt/test", {
-      method: "POST",
-      body: JSON.stringify({
-        base_url, user_email, fingerprint, passphrase, private_key
-      })
-    });
-    const result = await res.json();
-    if (result.ok) {
-      feedback.className = "test-feedback-box success";
-      feedback.innerText = "✓ " + result.message;
-      showToast("Prueba de conexión exitosa", "success");
-    } else {
-      feedback.className = "test-feedback-box error";
-      feedback.innerText = "✗ " + result.message;
-      showToast("Prueba de conexión fallida", "error");
-    }
-  } catch (err) {
-    feedback.className = "test-feedback-box error";
-    feedback.innerText = "✗ Error: " + err.message;
-  }
-});
-
-// --- Tester / Inspector Tab ---
+// --- Tab 2: Tester & Tool Inspector ---
 async function loadTesterTools() {
-  const scope = document.getElementById("tester-scope").value;
   const select = document.getElementById("tester-tool-select");
+  const scope = document.getElementById("tester-scope").value;
   select.innerHTML = "<option value=''>Cargando herramientas...</option>";
 
   try {
-    const res = await apiFetch(`/api/admin/tools?scope=${scope}`);
-    const data = await res.json();
+    const res = await apiFetch("/api/admin/tools");
+    const tools = await res.json();
     select.innerHTML = "";
-    if (!data.tools || data.tools.length === 0) {
-      select.innerHTML = "<option value=''>No hay herramientas activas en este scope</option>";
+
+    const filtered = scope === "unified" ? tools : tools.filter(t => t.service === scope);
+    if (filtered.length === 0) {
+      select.innerHTML = "<option value=''>No hay herramientas disponibles en este scope</option>";
       return;
     }
-    data.tools.forEach(t => {
+
+    filtered.forEach(t => {
       const opt = document.createElement("option");
       opt.value = t.name;
       opt.innerText = `${t.name} — ${t.description.substring(0, 60)}...`;
+      opt.setAttribute("data-schema", JSON.stringify(t.inputSchema || {}));
       select.appendChild(opt);
     });
+
+    fillDefaultTemplate();
   } catch (err) {
-    select.innerHTML = `<option value=''>Error cargando tools: ${err.message}</option>`;
+    select.innerHTML = "<option value=''>Error cargando herramientas</option>";
   }
 }
 
 document.getElementById("tester-scope").addEventListener("change", loadTesterTools);
+document.getElementById("tester-tool-select").addEventListener("change", fillDefaultTemplate);
+
+function fillDefaultTemplate() {
+  const select = document.getElementById("tester-tool-select");
+  const selectedOpt = select.options[select.selectedIndex];
+  if (!selectedOpt) return;
+
+  const toolName = selectedOpt.value;
+  let sample = {};
+  if (toolName === "passbolt_search_resources") {
+    sample = { query: "postgres", limit: 10 };
+  } else if (toolName === "passbolt_get_secret") {
+    sample = { resource_id: "00000000-0000-0000-0000-000000000000" };
+  } else if (toolName === "passbolt_list_folders") {
+    sample = {};
+  }
+  document.getElementById("tester-args").value = JSON.stringify(sample, null, 2);
+}
+
+document.getElementById("btn-fill-template").addEventListener("click", fillDefaultTemplate);
 
 document.getElementById("btn-run-tool").addEventListener("click", async () => {
-  const scope = document.getElementById("tester-scope").value;
   const toolName = document.getElementById("tester-tool-select").value;
+  const scope = document.getElementById("tester-scope").value;
   const rawArgs = document.getElementById("tester-args").value.trim();
-  const outputBox = document.getElementById("tester-output");
+  const output = document.getElementById("tester-output");
   const badge = document.getElementById("tester-status-badge");
+  const btn = document.getElementById("btn-run-tool");
 
   if (!toolName) {
-    showToast("Selecciona una herramienta", "warning");
+    showToast("Selecciona una herramienta primero", "error");
     return;
   }
 
@@ -395,82 +462,116 @@ document.getElementById("btn-run-tool").addEventListener("click", async () => {
     try {
       parsedArgs = JSON.parse(rawArgs);
     } catch (e) {
-      showToast("El campo de argumentos debe ser un JSON válido", "error");
+      showToast("Los argumentos deben ser un JSON válido", "error");
       return;
     }
   }
 
-  badge.className = "badge badge-info";
-  badge.innerText = "Ejecutando...";
-  outputBox.innerText = "Enviando JSON-RPC request...";
+  btn.disabled = true;
+  btn.innerText = "Ejecutando...";
+  badge.className = "badge";
+  badge.innerText = "Procesando...";
+  output.innerText = "Enviando llamada JSON-RPC 2.0 al Gateway...";
 
+  const startTime = performance.now();
   try {
-    const res = await apiFetch("/api/admin/tester/call", {
+    const res = await apiFetch("/api/admin/tools/execute", {
       method: "POST",
       body: JSON.stringify({
-        scope,
+        scope: scope,
         tool: toolName,
         arguments: parsedArgs
       })
     });
-    const result = await res.json();
-    outputBox.innerText = JSON.stringify(result, null, 2);
-    if (res.ok && !result.error && !(result.result && result.result.isError)) {
+    const elapsed = Math.round(performance.now() - startTime);
+    const data = await res.json();
+
+    if (res.ok && !data.error) {
       badge.className = "badge badge-success";
-      badge.innerText = "Éxito (200 OK)";
+      badge.innerText = `Éxito (${elapsed}ms)`;
+      output.innerText = JSON.stringify(data, null, 2);
     } else {
       badge.className = "badge badge-error";
-      badge.innerText = "Error";
+      badge.innerText = `Error (${elapsed}ms)`;
+      output.innerText = JSON.stringify(data, null, 2);
     }
   } catch (err) {
-    outputBox.innerText = "Error: " + err.message;
     badge.className = "badge badge-error";
-    badge.innerText = "Fallo de Red";
+    badge.innerText = "Error de Red";
+    output.innerText = `Error: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "Ejecutar Herramienta";
   }
 });
 
-// --- Client Snippets ---
-function updateClientSnippets() {
-  const origin = window.location.origin;
-  
-  const cursorConfig = {
-    mcpServers: {
-      "vps-mcp-passbolt": {
-        url: `${origin}/passbolt/sse`,
-        headers: {
-          Authorization: "Bearer TU_MCP_API_KEY_AQUI"
-        }
-      },
-      "vps-mcp-unified": {
-        url: `${origin}/unified/sse`,
-        headers: {
-          Authorization: "Bearer TU_MCP_API_KEY_AQUI"
-        }
+// --- Tab 3: Client Snippets ---
+async function updateClientSnippets() {
+  try {
+    const res = await apiFetch("/api/admin/gateway-info");
+    const info = await res.json();
+    const domain = window.location.origin;
+    const apiKey = info.api_key || "mcp_sec_...";
+
+    // 1. Hermes Config Snippet
+    document.getElementById("code-hermes").innerText = 
+`mcp_servers:
+  passbolt:
+    url: "${domain}/passbolt"
+    headers:
+      Authorization: "Bearer ${apiKey}"
+    timeout: 180
+
+  unified:
+    url: "${domain}/unified"
+    headers:
+      Authorization: "Bearer ${apiKey}"
+    timeout: 180`;
+
+    // 2. Claude Desktop Config Snippet
+    document.getElementById("code-claude").innerText = 
+`{
+  "mcpServers": {
+    "passbolt": {
+      "url": "${domain}/passbolt",
+      "headers": {
+        "Authorization": "Bearer ${apiKey}"
       }
     }
-  };
-  document.getElementById("snippet-cursor").innerText = JSON.stringify(cursorConfig, null, 2);
+  }
+}`;
 
-  const webuiConfig = {
-    name: "VPS MCP Gateway",
-    endpoint: `http://mcp-gateway:8000/unified/sse`,
-    type: "sse",
-    auth: "Bearer TU_MCP_API_KEY_AQUI"
-  };
-  document.getElementById("snippet-webui").innerText = JSON.stringify(webuiConfig, null, 2);
+    // 3. Cursor Config Snippet
+    document.getElementById("code-cursor").innerText = 
+`{
+  "mcpServers": {
+    "passbolt": {
+      "url": "${domain}/passbolt",
+      "headers": {
+        "Authorization": "Bearer ${apiKey}"
+      }
+    }
+  }
+}`;
+  } catch (err) {
+    console.error("Error updating snippets:", err);
+  }
 }
 
-document.querySelectorAll(".copy-btn").forEach(btn => {
+// Copy Code Button Handlers
+document.querySelectorAll(".btn-copy").forEach(btn => {
   btn.addEventListener("click", () => {
     const targetId = btn.getAttribute("data-target");
-    const text = document.getElementById(targetId).innerText;
-    navigator.clipboard.writeText(text).then(() => {
-      showToast("Snippet copiado al portapapeles", "success");
+    const code = document.getElementById(targetId).innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      const originalText = btn.innerText;
+      btn.innerText = "¡Copiado!";
+      setTimeout(() => btn.innerText = originalText, 1500);
     });
   });
 });
 
-// --- Audit Logs ---
+// --- Tab 4: Logs ---
 async function loadLogs() {
   const tbody = document.getElementById("logs-tbody");
   tbody.innerHTML = "<tr><td colspan='5' class='text-center'>Cargando registros...</td></tr>";
@@ -478,25 +579,30 @@ async function loadLogs() {
   try {
     const res = await apiFetch("/api/admin/logs");
     const logs = await res.json();
-    if (!logs || logs.length === 0) {
+    tbody.innerHTML = "";
+
+    if (logs.length === 0) {
       tbody.innerHTML = "<tr><td colspan='5' class='text-center'>No hay actividad registrada aún.</td></tr>";
       return;
     }
-    tbody.innerHTML = "";
+
     logs.forEach(log => {
       const tr = document.createElement("tr");
-      const statusClass = log.status === "success" ? "text-success" : (log.status === "error" ? "text-danger" : "");
+      const statusBadge = log.status === "success" 
+        ? "<span class='badge badge-success'>Éxito</span>" 
+        : "<span class='badge badge-error'>Error</span>";
+
       tr.innerHTML = `
-        <td>${log.timestamp}</td>
-        <td><span class="badge badge-accent">${log.service}</span></td>
+        <td><small>${log.timestamp || 'N/A'}</small></td>
+        <td><b>${log.service}</b></td>
         <td><code>${log.action}</code></td>
-        <td class="${statusClass}"><b>${log.status}</b></td>
-        <td>${log.details || "-"}</td>
+        <td>${statusBadge}</td>
+        <td><small>${log.details || ''}</small></td>
       `;
       tbody.appendChild(tr);
     });
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan='5' class='text-center text-error'>Error: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan='5' class='text-center text-error'>Error cargando logs: ${err.message}</td></tr>`;
   }
 }
 
@@ -508,13 +614,12 @@ function loadInitialData() {
   loadServices();
 }
 
-// Auto-login check on page load
-window.addEventListener("DOMContentLoaded", () => {
+// Bootstrap
+document.addEventListener("DOMContentLoaded", () => {
+  initTabs();
   if (currentToken) {
     document.getElementById("login-modal").classList.remove("active");
     document.getElementById("app-layout").classList.remove("hidden");
     loadInitialData();
-  } else {
-    document.getElementById("login-modal").classList.add("active");
   }
 });

@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MCP Gateway — VPS Tools</title>
+  <title>MCP Gateway — Panel</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="dark-theme">
@@ -15,13 +15,13 @@
 
   <!-- Login Modal -->
   <div id="login-modal" class="modal active">
-    <div class="modal-card glass-panel auth-card">
+    <div class="modal-card auth-card">
       <div class="auth-header">
-        <div class="logo-badge">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <div class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
         </div>
         <h2>MCP Gateway</h2>
-        <p class="subtitle">Panel de Control & Administrador de Servicios</p>
+        <p class="subtitle">Panel de Control</p>
       </div>
       <form id="login-form" class="auth-form">
         <div class="input-group">
@@ -29,8 +29,7 @@
           <input type="password" id="admin-password" placeholder="••••••••••••" required autocomplete="current-password">
         </div>
         <button type="submit" class="btn btn-primary btn-block">
-          <span>Ingresar al Panel</span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          Ingresar
         </button>
       </form>
     </div>
@@ -39,42 +38,27 @@
   <!-- Main Dashboard App -->
   <div id="app-layout" class="app-layout hidden">
     <!-- Top Navigation Header -->
-    <header class="top-nav glass-panel">
+    <header class="top-nav">
       <div class="nav-brand">
         <div class="brand-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
         </div>
-        <div class="brand-text">
-          <h1>MCP Gateway</h1>
-          <span class="badge-vps">VPS TOOLS</span>
-        </div>
+        <span class="brand-name">MCP Gateway</span>
       </div>
 
       <nav class="nav-tabs">
-        <button class="nav-tab active" data-tab="services">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
-          Servicios MCP
-        </button>
-        <button class="nav-tab" data-tab="tester">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Inspector & Tester
-        </button>
-        <button class="nav-tab" data-tab="clients">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-          Integración Clientes
-        </button>
-        <button class="nav-tab" data-tab="logs">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          Actividad & Logs
-        </button>
+        <button class="nav-tab active" data-tab="services">Servicios</button>
+        <button class="nav-tab" data-tab="tester">Inspector & Tester</button>
+        <button class="nav-tab" data-tab="clients">Clientes</button>
+        <button class="nav-tab" data-tab="logs">Actividad</button>
       </nav>
 
       <div class="nav-actions">
         <div class="status-indicator">
           <span class="status-dot pulsing"></span>
-          <span id="gateway-status-text">Gateway Online</span>
+          <span>Online</span>
         </div>
-        <button id="btn-logout" class="btn btn-icon" title="Cerrar Sesión">
+        <button id="btn-logout" class="btn-icon" title="Cerrar Sesión">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
         </button>
       </div>
@@ -82,39 +66,15 @@
 
     <!-- Main Content Container -->
     <main class="main-content">
-      <!-- Overview Banner -->
-      <section class="stats-grid">
-        <div class="stat-card glass-panel">
-          <span class="stat-label">Servicios Encapsulados</span>
-          <div class="stat-value" id="stat-total-services">1</div>
-          <span class="stat-detail">Arquitectura Modular</span>
-        </div>
-        <div class="stat-card glass-panel">
-          <span class="stat-label">Herramientas Activas</span>
-          <div class="stat-value text-accent" id="stat-active-tools">0</div>
-          <span class="stat-detail">Tools MCP disponibles</span>
-        </div>
-        <div class="stat-card glass-panel">
-          <span class="stat-label">Persistencia & DB</span>
-          <div class="stat-value text-success">SQLite</div>
-          <span class="stat-detail">0 MB RAM adicional / WAL</span>
-        </div>
-        <div class="stat-card glass-panel">
-          <span class="stat-label">Subrutas Aisladas</span>
-          <div class="stat-value text-info" id="stat-subroutes">/passbolt & /unified</div>
-          <span class="stat-detail">Soporte Streamable & SSE</span>
-        </div>
-      </section>
-
       <!-- TAB 1: SERVICES LIST -->
       <section id="tab-services" class="tab-pane active">
         <div class="section-header">
           <div>
-            <h2>Servicios Configurados</h2>
-            <p class="section-desc">Gestiona las APIs y herramientas expuestas a través del protocolo MCP.</p>
+            <h2>Servicios MCP</h2>
+            <p class="section-desc">Servidores y herramientas expuestos mediante el protocolo MCP.</p>
           </div>
-          <button id="btn-refresh-services" class="btn btn-secondary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          <button id="btn-refresh-services" class="btn btn-secondary btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
             Refrescar
           </button>
         </div>
@@ -128,46 +88,47 @@
       <section id="tab-tester" class="tab-pane">
         <div class="section-header">
           <div>
-            <h2>Inspector & Probador de Tools</h2>
-            <p class="section-desc">Prueba directamente llamadas MCP JSON-RPC a tus servicios sin salir del panel.</p>
+            <h2>Inspector & Tester</h2>
+            <p class="section-desc">Ejecuta llamadas JSON-RPC 2.0 y prueba tus herramientas directamente.</p>
           </div>
         </div>
 
         <div class="tester-layout">
-          <div class="glass-panel tester-form-card">
-            <h3>Ejecutar Tool</h3>
+          <div class="card tester-form-card">
             <div class="input-group">
-              <label for="tester-scope">Subruta / Scope MCP</label>
+              <label for="tester-scope">Endpoint / Scope</label>
               <select id="tester-scope">
-                <option value="unified">/unified (Todas las tools)</option>
+                <option value="unified">/unified (Todas las herramientas)</option>
                 <option value="passbolt">/passbolt (Aislado Passbolt)</option>
               </select>
             </div>
 
             <div class="input-group">
-              <label for="tester-tool-select">Selecciona la Herramienta</label>
+              <label for="tester-tool-select">Herramienta</label>
               <select id="tester-tool-select">
                 <option value="">Cargando herramientas...</option>
               </select>
             </div>
 
             <div class="input-group">
-              <label for="tester-args">Argumentos JSON</label>
-              <textarea id="tester-args" rows="6" placeholder='{"query": "database"}'></textarea>
+              <div class="label-row">
+                <label for="tester-args">Argumentos (JSON)</label>
+                <button type="button" id="btn-fill-template" class="link-btn">Ejemplo</button>
+              </div>
+              <textarea id="tester-args" rows="5" placeholder='{"query": "database"}'></textarea>
             </div>
 
             <button id="btn-run-tool" class="btn btn-primary btn-block">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               Ejecutar Herramienta
             </button>
           </div>
 
-          <div class="glass-panel tester-result-card">
+          <div class="card tester-result-card">
             <div class="result-header">
-              <h3>Respuesta JSON-RPC 2.0</h3>
+              <span class="result-title">Respuesta MCP</span>
               <span id="tester-status-badge" class="badge">Esperando ejecución</span>
             </div>
-            <pre id="tester-output" class="code-box">Selecciona una herramienta y haz clic en "Ejecutar Herramienta" para ver la respuesta del protocolo MCP.</pre>
+            <pre id="tester-output" class="code-box">Selecciona una herramienta y haz clic en "Ejecutar Herramienta".</pre>
           </div>
         </div>
       </section>
@@ -176,53 +137,68 @@
       <section id="tab-clients" class="tab-pane">
         <div class="section-header">
           <div>
-            <h2>Conectar con Clientes de IA</h2>
-            <p class="section-desc">Configuración lista para usar en Cursor, Claude Desktop, OpenCode, Hermes y Open WebUI.</p>
+            <h2>Integración con Clientes de IA</h2>
+            <p class="section-desc">Configuración lista para conectar agentes y asistentes con tu Gateway.</p>
           </div>
         </div>
 
-        <div class="integration-cards">
-          <div class="glass-panel client-card">
+        <div class="clients-grid">
+          <!-- Hermes Config -->
+          <div class="card client-card">
             <div class="client-header">
-              <div class="client-title">
-                <h3>Cursor & Claude Desktop (Streamable HTTP / SSE)</h3>
-                <span class="badge badge-accent">Recomendado</span>
-              </div>
-              <button class="btn btn-sm btn-secondary copy-btn" data-target="snippet-cursor">Copiar</button>
+              <h3>Hermes Agent</h3>
+              <span class="badge badge-accent">~/.hermes/config.yaml</span>
             </div>
-            <p class="client-desc">Pega esto en tu archivo <code>~/.cursor/mcp.json</code> o <code>claude_desktop_config.json</code>:</p>
-            <pre id="snippet-cursor" class="code-box"></pre>
+            <p class="client-desc">Configuración nativa de servidor MCP HTTP para Hermes.</p>
+            <div class="code-container">
+              <pre id="code-hermes" class="code-box"></pre>
+              <button class="btn btn-secondary btn-sm btn-copy" data-target="code-hermes">Copiar</button>
+            </div>
           </div>
 
-          <div class="glass-panel client-card">
+          <!-- Claude Desktop Config -->
+          <div class="card client-card">
             <div class="client-header">
-              <div class="client-title">
-                <h3>Open WebUI (Docker / Red Interna)</h3>
-                <span class="badge badge-info">Zero Latency</span>
-              </div>
-              <button class="btn btn-sm btn-secondary copy-btn" data-target="snippet-webui">Copiar</button>
+              <h3>Claude Desktop</h3>
+              <span class="badge">claude_desktop_config.json</span>
             </div>
-            <p class="client-desc">En <b>Open WebUI > Admin Settings > Tools / MCP</b>, agrega el conector:</p>
-            <pre id="snippet-webui" class="code-box"></pre>
+            <p class="client-desc">Integración directa mediante SSE / Streamable HTTP.</p>
+            <div class="code-container">
+              <pre id="code-claude" class="code-box"></pre>
+              <button class="btn btn-secondary btn-sm btn-copy" data-target="code-claude">Copiar</button>
+            </div>
+          </div>
+
+          <!-- Cursor Config -->
+          <div class="card client-card">
+            <div class="client-header">
+              <h3>Cursor / Windsurf</h3>
+              <span class="badge">.cursor/mcp.json</span>
+            </div>
+            <p class="client-desc">Configuración para editores y agentes de desarrollo.</p>
+            <div class="code-container">
+              <pre id="code-cursor" class="code-box"></pre>
+              <button class="btn btn-secondary btn-sm btn-copy" data-target="code-cursor">Copiar</button>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- TAB 4: AUDIT LOGS -->
+      <!-- TAB 4: ACTIVITY LOGS -->
       <section id="tab-logs" class="tab-pane">
         <div class="section-header">
           <div>
-            <h2>Registro de Actividad</h2>
-            <p class="section-desc">Auditoría de ejecuciones de herramientas, pruebas de conexión y cambios de configuración.</p>
+            <h2>Actividad & Logs</h2>
+            <p class="section-desc">Auditoría de ejecuciones y pruebas de conexión.</p>
           </div>
-          <button id="btn-refresh-logs" class="btn btn-secondary">Refrescar Logs</button>
+          <button id="btn-refresh-logs" class="btn btn-secondary btn-sm">Refrescar</button>
         </div>
 
-        <div class="glass-panel table-container">
+        <div class="card table-card">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Fecha y Hora</th>
+                <th>Fecha</th>
                 <th>Servicio</th>
                 <th>Acción</th>
                 <th>Estado</th>
@@ -240,79 +216,61 @@
 
   <!-- Passbolt Settings Modal -->
   <div id="passbolt-modal" class="modal">
-    <div class="modal-card glass-panel config-modal-card">
+    <div class="modal-card config-modal-card">
       <div class="modal-header">
         <div class="modal-title-group">
-          <div class="modal-icon passbolt-accent">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          </div>
-          <div>
-            <h3>Configurar Passbolt MCP</h3>
-            <p class="subtitle">Gestor de contraseñas de equipo con cifrado OpenPGP</p>
-          </div>
+          <h3>Configurar Passbolt</h3>
         </div>
-        <button class="btn btn-icon modal-close" data-modal="passbolt-modal">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        <button id="btn-close-passbolt-modal" class="btn-icon" title="Cerrar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
       </div>
 
-      <form id="passbolt-config-form" class="modal-body">
-        <div class="form-row">
+      <form id="passbolt-form">
+        <div class="form-body">
           <div class="input-group">
-            <label for="pb-url">URL del Servidor Passbolt *</label>
-            <input type="url" id="pb-url" placeholder="https://passbolt.tu-dominio.com" required>
-            <span class="field-hint">Ej: https://passbolt.articc.top o http://host.docker.internal:8080</span>
+            <label for="pb-base-url">URL de tu Servidor Passbolt</label>
+            <input type="url" id="pb-base-url" placeholder="https://passbolt.yourdomain.com" required>
           </div>
-          <div class="input-group">
-            <label for="pb-email">Email del Usuario / Bot (Opcional)</label>
-            <input type="email" id="pb-email" placeholder="ai-agent@articc.top">
-          </div>
-        </div>
 
-        <div class="form-row">
           <div class="input-group">
-            <label for="pb-passphrase">Contraseña de la Clave GPG (Passphrase) *</label>
-            <div class="password-input-wrap">
-              <input type="password" id="pb-passphrase" placeholder="Introduce la passphrase para desbloquear la clave privada">
-              <button type="button" class="btn-toggle-pwd" data-target="pb-passphrase">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <label for="pb-user-email">Correo de Usuario Passbolt</label>
+            <input type="email" id="pb-user-email" placeholder="user@domain.com">
+          </div>
+
+          <div class="input-group">
+            <label>Clave Privada GPG (OpenPGP)</label>
+            <div id="pb-file-drop" class="file-drop-area">
+              <input type="file" id="pb-key-file" accept=".asc,.gpg,.key,.txt" class="file-input-hidden">
+              <div class="drop-content">
+                <p>Arrastra tu archivo <code>.asc</code> / <code>.key</code> o <span class="browse-link">examinar</span></p>
+                <span id="pb-key-status" class="file-status-label">Ninguna clave cargada</span>
+              </div>
+            </div>
+            <textarea id="pb-private-key-paste" rows="3" placeholder="O pega el bloque -----BEGIN PGP PRIVATE KEY BLOCK----- aquí..." class="code-input"></textarea>
+          </div>
+
+          <div class="input-group">
+            <label for="pb-passphrase">Frase de Paso (Passphrase)</label>
+            <div class="input-with-icon">
+              <input type="password" id="pb-passphrase" placeholder="Frase de paso si tu clave está cifrada">
+              <button type="button" id="btn-toggle-pb-passphrase" class="btn-toggle-pwd">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
-            <span class="field-hint">Se almacena cifrada en SQLite con AES-GCM / Fernet</span>
           </div>
-          <div class="input-group">
-            <label for="pb-fingerprint">Fingerprint GPG (Opcional)</label>
-            <input type="text" id="pb-fingerprint" placeholder="Auto-detectada desde la clave privada si se omite">
-          </div>
-        </div>
 
-        <div class="input-group">
-          <label>Clave Privada OpenPGP (.asc / .key) *</label>
-          <div class="file-drop-area" id="file-drop-area">
-            <input type="file" id="pb-key-file" accept=".asc,.key,.gpg,.txt" class="file-input-hidden">
-            <div class="drop-content">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-              <p>Arrastra tu archivo <b>.asc</b> aquí o <span class="browse-link">selecciona un archivo</span></p>
-              <span class="file-status-label" id="file-status-label">Ningún archivo cargado aún</span>
-            </div>
-          </div>
-          <details class="paste-key-accordion">
-            <summary>O pegar contenido ASCII Armored manualmente</summary>
-            <textarea id="pb-private-key" rows="5" placeholder="-----BEGIN PGP PRIVATE KEY BLOCK-----&#10;...&#10;-----END PGP PRIVATE KEY BLOCK-----"></textarea>
-          </details>
+          <!-- Live test connection result feedback -->
+          <div id="pb-test-feedback" class="test-feedback-box hidden"></div>
         </div>
-
-        <!-- Connection Test Feedback Area -->
-        <div id="pb-test-feedback" class="test-feedback-box hidden"></div>
 
         <div class="modal-footer">
-          <button type="button" id="btn-test-passbolt" class="btn btn-secondary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3"/></svg>
+          <button type="button" id="btn-test-passbolt-live" class="btn btn-secondary">
             Probar Conexión Live
           </button>
-          <div class="footer-actions">
-            <button type="button" class="btn btn-ghost modal-close" data-modal="passbolt-modal">Cancelar</button>
-            <button type="submit" class="btn btn-primary">Guardar Configuración</button>
+          <div class="modal-actions-right">
+            <button type="button" id="btn-cancel-passbolt" class="btn btn-ghost">Cancelar</button>
+            <button type="submit" id="btn-save-passbolt" class="btn btn-primary">Guardar</button>
           </div>
         </div>
       </form>
