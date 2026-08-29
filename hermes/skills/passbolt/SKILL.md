@@ -1,7 +1,7 @@
 ---
 name: passbolt-credentials
-description: "Secure password, TOTP, and credential management via Passbolt MCP Gateway. Query and retrieve secrets and TOTP 2FA codes autonomously, with mandatory human confirmation for creating, updating, or deleting credentials."
-version: 1.1.0
+description: "Secure password, TOTP 2FA, and credential management via Passbolt MCP Gateway. Autonomous read-only access for queries, passwords, TOTPs, and folders. Mandatory human confirmation before creating, updating, or deleting any credential."
+version: 1.2.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -17,55 +17,74 @@ Empowers autonomous agents to search, decrypt, generate live 2FA TOTP codes, and
 
 ---
 
-## 🔑 Available MCP Tools
+## 🔑 MCP Tools Reference
 
-### Consultas y Lectura (Autónomas)
+### 🟢 1. Operaciones de Lectura (100% Autónomas - Sin Preguntar)
+Ejecuta estas herramientas de forma inmediata y sin pedir confirmación:
+
 * **`passbolt_search_resources(query, folder_id, limit)`**:
-  Search for credentials by service name, URL domain, username, or keyword (e.g. `"postgres"`, `"aws"`, `"github.com"`). Returns matching resource IDs, names, usernames, and URIs **without** exposing plaintext secrets in the list.
+  Busca credenciales por nombre del servicio, dominio/URL, usuario o palabra clave (ej. `"postgres"`, `"aws"`, `"github.com"`). Devuelve IDs y metadatos sin revelar contraseñas en texto plano en la lista.
 * **`passbolt_get_secret(resource_id)`**:
-  Decrypted retrieval of the password, username, URI, description, **live 2FA TOTP code** (with expiration countdown), and custom fields for a specific resource UUID.
+  Desencripta y obtiene la información completa de la credencial: contraseña, usuario, URL, descripción, campos personalizados y el **código TOTP 2FA generado en vivo** (con sus segundos restantes de validez).
 * **`passbolt_list_folders(parent_id)`**:
-  Inspect vault organizational hierarchy and folders.
+  Inspecciona la jerarquía y lista de carpetas de la bóveda.
 
-### Mutaciones y Escritura (Requieren Confirmación del Usuario)
+---
+
+### 🔴 2. Operaciones de Escritura / Mutación (PROHIBIDO Ejecutar Sin Preguntar)
+**NUNCA** ejecutes estas herramientas automáticamente. Debes **SIEMPRE preguntar al usuario y esperar su autorización explícita**:
+
 * **`passbolt_create_resource(name, password, username, uri, description, folder_id, totp_secret, custom_fields)`**:
-  Create a new credential resource with client-side OpenPGP encryption.
+  Crea una nueva credencial en Passbolt con cifrado OpenPGP.
 * **`passbolt_update_resource(resource_id, name, password, username, uri, description, folder_id, totp_secret, custom_fields)`**:
-  Update an existing credential resource (password, username, URI, TOTP secret, custom fields) with OpenPGP re-encryption.
+  Modifica una credencial existente (contraseña, usuario, URL, TOTP, notas o campos).
 * **`passbolt_delete_resource(resource_id)`**:
-  Delete / remove a credential resource from Passbolt vault.
+  Elimina definitivamente un recurso/credencial de Passbolt.
 * **`passbolt_create_folder(name, parent_id)`**:
-  Create a new folder to categorize credentials.
+  Crea una nueva carpeta en la bóveda.
 
 ---
 
-## 🛡️ Operational Guidelines & Safety Rules
+## 🛡️ Reglas Operativas Estrictas
 
-### 1. Consultas y Uso Autónomo (Libre y Sin Restricciones)
-* **Lectura libre:** Tienes autorización para buscar credenciales, desencriptar contraseñas y obtener códigos TOTP 2FA de forma autónoma siempre que sea necesario para cumplir una tarea del usuario (ej. desplegar bases de datos, iniciar sesión en servicios web con Steel Browser, automatizar tareas).
-* **Búsqueda primero:** Llama siempre a `passbolt_search_resources` con el nombre o dominio del servicio para localizar el `resource_id` exacto antes de llamar a `passbolt_get_secret`.
-* **Soporte TOTP:** Si la credencial cuenta con 2FA configurado en Passbolt (campo `totp` o URI `otpauth://`), `passbolt_get_secret` entregará el código TOTP numérico listo para autenticación junto con los segundos restantes de validez.
-* **Discreción de texto plano:** No imprimas contraseñas en texto plano en tus respuestas a menos que el usuario te lo pida explícitamente.
-
-### 2. Creaciones y Modificaciones (Estrictamente con Confirmación Humana)
-> [!CRITICAL]
-> **CONFIRMACIÓN OBLIGATORIA PARA ESCRITURA:**
-> Tienes **ESTRICTAMENTE PROHIBIDO** ejecutar `passbolt_create_resource`, `passbolt_update_resource` o `passbolt_delete_resource` de manera silenciosa o automática.
-> **SIEMPRE debes preguntar al usuario y esperar su autorización explícita antes de ejecutar cualquier cambio en la bóveda.**
-
-Antes de crear, modificar o eliminar una credencial:
-1. Presenta claramente al usuario un resumen con:
-   - **Acción a realizar:** (Crear nueva credencial / Actualizar contraseña / Eliminar credencial)
-   - **Nombre del Servicio:** (ej. `PostgreSQL Producción`)
-   - **Usuario / Login:** (ej. `admin_db`)
-   - **URL / Dominio:** (ej. `https://db.articc.top`)
-2. Pregunta: *"¿Deseas que proceda con esta acción en Passbolt?"*
-3. **Espera la respuesta afirmativa del usuario** antes de llamar a la tool correspondiente.
+```
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                           MATRIZ DE AUTORIZACIÓN                              │
+├────────────────────────────────────────┬──────────────────────────────────────┤
+│ TIPO DE ACCIÓN                         │ COMPORTAMIENTO EXIGIDO               │
+├────────────────────────────────────────┼──────────────────────────────────────┤
+│ 🔍 Buscar contraseñas / servicios      │ ✅ AUTÓNOMO: Ejecutar sin preguntar   │
+│ 🔓 Leer contraseña / secreto           │ ✅ AUTÓNOMO: Ejecutar sin preguntar   │
+│ ⏱️ Obtener código TOTP 2FA             │ ✅ AUTÓNOMO: Ejecutar sin preguntar   │
+│ 📁 Listar carpetas de la bóveda        │ ✅ AUTÓNOMO: Ejecutar sin preguntar   │
+├────────────────────────────────────────┼──────────────────────────────────────┤
+│ ➕ CREAR una nueva credencial           │ ⚠️ BLOQUEADO: Preguntar y esperar ok │
+│ ✏️ MODIFICAR una credencial existente   │ ⚠️ BLOQUEADO: Preguntar y esperar ok │
+│ 🗑️ ELIMINAR / BORRAR una credencial    │ ⚠️ BLOQUEADO: Preguntar y esperar ok │
+│ 📁 CREAR una carpeta                   │ ⚠️ BLOQUEADO: Preguntar y esperar ok │
+└────────────────────────────────────────┴──────────────────────────────────────┘
+```
 
 ---
 
-## ⚙️ Configuration & Connection Reference
+### 📋 Protocolo Obligatorio para Creación, Modificación o Borrado
 
-* **Endpoint**: `https://mcp.jeisson.top/passbolt` (o interno `http://127.0.0.1:8005/passbolt`)
-* **Transport**: Streamable HTTP / SSE JSON-RPC 2.0
-* **Authentication**: `Authorization: Bearer <MCP_API_KEY>` o cabecera `X-API-Key: <MCP_API_KEY>`
+Cuando una tarea requiera crear, modificar o eliminar una credencial en Passbolt:
+
+1. **DETÉN LA EJECUCIÓN** y presenta al usuario una ficha clara con los datos:
+   * **Acción:** `[Crear Nueva Contraseña | Modificar Contraseña | Eliminar Contraseña | Crear Carpeta]`
+   * **Servicio / Título:** `[Nombre del recurso]`
+   * **Usuario / Login:** `[Usuario o correo]`
+   * **URL / Host:** `[Dominio o URL]`
+   * **Cambios propuestos:** `[Detalle de los campos a crear o modificar]`
+2. **Formula la pregunta explícita:**
+   > *"¿Deseas que proceda a [crear / actualizar / eliminar] esta credencial en Passbolt?"*
+3. **ESPERA** a que el usuario responda afirmativamente antes de invocar la tool.
+
+---
+
+## ⚙️ Conexión y Gateway MCP
+
+* **URL del Servicio**: `http://127.0.0.1:8005/passbolt` (interno) / `https://mcp.jeisson.top/passbolt` (público)
+* **Transporte**: Streamable HTTP / SSE JSON-RPC 2.0
+* **Autenticación**: Cabecera `Authorization: Bearer <MCP_API_KEY>`
