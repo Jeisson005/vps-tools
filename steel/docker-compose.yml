@@ -31,7 +31,7 @@ services:
   steel-2:
     image: ghcr.io/steel-dev/steel-browser:latest
     container_name: steel-browser-2
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "127.0.0.1:3002:3000"
       - "127.0.0.1:9222:9223"
@@ -60,7 +60,7 @@ services:
   steel-3:
     image: ghcr.io/steel-dev/steel-browser:latest
     container_name: steel-browser-3
-    restart: unless-stopped
+    restart: "no"
     ports:
       - "127.0.0.1:3003:3000"
       - "127.0.0.1:9224:9223"
@@ -94,14 +94,14 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
       - "127.0.0.1:9223:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - STEEL_API_KEY=${STEEL_API_KEY:-}
-      - POOL_BACKENDS=http://steel-1:3000,http://steel-2:3000,http://steel-3:3000
+      - IDLE_TIMEOUT_SEC=${STEEL_IDLE_TIMEOUT_SEC:-180}
       - PORT=3000
     depends_on:
       - steel-1
-      - steel-2
-      - steel-3
     networks:
       - default
       - nginx_default
