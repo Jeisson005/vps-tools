@@ -14,7 +14,7 @@ const { URL } = require('url');
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const STEEL_API_KEY = process.env.STEEL_API_KEY || '';
-const IDLE_TIMEOUT_SEC = parseInt(process.env.IDLE_TIMEOUT_SEC || '180', 10); // 3 minutes
+const IDLE_TIMEOUT_SEC = parseInt(process.env.IDLE_TIMEOUT_SEC || '3600', 10); // 1 hour
 
 const BACKENDS = [
   { id: 'steel-1', name: 'steel-browser-1', url: 'http://steel-1:3000', isPrimary: true, idleSince: null },
@@ -91,13 +91,34 @@ async function waitForBackendReady(backendUrl, maxWaitMs = 12000) {
 /* -------------------------------------------------------------
  * HTTP & WebSocket Backend Communication
  * ------------------------------------------------------------- */
-function extractSessionId(reqUrl) {
+const UUID_REGEX = /([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/;
+
+function extractSessionId(reqUrl, headers = {}) {
   try {
     const parsed = new URL(reqUrl, 'http://localhost');
     const qSid = parsed.searchParams.get('sessionId');
-    if (qSid) return qSid;
-    const match = parsed.pathname.match(/\/sessions\/([0-9a-fA-F-]+)/);
+    if (qSid) {
+      const m = qSid.match(UUID_REGEX);
+      if (m) return m[1];
+    }
+    const match = parsed.pathname.match(UUID_REGEX);
     if (match) return match[1];
+
+    if (headers && headers.referer) {
+      const refUrl = new URL(headers.referer, 'http://localhost');
+      const refSid = refUrl.searchParams.get('sessionId');
+      if (refSid) {
+        const m = refSid.match(UUID_REGEX);
+        if (m) return m[1];
+      }
+      const refMatch = refUrl.pathname.match(UUID_REGEX);
+      if (refMatch) return refMatch[1];
+    }
+
+    if (headers && headers.cookie) {
+      const cMatch = headers.cookie.match(/steel_sid=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/);
+      if (cMatch) return cMatch[1];
+    }
   } catch (e) {}
   return null;
 }
@@ -152,7 +173,7 @@ async function findSessionOwner(sessionId) {
     if (!running) continue;
     const res = await queryBackend(b.url, '/v1/sessions');
     if (res && res.data && Array.isArray(res.data.sessions)) {
-      const found = res.data.sessions.some(s => s.id === sessionId);
+      const found = res.data.sessions.some(s => s.id === sessionId && s.status !== 'released' && s.status !== 'failed');
       if (found) {
         sessionMap.set(sessionId, b.url);
         b.idleSince = null;
@@ -310,7 +331,41 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  // 4. Session-specific requests (by ID)
+  // 4. Debug viewer & DevTools security check (Capability Token)
+  const isDebugView = reqUrl.startsWith('/v1/sessions/debug');
+  const isDevtools = reqUrl.startsWith('/v1/devtools');
+
+  if (isDebugView || isDevtools) {
+    if (!sid) {
+      res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>403 Acceso Denegado</title><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0f172a;color:#f8fafc;}.card{background:#1e293b;padding:2.5rem;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.5);text-align:center;max-width:480px;}h1{color:#ef4444;margin-top:0;}p{color:#94a3b8;line-height:1.5;}code{background:#334155;padding:2px 6px;border-radius:4px;color:#38bdf8;}</style></head><body><div class="card"><h1>🔒 403 Prohibido</h1><p>Se requiere un identificador de sesión activo (<code>?sessionId=UUID</code>) para ver el navegador en vivo.</p></div></body></html>`);
+    }
+
+    let targetBackend = sessionMap.get(sid);
+    if (targetBackend) {
+      // Check if session is truly active in this backend
+      const res = await queryBackend(targetBackend, '/v1/sessions');
+      const active = res && res.data && Array.isArray(res.data.sessions) && res.data.sessions.some(s => s.id === sid && s.status !== 'released' && s.status !== 'failed');
+      if (!active) {
+        sessionMap.delete(sid);
+        targetBackend = null;
+      }
+    }
+
+    if (!targetBackend) {
+      targetBackend = await findSessionOwner(sid);
+    }
+
+    if (!targetBackend) {
+      res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>404 Sesión No Encontrada</title><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0f172a;color:#f8fafc;}.card{background:#1e293b;padding:2.5rem;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.5);text-align:center;max-width:480px;}h1{color:#f59e0b;margin-top:0;}p{color:#94a3b8;line-height:1.5;}code{background:#334155;padding:2px 6px;border-radius:4px;color:#38bdf8;}</style></head><body><div class="card"><h1>⚠️ Sesión No Encontrada</h1><p>La sesión <code>${sid}</code> no existe o ya ha sido liberada.</p></div></body></html>`);
+    }
+
+    res.setHeader('Set-Cookie', `steel_sid=${sid}; Path=/; HttpOnly; SameSite=Lax`);
+    return proxyHttpRequest(targetBackend, req, res);
+  }
+
+  // 5. Session-specific requests (by ID)
   if (sid) {
     let targetBackend = sessionMap.get(sid);
     if (!targetBackend) {
@@ -333,15 +388,28 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 5. Default fallback to primary backend
+  // 6. Default fallback to primary backend
   const defaultBackend = BACKENDS[0].url;
   return proxyHttpRequest(defaultBackend, req, res);
 });
 
 // WebSocket / Upgrade proxying
 server.on('upgrade', async (req, clientSocket, head) => {
-  const sid = extractSessionId(req.url || '');
-  let targetBackend = sid ? (sessionMap.get(sid) || await findSessionOwner(sid)) : BACKENDS[0].url;
+  const sid = extractSessionId(req.url || '', req.headers);
+  const isCast = (req.url || '').startsWith('/v1/sessions/cast');
+
+  if (isCast && !sid) {
+    clientSocket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\nMissing sessionId for live stream');
+    return clientSocket.destroy();
+  }
+
+  let targetBackend = sid ? (sessionMap.get(sid) || await findSessionOwner(sid)) : null;
+
+  if (isCast && !targetBackend) {
+    clientSocket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\nSession not found or expired');
+    return clientSocket.destroy();
+  }
+
   if (!targetBackend) targetBackend = BACKENDS[0].url;
 
   try {
