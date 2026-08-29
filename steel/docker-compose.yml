@@ -1,13 +1,13 @@
 services:
-  steel:
+  steel-1:
     image: ghcr.io/steel-dev/steel-browser:latest
-    container_name: steel-browser
+    container_name: steel-browser-1
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${STEEL_PORT:-3000}:3000"
-      - "127.0.0.1:${STEEL_CDP_PORT:-9223}:9223"
+      - "127.0.0.1:3001:3000"
+      - "127.0.0.1:9221:9223"
     volumes:
-      - ./data/steel-cache:/app/.cache
+      - ./data/steel-cache-1:/app/.cache
     environment:
       - STEEL_API_KEY=${STEEL_API_KEY:-}
       - PORT=3000
@@ -17,14 +17,91 @@ services:
       - NODE_ENV=production
       - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
       - TIMEOUT_MS=${STEEL_TIMEOUT_MS:-3600000}
-      - CONCURRENCY=${STEEL_CONCURRENCY:-5}
-    shm_size: ${STEEL_SHM_SIZE:-1gb}
+      - CONCURRENCY=8
+    shm_size: 1gb
     cap_add:
       - SYS_ADMIN
     deploy:
       resources:
         limits:
-          memory: 2.5G
+          memory: 2G
+    networks:
+      - default
+
+  steel-2:
+    image: ghcr.io/steel-dev/steel-browser:latest
+    container_name: steel-browser-2
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3002:3000"
+      - "127.0.0.1:9222:9223"
+    volumes:
+      - ./data/steel-cache-2:/app/.cache
+    environment:
+      - STEEL_API_KEY=${STEEL_API_KEY:-}
+      - PORT=3000
+      - CDP_PORT=9223
+      - USE_SSL=${USE_SSL:-true}
+      - DOMAIN=${STEEL_DOMAIN:-browser.localhost}
+      - NODE_ENV=production
+      - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
+      - TIMEOUT_MS=${STEEL_TIMEOUT_MS:-3600000}
+      - CONCURRENCY=8
+    shm_size: 1gb
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    networks:
+      - default
+
+  steel-3:
+    image: ghcr.io/steel-dev/steel-browser:latest
+    container_name: steel-browser-3
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3003:3000"
+      - "127.0.0.1:9224:9223"
+    volumes:
+      - ./data/steel-cache-3:/app/.cache
+    environment:
+      - STEEL_API_KEY=${STEEL_API_KEY:-}
+      - PORT=3000
+      - CDP_PORT=9223
+      - USE_SSL=${USE_SSL:-true}
+      - DOMAIN=${STEEL_DOMAIN:-browser.localhost}
+      - NODE_ENV=production
+      - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
+      - TIMEOUT_MS=${STEEL_TIMEOUT_MS:-3600000}
+      - CONCURRENCY=8
+    shm_size: 1gb
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    networks:
+      - default
+
+  steel-router:
+    build:
+      context: ./router
+    container_name: steel-browser
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:9223:3000"
+    environment:
+      - STEEL_API_KEY=${STEEL_API_KEY:-}
+      - POOL_BACKENDS=http://steel-1:3000,http://steel-2:3000,http://steel-3:3000
+      - PORT=3000
+    depends_on:
+      - steel-1
+      - steel-2
+      - steel-3
     networks:
       - default
       - nginx_default
