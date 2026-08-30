@@ -39,6 +39,9 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # GFS Retention: 7 daily + 12 monthly backups, GPG AES-256 encrypted
 30 8 * * * /path/to/vps-tools/backup/scripts/backup.sh >> /path/to/vps-tools/cron/logs/backup.log 2>&1
 
+# 11. Centinela Resource & Disk Space Health Check (Daily at 9:00 AM UTC / 4:00 AM UTC-5)
+0 9 * * * /path/to/vps-tools/centinela/scripts/check_disk.sh >> /path/to/vps-tools/cron/logs/centinela.log 2>&1
+
 
 # ==============================================================================
 # EXAMPLE 2: SPECIFIC CONFIGURATION (ROOT-BASED EXECUTION & DATE-BASED LOGS)
