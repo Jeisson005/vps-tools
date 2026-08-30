@@ -80,6 +80,25 @@ echo "================================================================="
 rm -rf "${STAGING_DIR}" "${TAR_FILE}" "${GPG_FILE}" 2>/dev/null || true
 mkdir -p "${STAGING_DIR}" "${DB_DUMP_DIR}"
 
+send_telegram() {
+  local msg="$1"
+  if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
+    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+      -d "chat_id=${TELEGRAM_CHAT_ID}" \
+      -d "text=${msg}" \
+      -d "parse_mode=Markdown" >/dev/null 2>&1 || true
+  fi
+}
+
+on_error() {
+  local exit_code="$?"
+  local line="$1"
+  local cmd="$2"
+  echo "[-] ERROR: Backup failed at line ${line} (exit code ${exit_code}, command: '${cmd}')" >&2
+  send_telegram "🚨 *ALERTA: Falló el backup del VPS* 🚨%0A%0A🖥️ *Host:* \`$(hostname)\`%0A⚠️ *Línea:* \`${line}\`%0A🔧 *Comando:* \`${cmd}\`%0A❌ *Código:* \`${exit_code}\`%0A📁 *Logs:* \`${HOME}/vps-tools/cron/logs/backup.log\`"
+}
+trap 'on_error ${LINENO} "${BASH_COMMAND}"' ERR
+
 cleanup() {
   echo "[*] Cleaning up local staging files in ${TEMP_DIR}..."
   rm -rf "${STAGING_DIR}" "${TAR_FILE}" "${GPG_FILE}" 2>/dev/null || true
@@ -278,3 +297,7 @@ echo "📦 Backup Name: ${RUN_ID}.tar.gz.gpg"
 echo "🔐 Encrypted: GPG AES-256"
 echo "☁️  Remote: ${RCLONE_REMOTE}"
 echo "================================================================="
+
+if [[ "${NOTIFY_ON_SUCCESS:-false}" == "true" ]]; then
+  send_telegram "✅ *Backup VPS Exitoso* ✅%0A%0A🖥️ *Host:* \`$(hostname)\`%0A📦 *Archivo:* \`${RUN_ID}.tar.gz.gpg\`%0A📊 *Modo:* \`${MODE^^}\`%0A☁️ *Destino:* \`${RCLONE_REMOTE}/${TARGET_SUBDIR}/\`"
+fi
