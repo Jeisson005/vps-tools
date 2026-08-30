@@ -7,7 +7,7 @@ Sistema integral de copias de seguridad en la nube para el VPS con cifrado simé
 ## 🎯 Características Principales
 
 1. **Respaldos Completos por Defecto:**
-   * Empaqueta todo `/home/jeisson` (proyectos, configuraciones, `.bashrc`, claves SSH, `.env`).
+   * Empaqueta todo el directorio de usuario (`$HOME`: proyectos, configuraciones, `.bashrc`, claves SSH, `.env`).
    * **Filtros inteligentes:** Omite automáticamente cachés (`.cache/`, `.npm/`), `node_modules/`, entornos virtuales (`venv/`, `.venv/`) y logs masivos para que el archivo sea ligero y rápido de subir.
 2. **Auto-descubrimiento de Bases de Datos:**
    * Detecta automáticamente contenedores activos de **PostgreSQL**, **MySQL/MariaDB**, **MongoDB** y **Redis**.
@@ -72,13 +72,13 @@ Asegúrate de definir:
 
 ## ⏰ Programación Automática (Cron)
 
-Para que el backup se ejecute todos los días a las **3:00 AM** (hora del servidor):
+Para que el backup se ejecute todos los días a las **3:30 AM** (hora del servidor):
 
 Edita tu crontab con `crontab -e` y añade:
 
 ```cron
 # Backup diario del VPS a Google Drive con retención de 7 días y 12 meses
-0 3 * * * /home/jeisson/vps-tools/backup/scripts/backup.sh >> /home/jeisson/vps-tools/cron/logs/backup.log 2>&1
+30 3 * * * /path/to/vps-tools/backup/scripts/backup.sh >> /path/to/vps-tools/cron/logs/backup.log 2>&1
 ```
 
 O revisa la plantilla en [`cron/crontab.example`](file:///home/jeisson/Documents/Artic%20proyectos/vps-tools/cron/crontab.example).

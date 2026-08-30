@@ -10,17 +10,25 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${BASE_DIR}/.env"
 
-if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "[-] ERROR: Configuration file not found at ${ENV_FILE}" >&2
-  exit 1
+if [[ -f "${ENV_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
 fi
-
-# shellcheck disable=SC1090
-source "${ENV_FILE}"
 
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive:vps-tools-backups}"
 BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-}"
 TEMP_RESTORE_DIR="${TEMP_DIR:-/tmp/vps-backups}/restore_staging"
+
+ensure_key() {
+  if [[ -z "${BACKUP_ENCRYPTION_KEY}" ]]; then
+    read -r -s -p "Introduce tu clave maestra para descifrar el backup: " BACKUP_ENCRYPTION_KEY
+    echo ""
+  fi
+  if [[ -z "${BACKUP_ENCRYPTION_KEY}" ]]; then
+    echo "[-] ERROR: Se requiere la clave de cifrado para continuar." >&2
+    exit 1
+  fi
+}
 
 usage() {
   echo "Usage: $0 {list|test <file>|download <file>|restore <file> <target_dir>}"
@@ -88,6 +96,7 @@ case "${CMD}" in
     fi
 
     LOCAL_TAR="${LOCAL_GPG%.gpg}"
+    ensure_key
     echo "[+] Decrypting test copy with GPG..."
     gpg --batch --yes --decrypt \
         --passphrase "${BACKUP_ENCRYPTION_KEY}" \
@@ -122,6 +131,7 @@ case "${CMD}" in
     fi
 
     LOCAL_TAR="${LOCAL_GPG%.gpg}"
+    ensure_key
     echo "[+] Decrypting archive..."
     gpg --batch --yes --decrypt \
         --passphrase "${BACKUP_ENCRYPTION_KEY}" \
