@@ -48,12 +48,19 @@ Asegúrate de definir:
 
 ## 💻 Uso de los Scripts
 
-### Ejecutar Backup Manual
+### Ejecutar Backup Diario (GFS, rota según retención)
 ```bash
 ./scripts/backup.sh
+# O explícitamente:
+./scripts/backup.sh daily
 ```
 
-### Listar Backups en Google Drive
+### Ejecutar Backup Manual (Permanente, no expira)
+```bash
+./scripts/backup.sh manual
+```
+
+### Listar Backups en Google Drive (Daily, Monthly y Manual)
 ```bash
 ./scripts/restore.sh list
 ```

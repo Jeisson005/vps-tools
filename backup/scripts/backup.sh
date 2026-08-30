@@ -46,18 +46,31 @@ for tool in tar gzip gpg rclone; do
   fi
 done
 
+MODE="${1:-daily}"
+if [[ "${MODE}" != "daily" && "${MODE}" != "manual" ]]; then
+  echo "Usage: $0 [daily|manual]" >&2
+  exit 1
+fi
+
 TIMESTAMP="$(date +"%Y%m%d_%H%M%S")"
 DATE_DAY="$(date +"%d")"
 DATE_MONTH="$(date +"%Y%m")"
 
-RUN_ID="backup_daily_${TIMESTAMP}"
+if [[ "${MODE}" == "manual" ]]; then
+  RUN_ID="backup_manual_${TIMESTAMP}"
+  TARGET_SUBDIR="manual"
+else
+  RUN_ID="backup_daily_${TIMESTAMP}"
+  TARGET_SUBDIR="daily"
+fi
+
 STAGING_DIR="${TEMP_DIR}/${RUN_ID}"
 DB_DUMP_DIR="${STAGING_DIR}/db_dumps"
 TAR_FILE="${TEMP_DIR}/${RUN_ID}.tar.gz"
 GPG_FILE="${TAR_FILE}.gpg"
 
 echo "================================================================="
-echo "🚀 Starting VPS Backup: ${RUN_ID}"
+echo "🚀 Starting VPS Backup [${MODE^^}]: ${RUN_ID}"
 echo "📅 Date: $(date -R)"
 echo "📂 Source Directory: ${SOURCE_DIR}"
 echo "☁️  Remote Target: ${RCLONE_REMOTE}"
@@ -185,7 +198,7 @@ echo "[+] Encryption complete (${ENC_SIZE})"
 # Remove raw unencrypted tarball immediately
 rm -f "${TAR_FILE}"
 
-# 6. Upload to Google Drive (Daily)
+# 6. Upload to Google Drive
 REMOTE_NAME="${RCLONE_REMOTE%%:*}"
 if ! rclone lsd "${REMOTE_NAME}:" &>/dev/null; then
   echo "[-] WARNING: Rclone remote '${REMOTE_NAME}' is not configured yet or not accessible." >&2
@@ -196,61 +209,65 @@ if ! rclone lsd "${REMOTE_NAME}:" &>/dev/null; then
   exit 0
 fi
 
-echo "[+] Uploading to Google Drive: ${RCLONE_REMOTE}/daily/..."
-rclone copy "${GPG_FILE}" "${RCLONE_REMOTE}/daily/" \
+echo "[+] Uploading to Google Drive: ${RCLONE_REMOTE}/${TARGET_SUBDIR}/..."
+rclone copy "${GPG_FILE}" "${RCLONE_REMOTE}/${TARGET_SUBDIR}/" \
   --fast-list \
   --progress
 
-echo "[+] ✓ Daily backup uploaded: ${RUN_ID}.tar.gz.gpg"
+echo "[+] ✓ [${MODE^^}] Backup uploaded: ${RUN_ID}.tar.gz.gpg"
 
-# 7. Monthly Copy Promotion
-# If 1st of month OR if no backup exists yet for this month
-MONTHLY_DEST="${RCLONE_REMOTE}/monthly/backup_monthly_${DATE_MONTH}.tar.gz.gpg"
-MONTHLY_EXISTS=$(rclone lsf "${RCLONE_REMOTE}/monthly/" 2>/dev/null | grep "backup_monthly_${DATE_MONTH}" || true)
+if [[ "${MODE}" == "daily" ]]; then
+  # 7. Monthly Copy Promotion (Only for daily backups)
+  # If 1st of month OR if no backup exists yet for this month
+  MONTHLY_DEST="${RCLONE_REMOTE}/monthly/backup_monthly_${DATE_MONTH}.tar.gz.gpg"
+  MONTHLY_EXISTS=$(rclone lsf "${RCLONE_REMOTE}/monthly/" 2>/dev/null | grep "backup_monthly_${DATE_MONTH}" || true)
 
-if [[ "${DATE_DAY}" == "01" || -z "${MONTHLY_EXISTS}" ]]; then
-  echo "[+] Promoting backup to Monthly: ${MONTHLY_DEST}..."
-  rclone copyto "${GPG_FILE}" "${MONTHLY_DEST}"
-  echo "[+] ✓ Monthly backup recorded for ${DATE_MONTH}"
-fi
+  if [[ "${DATE_DAY}" == "01" || -z "${MONTHLY_EXISTS}" ]]; then
+    echo "[+] Promoting backup to Monthly: ${MONTHLY_DEST}..."
+    rclone copyto "${GPG_FILE}" "${MONTHLY_DEST}"
+    echo "[+] ✓ Monthly backup recorded for ${DATE_MONTH}"
+  fi
 
-# 8. Grandfather-Father-Son Retention Enforcement
-echo "[+] Enforcing Retention Policy..."
+  # 8. Grandfather-Father-Son Retention Enforcement
+  echo "[+] Enforcing Retention Policy..."
 
-# A) Daily Backups Retention (Max $RETENTION_DAYS)
-echo "  [retention] Checking daily backups (max ${RETENTION_DAYS})..."
-DAILY_FILES=$(rclone lsf "${RCLONE_REMOTE}/daily/" --files-only 2>/dev/null | sort || true)
-DAILY_COUNT=$(echo "${DAILY_FILES}" | grep -c . || true)
+  # A) Daily Backups Retention (Max $RETENTION_DAYS)
+  echo "  [retention] Checking daily backups (max ${RETENTION_DAYS})..."
+  DAILY_FILES=$(rclone lsf "${RCLONE_REMOTE}/daily/" --files-only 2>/dev/null | sort || true)
+  DAILY_COUNT=$(echo "${DAILY_FILES}" | grep -c . || true)
 
-if [[ ${DAILY_COUNT} -gt ${RETENTION_DAYS} ]]; then
-  EXCESS=$((DAILY_COUNT - RETENTION_DAYS))
-  echo "  [retention] Found ${DAILY_COUNT} daily backups. Deleting oldest ${EXCESS}..."
-  echo "${DAILY_FILES}" | head -n "${EXCESS}" | while IFS= read -r file; do
-    if [[ -n "${file}" ]]; then
-      echo "  [delete] Removing ${RCLONE_REMOTE}/daily/${file}..."
-      rclone delete "${RCLONE_REMOTE}/daily/${file}"
-    fi
-  done
+  if [[ ${DAILY_COUNT} -gt ${RETENTION_DAYS} ]]; then
+    EXCESS=$((DAILY_COUNT - RETENTION_DAYS))
+    echo "  [retention] Found ${DAILY_COUNT} daily backups. Deleting oldest ${EXCESS}..."
+    echo "${DAILY_FILES}" | head -n "${EXCESS}" | while IFS= read -r file; do
+      if [[ -n "${file}" ]]; then
+        echo "  [delete] Removing ${RCLONE_REMOTE}/daily/${file}..."
+        rclone delete "${RCLONE_REMOTE}/daily/${file}"
+      fi
+    done
+  else
+    echo "  [retention] Daily backups within limit (${DAILY_COUNT}/${RETENTION_DAYS})."
+  fi
+
+  # B) Monthly Backups Retention (Max $RETENTION_MONTHS)
+  echo "  [retention] Checking monthly backups (max ${RETENTION_MONTHS})..."
+  MONTHLY_FILES=$(rclone lsf "${RCLONE_REMOTE}/monthly/" --files-only 2>/dev/null | sort || true)
+  MONTHLY_COUNT=$(echo "${MONTHLY_FILES}" | grep -c . || true)
+
+  if [[ ${MONTHLY_COUNT} -gt ${RETENTION_MONTHS} ]]; then
+    EXCESS=$((MONTHLY_COUNT - RETENTION_MONTHS))
+    echo "  [retention] Found ${MONTHLY_COUNT} monthly backups. Deleting oldest ${EXCESS}..."
+    echo "${MONTHLY_FILES}" | head -n "${EXCESS}" | while IFS= read -r file; do
+      if [[ -n "${file}" ]]; then
+        echo "  [delete] Removing ${RCLONE_REMOTE}/monthly/${file}..."
+        rclone delete "${RCLONE_REMOTE}/monthly/${file}"
+      fi
+    done
+  else
+    echo "  [retention] Monthly backups within limit (${MONTHLY_COUNT}/${RETENTION_MONTHS})."
+  fi
 else
-  echo "  [retention] Daily backups within limit (${DAILY_COUNT}/${RETENTION_DAYS})."
-fi
-
-# B) Monthly Backups Retention (Max $RETENTION_MONTHS)
-echo "  [retention] Checking monthly backups (max ${RETENTION_MONTHS})..."
-MONTHLY_FILES=$(rclone lsf "${RCLONE_REMOTE}/monthly/" --files-only 2>/dev/null | sort || true)
-MONTHLY_COUNT=$(echo "${MONTHLY_FILES}" | grep -c . || true)
-
-if [[ ${MONTHLY_COUNT} -gt ${RETENTION_MONTHS} ]]; then
-  EXCESS=$((MONTHLY_COUNT - RETENTION_MONTHS))
-  echo "  [retention] Found ${MONTHLY_COUNT} monthly backups. Deleting oldest ${EXCESS}..."
-  echo "${MONTHLY_FILES}" | head -n "${EXCESS}" | while IFS= read -r file; do
-    if [[ -n "${file}" ]]; then
-      echo "  [delete] Removing ${RCLONE_REMOTE}/monthly/${file}..."
-      rclone delete "${RCLONE_REMOTE}/monthly/${file}"
-    fi
-  done
-else
-  echo "  [retention] Monthly backups within limit (${MONTHLY_COUNT}/${RETENTION_MONTHS})."
+  echo "[i] Los backups manuales se guardan permanentemente en '${TARGET_SUBDIR}/' (no expiran)."
 fi
 
 echo "================================================================="
