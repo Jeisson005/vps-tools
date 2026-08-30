@@ -109,7 +109,7 @@ case "${CMD}" in
         "${LOCAL_GPG}"
 
     echo "[+] Verifying tarball integrity and listing contents..."
-    tar -ztvf "${LOCAL_TAR}" | head -n 30
+    tar -ztvf "${LOCAL_TAR}" 2>/dev/null | head -n 30 || true
     echo "[...] (Truncated output)"
     echo "[+] Checking full tar archive for errors..."
     tar -ztf "${LOCAL_TAR}" > /dev/null
