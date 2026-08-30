@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Steel Browser | Centro de Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #090d16;
+      --bg-surface: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #273549;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-focus: #3b82f6;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.25);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top Bar */
+    header {
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+
+    .brand-title {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .brand-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.15rem 0.45rem;
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.75rem;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background-color 0.3s;
+    }
+
+    .status-dot.active {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+      outline: none;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-secondary);
+      border-color: var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.1);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ffffff;
+    }
+
+    /* Tabs Switcher Bar */
+    .tabs-bar {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.5rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-height: 48px;
+    }
+
+    .tabs-list {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .tabs-list::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.45rem 0.9rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 0.825rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .tab-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-primary);
+    }
+
+    .tab-item.active {
+      background: var(--bg-card);
+      border-color: var(--accent);
+      color: var(--text-primary);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .tab-item .tab-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+    }
+
+    .active-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Main Viewport Container */
+    main {
+      flex: 1;
+      position: relative;
+      background: #000000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #viewer-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #000000;
+      display: none;
+    }
+
+    /* Empty State View */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      text-align: center;
+      background: radial-gradient(circle at 50% 40%, rgba(30, 41, 59, 0.6), var(--bg-base) 70%);
+    }
+
+    .empty-icon-wrap {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 0 30px rgba(59, 130, 246, 0.15);
+      animation: pulseGlow 3s infinite alternate;
+    }
+
+    @keyframes pulseGlow {
+      from { box-shadow: 0 0 20px rgba(59, 130, 246, 0.1); }
+      to { box-shadow: 0 0 40px rgba(59, 130, 246, 0.3); }
+    }
+
+    .empty-title {
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.6rem;
+      letter-spacing: -0.02em;
+    }
+
+    .empty-desc {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      max-width: 520px;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+
+    /* Pool Workers Grid */
+    .pool-grid {
+      display: flex;
+      gap: 1rem;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    .worker-card {
+      flex: 1;
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: left;
+      transition: border-color 0.2s;
+    }
+
+    .worker-card.primary {
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+
+    .worker-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+
+    .worker-name {
+      font-size: 0.8rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .worker-tag {
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+
+    .worker-tag.fixed {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+    }
+
+    .worker-tag.elastic {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+    }
+
+    .worker-status {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .worker-status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .worker-status-dot.online {
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+    }
+
+    .worker-status-dot.standby {
+      background: var(--warning);
+    }
+
+    /* Modal / Notification toast */
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 0.75rem 1.25rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header>
+    <a href="/" class="brand">
+      <div class="brand-icon">🌐</div>
+      <div>
+        <div class="brand-title">
+          Steel Browser
+          <span class="brand-badge">Control Center</span>
+        </div>
+      </div>
+    </a>
+
+    <div class="header-actions">
+      <div class="status-pill">
+        <span class="status-dot" id="header-status-dot"></span>
+        <span id="header-status-text">Conectando...</span>
+      </div>
+
+      <a href="/native-ui" class="btn btn-secondary" title="Abrir interfaz de desarrollo de Steel">
+        ⚙️ Panel Nativo
+      </a>
+    </div>
+  </header>
+
+  <!-- Session Switcher Tabs Bar -->
+  <div class="tabs-bar">
+    <div class="tabs-list" id="tabs-container">
+      <!-- Injected dynamically by JavaScript -->
+    </div>
+
+    <div class="active-controls" id="active-controls" style="display: none;">
+      <button class="btn btn-secondary" id="btn-reload" title="Recargar la visualización de la sesión">
+        🔄 Recargar
+      </button>
+      <button class="btn btn-secondary" id="btn-external" title="Abrir en pestaña independiente">
+        ↗️ Pestaña Nueva
+      </button>
+      <button class="btn btn-danger" id="btn-release" title="Liberar y cerrar esta sesión">
+        🛑 Cerrar Sesión
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Viewport -->
+  <main>
+    <!-- IFrame for Active Browser -->
+    <iframe id="viewer-frame" allow="clipboard-read; clipboard-write; autoplay; fullscreen" sandbox="allow-same-origin allow-scripts allow-forms allow-downloads allow-modals allow-popups"></iframe>
+
+    <!-- Empty State View when 0 active sessions -->
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon-wrap">🌐</div>
+      <h2 class="empty-title">No hay sesiones de navegador activas</h2>
+      <p class="empty-desc">
+        El clúster está listo y en espera. Cuando cualquier servicio o automatización inicie un navegador, aparecerá aquí en tiempo real para su visualización y control interactivo.
+      </p>
+
+      <!-- Worker Status Cards -->
+      <div class="pool-grid" id="pool-workers-grid">
+        <div class="worker-card primary">
+          <div class="worker-header">
+            <span class="worker-name">steel-browser-1</span>
+            <span class="worker-tag fixed">Fijo</span>
+          </div>
+          <div class="worker-status">
+            <span class="worker-status-dot online"></span>
+            <span>Siempre Activo • 0ms latencia</span>
+          </div>
+        </div>
+
+        <div class="worker-card">
+          <div class="worker-header">
+            <span class="worker-name">steel-browser-2</span>
+            <span class="worker-tag elastic">Elástico</span>
+          </div>
+          <div class="worker-status" id="worker-2-status">
+            <span class="worker-status-dot standby"></span>
+            <span>En Espera (Bajo demanda)</span>
+          </div>
+        </div>
+
+        <div class="worker-card">
+          <div class="worker-header">
+            <span class="worker-name">steel-browser-3</span>
+            <span class="worker-tag elastic">Elástico</span>
+          </div>
+          <div class="worker-status" id="worker-3-status">
+            <span class="worker-status-dot standby"></span>
+            <span>En Espera (Bajo demanda)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast"></div>
+
+  <script>
+    let currentSessionId = null;
+    let knownSessions = [];
+    let isInitialLoad = true;
+
+    const tabsContainer = document.getElementById('tabs-container');
+    const activeControls = document.getElementById('active-controls');
+    const viewerFrame = document.getElementById('viewer-frame');
+    const emptyState = document.getElementById('empty-state');
+    const headerStatusDot = document.getElementById('header-status-dot');
+    const headerStatusText = document.getElementById('header-status-text');
+    const btnReload = document.getElementById('btn-reload');
+    const btnExternal = document.getElementById('btn-external');
+    const btnRelease = document.getElementById('btn-release');
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    async function fetchClusterState() {
+      try {
+        const [sessRes, healthRes] = await Promise.all([
+          fetch('/v1/sessions').then(r => r.json()),
+          fetch('/healthz').then(r => r.json()).catch(() => null)
+        ]);
+
+        const allSessions = sessRes && Array.isArray(sessRes.sessions) ? sessRes.sessions : [];
+        // Only keep active (non-released, non-failed) sessions
+        const activeSessions = allSessions.filter(s => s.status !== 'released' && s.status !== 'failed');
+
+        updateHeaderStatus(activeSessions.length);
+        updateWorkersGrid(healthRes);
+        renderTabs(activeSessions);
+      } catch (err) {
+        console.error('Error fetching cluster state:', err);
+      }
+    }
+
+    function updateHeaderStatus(activeCount) {
+      if (activeCount > 0) {
+        headerStatusDot.className = 'status-dot active';
+        headerStatusText.textContent = `${activeCount} sesión${activeCount > 1 ? 'es' : ''} activa${activeCount > 1 ? 's' : ''}`;
+      } else {
+        headerStatusDot.className = 'status-dot';
+        headerStatusText.textContent = 'En Espera (0 activas)';
+      }
+    }
+
+    function updateWorkersGrid(health) {
+      if (!health || !Array.isArray(health.pool)) return;
+
+      const w2 = health.pool.find(p => p.name === 'steel-browser-2');
+      const w3 = health.pool.find(p => p.name === 'steel-browser-3');
+
+      const el2 = document.getElementById('worker-2-status');
+      const el3 = document.getElementById('worker-3-status');
+
+      if (el2 && w2) {
+        el2.innerHTML = w2.running
+          ? `<span class="worker-status-dot online"></span><span>Ejecutando (${w2.activeSessions} ses.)</span>`
+          : `<span class="worker-status-dot standby"></span><span>En reposo (Ahorrando RAM)</span>`;
+      }
+      if (el3 && w3) {
+        el3.innerHTML = w3.running
+          ? `<span class="worker-status-dot online"></span><span>Ejecutando (${w3.activeSessions} ses.)</span>`
+          : `<span class="worker-status-dot standby"></span><span>En reposo (Ahorrando RAM)</span>`;
+      }
+    }
+
+    function renderTabs(activeSessions) {
+      knownSessions = activeSessions;
+
+      if (activeSessions.length === 0) {
+        // No active sessions
+        tabsContainer.innerHTML = '<span style="font-size:0.8rem;color:var(--text-muted);">Sin sesiones activas en este momento</span>';
+        activeControls.style.display = 'none';
+        viewerFrame.style.display = 'none';
+        viewerFrame.src = 'about:blank';
+        emptyState.style.display = 'flex';
+        currentSessionId = null;
+        return;
+      }
+
+      // If current session is no longer active, select the first available
+      if (!currentSessionId || !activeSessions.some(s => s.id === currentSessionId)) {
+        selectSession(activeSessions[0].id);
+      }
+
+      emptyState.style.display = 'none';
+      viewerFrame.style.display = 'block';
+      activeControls.style.display = 'flex';
+
+      // Build tabs HTML
+      tabsContainer.innerHTML = '';
+      activeSessions.forEach((sess, idx) => {
+        const tab = document.createElement('div');
+        tab.className = `tab-item ${sess.id === currentSessionId ? 'active' : ''}`;
+        
+        const shortId = sess.id.slice(0, 8);
+        const startTime = sess.createdAt ? new Date(sess.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+
+        tab.innerHTML = `
+          <span class="tab-dot"></span>
+          <span><strong>Navegador #${idx + 1}</strong> (${shortId})</span>
+          <span style="font-size:0.7rem;color:var(--text-muted);">${startTime}</span>
+        `;
+
+        tab.onclick = () => selectSession(sess.id);
+        tabsContainer.appendChild(tab);
+      });
+    }
+
+    function selectSession(sessionId) {
+      if (currentSessionId === sessionId && !isInitialLoad) return;
+      isInitialLoad = false;
+      currentSessionId = sessionId;
+
+      // Update active state in tabs
+      document.querySelectorAll('.tab-item').forEach(tab => {
+        if (tab.textContent.includes(sessionId.slice(0, 8))) {
+          tab.classList.add('active');
+        } else {
+          tab.classList.remove('active');
+        }
+      });
+
+      // Update iframe source
+      const targetUrl = `/v1/sessions/debug?sessionId=${sessionId}&clipboardBridge=true`;
+      if (viewerFrame.getAttribute('data-loaded-session') !== sessionId) {
+        viewerFrame.setAttribute('data-loaded-session', sessionId);
+        viewerFrame.src = targetUrl;
+      }
+    }
+
+    // Actions
+    btnReload.onclick = () => {
+      if (currentSessionId) {
+        viewerFrame.src = `/v1/sessions/debug?sessionId=${currentSessionId}&clipboardBridge=true`;
+        showToast('Visualización recargada');
+      }
+    };
+
+    btnExternal.onclick = () => {
+      if (currentSessionId) {
+        window.open(`/v1/sessions/debug?sessionId=${currentSessionId}`, '_blank');
+      }
+    };
+
+    btnRelease.onclick = async () => {
+      if (!currentSessionId) return;
+      const confirmClose = confirm('¿Deseas cerrar y liberar este navegador?');
+      if (!confirmClose) return;
+
+      const sidToRelease = currentSessionId;
+      try {
+        const res = await fetch(`/v1/sessions/${sidToRelease}/release`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+        if (data && data.success) {
+          showToast(`Navegador ${sidToRelease.slice(0, 8)} liberado exitosamente`);
+          currentSessionId = null;
+          fetchClusterState();
+        }
+      } catch (e) {
+        alert('Error al liberar la sesión: ' + e.message);
+      }
+    };
+
+    // Initial fetch and auto-refresh every 3.5 seconds
+    fetchClusterState();
+    setInterval(fetchClusterState, 3500);
+  </script>
+</body>
+</html>
