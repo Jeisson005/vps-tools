@@ -211,6 +211,7 @@ fi
 
 echo "[+] Uploading to Google Drive: ${RCLONE_REMOTE}/${TARGET_SUBDIR}/..."
 rclone copy "${GPG_FILE}" "${RCLONE_REMOTE}/${TARGET_SUBDIR}/" \
+  --drive-chunk-size 64M \
   --fast-list \
   --progress
 
