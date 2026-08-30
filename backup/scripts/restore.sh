@@ -55,13 +55,13 @@ case "${CMD}" in
     echo "================================================================="
     echo ""
     echo "📅 Daily Backups (Latest 7):"
-    rclone lsl "${RCLONE_REMOTE}/daily/" 2>/dev/null || echo "  (none found)"
+    rclone lsl "${RCLONE_REMOTE}/daily/" --tpslimit 2 2>/dev/null || echo "  (none found)"
     echo ""
     echo "📆 Monthly Backups (Latest 12):"
-    rclone lsl "${RCLONE_REMOTE}/monthly/" 2>/dev/null || echo "  (none found)"
+    rclone lsl "${RCLONE_REMOTE}/monthly/" --tpslimit 2 2>/dev/null || echo "  (none found)"
     echo ""
     echo "📌 Manual Backups (Permanent):"
-    rclone lsl "${RCLONE_REMOTE}/manual/" 2>/dev/null || echo "  (none found)"
+    rclone lsl "${RCLONE_REMOTE}/manual/" --tpslimit 2 2>/dev/null || echo "  (none found)"
     echo ""
     ;;
 
@@ -73,11 +73,11 @@ case "${CMD}" in
     echo "[+] Searching for ${FILE} in ${RCLONE_REMOTE}..."
 
     # Check if file is in daily, monthly or manual
-    if rclone lsf "${RCLONE_REMOTE}/daily/${FILE}" &>/dev/null; then
+    if rclone lsf "${RCLONE_REMOTE}/daily/${FILE}" --tpslimit 2 &>/dev/null; then
       SOURCE_PATH="${RCLONE_REMOTE}/daily/${FILE}"
-    elif rclone lsf "${RCLONE_REMOTE}/monthly/${FILE}" &>/dev/null; then
+    elif rclone lsf "${RCLONE_REMOTE}/monthly/${FILE}" --tpslimit 2 &>/dev/null; then
       SOURCE_PATH="${RCLONE_REMOTE}/monthly/${FILE}"
-    elif rclone lsf "${RCLONE_REMOTE}/manual/${FILE}" &>/dev/null; then
+    elif rclone lsf "${RCLONE_REMOTE}/manual/${FILE}" --tpslimit 2 &>/dev/null; then
       SOURCE_PATH="${RCLONE_REMOTE}/manual/${FILE}"
     else
       echo "[-] File ${FILE} not found in daily/, monthly/, or manual/ on remote." >&2
@@ -85,7 +85,7 @@ case "${CMD}" in
     fi
 
     echo "[+] Downloading ${SOURCE_PATH} -> ${TEMP_RESTORE_DIR}/${FILE}..."
-    rclone copy "${SOURCE_PATH}" "${TEMP_RESTORE_DIR}/" --progress
+    rclone copy "${SOURCE_PATH}" "${TEMP_RESTORE_DIR}/" --tpslimit 2 --drive-chunk-size 64M --progress
     echo "[+] Downloaded to: ${TEMP_RESTORE_DIR}/${FILE}"
     ;;
 
