@@ -48,7 +48,8 @@ if rclone lsd gdrive: &>/dev/null; then
   echo "✅ ¡Conexión exitosa con Google Drive!"
   rclone mkdir gdrive:vps-tools-backups/daily 2>/dev/null || true
   rclone mkdir gdrive:vps-tools-backups/monthly 2>/dev/null || true
-  echo "📁 Carpetas 'vps-tools-backups/daily' y 'vps-tools-backups/monthly' listas en Drive."
+  rclone mkdir gdrive:vps-tools-backups/manual 2>/dev/null || true
+  echo "📁 Carpetas 'daily', 'monthly' y 'manual' listas en Drive."
 else
   echo "⚠️ Aún no se ha detectado el remote 'gdrive'. Puedes ejecutar 'rclone config' en cualquier momento."
 fi
