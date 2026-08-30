@@ -311,7 +311,15 @@ const server = http.createServer(async (req, res) => {
     const aggregated = [];
     for (const r of results) {
       if (r && r.data && Array.isArray(r.data.sessions)) {
-        aggregated.push(...r.data.sessions);
+        for (const s of r.data.sessions) {
+          if (s.debugUrl && !s.debugUrl.includes('sessionId=')) {
+            s.debugUrl += `${s.debugUrl.includes('?') ? '&' : '?'}sessionId=${s.id}`;
+          }
+          if (s.debuggerUrl && !s.debuggerUrl.includes('sessionId=')) {
+            s.debuggerUrl += `${s.debuggerUrl.includes('?') ? '&' : '?'}sessionId=${s.id}`;
+          }
+          aggregated.push(s);
+        }
       }
     }
     res.writeHead(200, { 'Content-Type': 'application/json', Connection: 'close' });
@@ -383,6 +391,13 @@ const server = http.createServer(async (req, res) => {
             if (remaining === 0) bObj.idleSince = Date.now();
           }
           console.log(`[router] Unmapped released session ${sid}`);
+        } else if (resJson && resJson.id) {
+          if (resJson.debugUrl && !resJson.debugUrl.includes('sessionId=')) {
+            resJson.debugUrl += `${resJson.debugUrl.includes('?') ? '&' : '?'}sessionId=${resJson.id}`;
+          }
+          if (resJson.debuggerUrl && !resJson.debuggerUrl.includes('sessionId=')) {
+            resJson.debuggerUrl += `${resJson.debuggerUrl.includes('?') ? '&' : '?'}sessionId=${resJson.id}`;
+          }
         }
       });
     }
