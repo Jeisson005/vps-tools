@@ -10,7 +10,16 @@
 
 const http = require('http');
 const net = require('net');
+const fs = require('fs');
+const path = require('path');
 const { URL } = require('url');
+
+let DASHBOARD_HTML = '';
+try {
+  DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
+} catch (e) {
+  console.warn('[router] Could not pre-load dashboard.html:', e.message);
+}
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const STEEL_API_KEY = process.env.STEEL_API_KEY || '';
@@ -300,7 +309,19 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
-  // 2. Global session aggregation: GET /v1/sessions
+  // 2. Serve Unified Control Center Dashboard on / and /ui
+  if (req.method === 'GET' && (reqUrl === '/' || reqUrl === '/ui' || reqUrl === '/ui/')) {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(DASHBOARD_HTML);
+  }
+
+  // 3. Proxy to Native Steel Developer UI on /native-ui
+  if (reqUrl.startsWith('/native-ui')) {
+    req.url = reqUrl.replace(/^\/native-ui/, '/ui');
+    return proxyHttpRequest(BACKENDS[0].url, req, res);
+  }
+
+  // 4. Global session aggregation: GET /v1/sessions
   if (req.method === 'GET' && (reqUrl === '/v1/sessions' || reqUrl.startsWith('/v1/sessions?'))) {
     const promises = BACKENDS.map(async (b) => {
       const running = await isContainerRunning(b.name);
