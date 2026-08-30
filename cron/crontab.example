@@ -35,6 +35,10 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # Keeps logs for 30 days by default.
 0 8 * * * /path/to/vps-tools/cron/cleanup_logs.sh >> /path/to/vps-tools/cron/logs/cleanup.log 2>&1
 
+# 10. Automated VPS Backup to Google Drive (Daily at 8:30 AM UTC / 3:30 AM UTC-5)
+# GFS Retention: 7 daily + 12 monthly backups, GPG AES-256 encrypted
+30 8 * * * /path/to/vps-tools/backup/scripts/backup.sh >> /path/to/vps-tools/cron/logs/backup.log 2>&1
+
 
 # ==============================================================================
 # EXAMPLE 2: SPECIFIC CONFIGURATION (ROOT-BASED EXECUTION & DATE-BASED LOGS)

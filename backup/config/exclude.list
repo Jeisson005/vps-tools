@@ -1,0 +1,55 @@
+# GNU Tar Exclude List for VPS Backups
+# Directories and patterns excluded anywhere in the tree
+
+# Dependencies and package managers
+node_modules
+.npm
+.pnpm-store
+.yarn/cache
+
+# Python virtualenvs, bytecode and caches
+venv
+.venv
+.venv-*
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+
+# Rust / Go build caches
+target/debug
+target/release
+.cargo/registry
+.cargo/git
+go/pkg
+
+# Version control internals (code is in remote repos)
+.git
+
+# Heavy system and user caches
+.cache
+.gvfs
+.dbus
+.local/share/Trash
+Cache
+cached-data
+
+# Browser internal cache and root container data
+*Cache*
+*cache*
+google-chrome/*Cache*
+chromium/*Cache*
+steel-chrome
+*/steel-chrome/*
+*/steel/data/*
+
+# Staging, temp and sockets
+tmp
+vps-backups
+*.sock
+
+# Rotated and oversized logs
+*.log.1
+*.log.gz
+*.log.20*
