@@ -339,6 +339,7 @@ const server = http.createServer(async (req, res) => {
           if (s.debuggerUrl && !s.debuggerUrl.includes('sessionId=')) {
             s.debuggerUrl += `${s.debuggerUrl.includes('?') ? '&' : '?'}sessionId=${s.id}`;
           }
+          s.activeInPool = sessionMap.has(s.id);
           aggregated.push(s);
         }
       }
