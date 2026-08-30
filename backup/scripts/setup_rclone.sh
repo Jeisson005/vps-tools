@@ -52,3 +52,49 @@ if rclone lsd gdrive: &>/dev/null; then
 else
   echo "⚠️ Aún no se ha detectado el remote 'gdrive'. Puedes ejecutar 'rclone config' en cualquier momento."
 fi
+
+# 2. Configurar Clave Maestra de Cifrado
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="${BASE_DIR}/.env"
+
+echo ""
+echo "================================================================="
+echo "🔐 Configuración de la Clave Maestra de Cifrado (GPG AES-256)"
+echo "================================================================="
+echo "⚠️  IMPORTANTE: Los backups se cifran para que nadie pueda leer tus"
+echo "   archivos o contraseñas en Google Drive. Debes guardar esta clave"
+echo "   en tu gestor de contraseñas personal (1Password, Bitwarden, etc.)."
+echo "   Sin esta clave, NO podrás recuperar tus datos si el VPS se destruye."
+echo "================================================================="
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+  cp "${BASE_DIR}/.env.example" "${ENV_FILE}"
+  chmod 600 "${ENV_FILE}"
+fi
+
+CURRENT_KEY=$(grep -E '^BACKUP_ENCRYPTION_KEY=' "${ENV_FILE}" | cut -d'=' -f2- | tr -d '"' || true)
+
+if [[ -n "${CURRENT_KEY}" && "${CURRENT_KEY}" != *"ChangeThis"* ]]; then
+  echo "Tu clave actual configurada es:"
+  echo "👉 ${CURRENT_KEY}"
+  echo ""
+  read -r -p "¿Deseas cambiarla por una propia ahora? [s/N]: " CHANGE_KEY
+  if [[ "${CHANGE_KEY}" =~ ^[sSyY]$ ]]; then
+    read -r -s -p "Introduce tu nueva clave maestra: " NEW_KEY
+    echo ""
+    if [[ -n "${NEW_KEY}" ]]; then
+      sed -i "s/^BACKUP_ENCRYPTION_KEY=.*/BACKUP_ENCRYPTION_KEY=\"${NEW_KEY}\"/" "${ENV_FILE}"
+      echo "✅ Clave maestra actualizada en ${ENV_FILE}."
+    fi
+  fi
+else
+  read -r -s -p "Introduce tu clave maestra de cifrado: " USER_KEY
+  echo ""
+  if [[ -z "${USER_KEY}" ]]; then
+    USER_KEY=$(openssl rand -hex 24)
+    echo "Se ha generado una clave segura aleatoria: ${USER_KEY}"
+  fi
+  sed -i "s/^BACKUP_ENCRYPTION_KEY=.*/BACKUP_ENCRYPTION_KEY=\"${USER_KEY}\"/" "${ENV_FILE}"
+  echo "✅ Clave maestra guardada en ${ENV_FILE}."
+  echo "⚠️  Cópiala y guárdala ahora en tu gestor de contraseñas: ${USER_KEY}"
+fi

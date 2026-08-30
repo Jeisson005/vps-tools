@@ -26,11 +26,15 @@ RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive:vps-tools-backups}"
 BACKUP_ENCRYPTION_KEY="${BACKUP_ENCRYPTION_KEY:-}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
 RETENTION_MONTHS="${RETENTION_MONTHS:-12}"
-SOURCE_DIR="${SOURCE_DIR:-/home/jeisson}"
+SOURCE_DIR="${SOURCE_DIR:-${HOME}}"
 TEMP_DIR="${TEMP_DIR:-/tmp/vps-backups}"
 
-if [[ -z "${BACKUP_ENCRYPTION_KEY}" ]]; then
-  echo "[-] ERROR: BACKUP_ENCRYPTION_KEY is not defined in ${ENV_FILE}" >&2
+if [[ -z "${BACKUP_ENCRYPTION_KEY}" || "${BACKUP_ENCRYPTION_KEY}" == *"ChangeThis"* ]]; then
+  echo "[-] ERROR: BACKUP_ENCRYPTION_KEY is not configured in ${ENV_FILE}" >&2
+  echo "    Debes definir una clave maestra de cifrado en ${ENV_FILE}." >&2
+  echo "    ⚠️ IMPORTANTE: Guarda esta clave en tu gestor de contraseñas personal." >&2
+  echo "    Si tu servidor se destruye o pierdes acceso, necesitarás esta clave" >&2
+  echo "    para descifrar y restaurar tus copias desde Google Drive." >&2
   exit 1
 fi
 
