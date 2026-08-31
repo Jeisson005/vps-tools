@@ -14,6 +14,7 @@ services:
     networks:
       - rustdesk-net
       - default
+      - nginx-network
 
   hbbr:
     container_name: rustdesk-hbbr
@@ -28,6 +29,7 @@ services:
     networks:
       - rustdesk-net
       - default
+      - nginx-network
 
   rustdesk-web:
     container_name: rustdesk-web
