@@ -1,18 +1,19 @@
 """
 Sentinel Internal MCP & REST API Server
 Exposes Model Context Protocol (MCP) tools and REST management endpoints on port 8006.
+Supports full MCP SSE Session Queues & Streamable HTTP transport.
 """
 import os
 import sys
 import json
 import uuid
 import asyncio
+import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse, JSONResponse
-from pydantic import BaseModel, Field
 
 # Add parent directory to sys.path to import core modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -24,8 +25,11 @@ from core.runner import TaskRunner
 from core.healer import Healer
 from core.telegram_hub import TelegramHub
 
+logger = logging.getLogger("sentinel.api")
+
 app = FastAPI(title="Sentinel Task Orchestration & MCP Server", version="2.0.0")
 
+_active_sse_queues: Dict[str, asyncio.Queue] = {}
 
 # -----------------------------------------------------------------------------
 # MCP JSON-RPC 2.0 PROTOCOL SCHEMAS & SANITIZER
@@ -119,7 +123,6 @@ def handle_mcp_tool_call(name: str, args: dict) -> dict:
         env_vars = args.get("env_vars", {})
         requires_browser = args.get("requires_browser", False)
         
-        # Generate clean task ID from name
         task_id = task_name.lower().replace(" ", "_").replace("-", "_")
         task_id = "".join(c for c in task_id if c.isalnum() or c == "_")[:32]
         if not task_id or (TASKS_DIR / task_id).exists():
@@ -133,7 +136,6 @@ def handle_mcp_tool_call(name: str, args: dict) -> dict:
         (task_dir / script_file).write_text(code, encoding="utf-8")
         os.chmod(task_dir / script_file, 0o755)
         
-        # Write .env if secrets provided
         if env_vars:
             env_lines = [f"{k}={v}" for k, v in env_vars.items()]
             (task_dir / ".env").write_text("\n".join(env_lines) + "\n", encoding="utf-8")
@@ -151,7 +153,6 @@ def handle_mcp_tool_call(name: str, args: dict) -> dict:
         TaskRunner.save_task_meta(task_id, meta)
         GitManager.init_task_repo(task_dir, f"Initial task commit: {task_name}")
         
-        # Register in isolated cron
         cmd = f"/usr/local/bin/sentinel-run --id {task_id}"
         CronManager.add_or_update_task(task_id, task_name, cron_expr, cmd)
         
@@ -164,18 +165,19 @@ def handle_mcp_tool_call(name: str, args: dict) -> dict:
 
     elif normalized_name == "sentinel_list_tasks":
         tasks = []
-        for d in TASKS_DIR.iterdir():
-            if d.is_dir() and (d / "task.json").exists():
-                meta = TaskRunner.load_task_meta(d.name) or {}
-                history = GitManager.get_history(d, limit=1)
-                last_commit = history[0]["commit"] if history else "none"
-                tasks.append({
-                    "id": d.name,
-                    "name": meta.get("name", d.name),
-                    "schedule": meta.get("schedule_cron", "manual"),
-                    "language": meta.get("language", "unknown"),
-                    "git_version": last_commit
-                })
+        if TASKS_DIR.exists():
+            for d in TASKS_DIR.iterdir():
+                if d.is_dir() and (d / "task.json").exists():
+                    meta = TaskRunner.load_task_meta(d.name) or {}
+                    history = GitManager.get_history(d, limit=1)
+                    last_commit = history[0]["commit"] if history else "none"
+                    tasks.append({
+                        "id": d.name,
+                        "name": meta.get("name", d.name),
+                        "schedule": meta.get("schedule_cron", "manual"),
+                        "language": meta.get("language", "unknown"),
+                        "git_version": last_commit
+                    })
         return {
             "content": [{
                 "type": "text",
@@ -222,36 +224,34 @@ def handle_mcp_tool_call(name: str, args: dict) -> dict:
     return {"content": [{"type": "text", "text": f"Tool '{name}' not found."}], "isError": True}
 
 
-# -----------------------------------------------------------------------------
-# MCP SSE ENDPOINT & JSON-RPC 2.0 HANDLERS
-# -----------------------------------------------------------------------------
-@app.get("/sse")
-@app.get("/mcp")
-async def mcp_sse_endpoint(request: Request):
-    """Server-Sent Events endpoint for MCP protocol discovery."""
-    async def event_generator():
-        yield "event: endpoint\ndata: /messages\n\n"
-        while True:
-            await asyncio.sleep(15)
-            yield ": keepalive\n\n"
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-
-@app.post("/messages")
-@app.post("/mcp/messages")
-async def mcp_messages_endpoint(request: Request):
-    """Handles MCP JSON-RPC 2.0 tool discovery and execution requests."""
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": None})
-
+def process_jsonrpc_request(body: dict) -> Optional[dict]:
     req_id = body.get("id")
     method = body.get("method")
     params = body.get("params", {})
 
-    if method == "tools/list":
+    if method == "notifications/initialized":
+        return None
+
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {"listChanged": False}
+                },
+                "serverInfo": {
+                    "name": "sentinel-mcp-server",
+                    "version": "2.0.0"
+                }
+            }
+        }
+
+    elif method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+
+    elif method == "tools/list":
         return {
             "jsonrpc": "2.0",
             "id": req_id,
@@ -270,27 +270,72 @@ async def mcp_messages_endpoint(request: Request):
             "result": result
         }
 
-    elif method == "initialize":
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": {}
-                },
-                "serverInfo": {
-                    "name": "sentinel-mcp-server",
-                    "version": "2.0.0"
-                }
-            }
-        }
-
     return {
         "jsonrpc": "2.0",
         "id": req_id,
-        "result": {}
+        "error": {"code": -32601, "message": f"Method '{method}' not found"}
     }
+
+
+# -----------------------------------------------------------------------------
+# MCP SSE ENDPOINT & JSON-RPC 2.0 HANDLERS
+# -----------------------------------------------------------------------------
+@app.get("/sse")
+@app.get("/mcp")
+async def mcp_sse_endpoint(request: Request):
+    session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId") or str(uuid.uuid4())
+    q: asyncio.Queue = asyncio.Queue()
+    _active_sse_queues[session_id] = q
+
+    async def event_generator():
+        # Yield endpoint immediately
+        endpoint_url = f"/messages?sessionId={session_id}"
+        yield f"event: endpoint\ndata: {endpoint_url}\n\n"
+
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"event: message\ndata: {json.dumps(msg)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        finally:
+            _active_sse_queues.pop(session_id, None)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Mcp-Session-Id": session_id
+        }
+    )
+
+
+@app.post("/messages")
+@app.post("/mcp/messages")
+async def mcp_messages_endpoint(request: Request):
+    session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId")
+    
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": None})
+
+    response_data = process_jsonrpc_request(body)
+
+    # If SSE queue is active for this session, push response to queue as well
+    if session_id and session_id in _active_sse_queues and response_data is not None:
+        await _active_sse_queues[session_id].put(response_data)
+
+    if response_data is None:
+        return Response(status_code=204)
+        
+    return JSONResponse(content=response_data)
 
 
 # -----------------------------------------------------------------------------
@@ -304,10 +349,11 @@ def health_check():
 @app.get("/api/tasks")
 def list_tasks_rest():
     tasks = []
-    for d in TASKS_DIR.iterdir():
-        if d.is_dir() and (d / "task.json").exists():
-            meta = TaskRunner.load_task_meta(d.name) or {}
-            tasks.append(meta)
+    if TASKS_DIR.exists():
+        for d in TASKS_DIR.iterdir():
+            if d.is_dir() and (d / "task.json").exists():
+                meta = TaskRunner.load_task_meta(d.name) or {}
+                tasks.append(meta)
     return {"tasks": tasks}
 
 
