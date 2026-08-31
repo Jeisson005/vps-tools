@@ -12,6 +12,7 @@ Contains:
 - [steel/](steel/) — Steel Browser Sandbox (isolated headless Chromium with Live Session Viewer & MCP)
 - [bash-mcp/](bash-mcp/) — Host-native Model Context Protocol server for VPS administration
 - [mcp/](mcp/) — Modular MCP Gateway & Admin Panel (isolated subroutes, schema sanitizer, starting with Passbolt)
+- [rustdesk/](rustdesk/) — RustDesk Self-Hosted Remote Desktop Server & Web Client (hbbs, hbbr, Web UI)
 - [sentinel/](sentinel/) — Autonomous self-healing scheduled tasks & multi-bot Telegram routing
 - [open-webui/](open-webui/) — Open WebUI ChatGPT/Claude-like interface with multi-user auth and RAG
 - [postgres/](postgres/) — Postgres database + PgBouncer

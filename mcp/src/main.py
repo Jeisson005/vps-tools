@@ -53,14 +53,8 @@ if os.path.exists(web_dir):
 
 # --- Security & Auth Helpers ---
 
-def verify_admin_token(authorization: Optional[str] = Header(None)) -> bool:
-    """Verify bearer token for Admin Panel API requests."""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing authorization header")
-    parts = authorization.split(" ")
-    token = parts[1] if len(parts) == 2 else parts[0]
-    if token != ADMIN_PASSWORD:
-        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+def verify_admin_token() -> bool:
+    """Admin endpoints are protected at reverse proxy level via Nginx HTTP Basic Auth."""
     return True
 
 def verify_client_mcp_auth(request: Request):

@@ -18,57 +18,17 @@ function showToast(message, type = "info") {
   }, 3500);
 }
 
-// --- Authenticated Fetch Helper ---
+// --- Direct Fetch Helper ---
 async function apiFetch(endpoint, options = {}) {
   options.headers = options.headers || {};
-  if (currentToken) {
-    options.headers["Authorization"] = `Bearer ${currentToken}`;
-  }
   options.headers["Content-Type"] = options.headers["Content-Type"] || "application/json";
 
   const res = await fetch(endpoint, options);
-  if (res.status === 401) {
-    localStorage.removeItem("mcp_admin_token");
-    currentToken = "";
-    document.getElementById("app-layout").classList.add("hidden");
-    document.getElementById("login-modal").classList.add("active");
-    throw new Error("Sesión expirada o no autorizada.");
+  if (!res.ok && res.status !== 404) {
+    console.warn(`Request to ${endpoint} returned status ${res.status}`);
   }
   return res;
 }
-
-// --- Auth Flow ---
-document.getElementById("login-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const password = document.getElementById("admin-password").value;
-  try {
-    const res = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password })
-    });
-    const data = await res.json();
-    if (res.ok && data.token) {
-      currentToken = data.token;
-      localStorage.setItem("mcp_admin_token", currentToken);
-      document.getElementById("login-modal").classList.remove("active");
-      document.getElementById("app-layout").classList.remove("hidden");
-      showToast("Bienvenido al panel MCP Gateway", "success");
-      loadInitialData();
-    } else {
-      showToast(data.detail || "Contraseña incorrecta", "error");
-    }
-  } catch (err) {
-    showToast("Error de conexión: " + err.message, "error");
-  }
-});
-
-document.getElementById("btn-logout").addEventListener("click", () => {
-  localStorage.removeItem("mcp_admin_token");
-  currentToken = "";
-  document.getElementById("app-layout").classList.add("hidden");
-  document.getElementById("login-modal").classList.add("active");
-});
 
 // --- Tab Navigation ---
 function initTabs() {
@@ -617,9 +577,5 @@ function loadInitialData() {
 // Bootstrap
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
-  if (currentToken) {
-    document.getElementById("login-modal").classList.remove("active");
-    document.getElementById("app-layout").classList.remove("hidden");
-    loadInitialData();
-  }
+  loadInitialData();
 });
