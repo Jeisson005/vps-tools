@@ -182,21 +182,21 @@ TAR_ARGS+=(
   --exclude="${STAGING_DIR}"
 )
 
-# Append extra staging DB dumps if created
-set +e
+# Disable ERR trap temporarily for tar so benign warnings (exit code 1) don't trigger false alerts
+trap - ERR
+TAR_EXIT=0
 if [[ -d "${DB_DUMP_DIR}" && "$(ls -A "${DB_DUMP_DIR}" 2>/dev/null)" ]]; then
   echo "  [tar] Including container database dumps..."
-  tar "${TAR_ARGS[@]}" -C "${SOURCE_DIR}" . -C "${STAGING_DIR}" db_dumps
-  TAR_EXIT=$?
+  tar "${TAR_ARGS[@]}" -C "${SOURCE_DIR}" . -C "${STAGING_DIR}" db_dumps || TAR_EXIT=$?
 else
-  tar "${TAR_ARGS[@]}" -C "${SOURCE_DIR}" .
-  TAR_EXIT=$?
+  tar "${TAR_ARGS[@]}" -C "${SOURCE_DIR}" . || TAR_EXIT=$?
 fi
-set -e
+trap 'on_error ${LINENO} "${BASH_COMMAND}"' ERR
 
 # GNU tar returns 0 on success, 1 on file changed/unreadable warnings, 2 on fatal
 if [[ ${TAR_EXIT} -gt 1 ]]; then
   echo "[-] ERROR: tar failed with fatal exit code ${TAR_EXIT}" >&2
+  on_error "${LINENO}" "tar compression (fatal code ${TAR_EXIT})"
   exit "${TAR_EXIT}"
 fi
 
