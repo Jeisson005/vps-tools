@@ -1,0 +1,56 @@
+services:
+  hbbs:
+    container_name: rustdesk-hbbs
+    image: rustdesk/rustdesk-server:latest
+    command: hbbs -r ${RUSTDESK_DOMAIN:-rustdesk.jeisson.top}:21117 -k _
+    restart: unless-stopped
+    volumes:
+      - ./data:/root
+    ports:
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp"
+      - "21118:21118"
+    networks:
+      - rustdesk-net
+      - default
+
+  hbbr:
+    container_name: rustdesk-hbbr
+    image: rustdesk/rustdesk-server:latest
+    command: hbbr -k _
+    restart: unless-stopped
+    volumes:
+      - ./data:/root
+    ports:
+      - "21117:21117"
+      - "21119:21119"
+    networks:
+      - rustdesk-net
+      - default
+
+  rustdesk-web:
+    container_name: rustdesk-web
+    image: lscr.io/linuxserver/rustdesk:latest
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Bogota}
+      - CUSTOM_USER=${RUSTDESK_WEB_USER:-jeisson}
+      - PASSWORD=${RUSTDESK_WEB_PASSWORD:-ChangeThisSecurePassword123!}
+    volumes:
+      - ./web-config:/config
+    ports:
+      - "127.0.0.1:21120:3000"
+    networks:
+      - rustdesk-net
+      - default
+      - nginx-network
+
+networks:
+  rustdesk-net:
+    driver: bridge
+  nginx-network:
+    name: ${NGINX_NETWORK:-nginx_default}
+    external: true
