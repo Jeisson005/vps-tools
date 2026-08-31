@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Centinela - VPS Disk Space Health Monitor
+# Sentinel - VPS Disk Space Health Monitor
 # Checks disk usage against configurable thresholds and sends Telegram alerts.
 # ==============================================================================
 
@@ -19,11 +19,12 @@ fi
 DISK_ALERT_THRESHOLD="${DISK_ALERT_THRESHOLD:-85}"
 MONITORED_MOUNTS="${MONITORED_MOUNTS:-/}"
 NOTIFY_ON_HEALTHY="${NOTIFY_ON_HEALTHY:-false}"
+TELEGRAM_TOKEN="${TELEGRAM_BOT_URGENT_TOKEN:-${TELEGRAM_BOT_TOKEN:-}}"
 
 send_telegram() {
   local msg="$1"
-  if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
-    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+  if [[ -n "${TELEGRAM_TOKEN}" && -n "${TELEGRAM_CHAT_ID:-}" ]]; then
+    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
       -d "chat_id=${TELEGRAM_CHAT_ID}" \
       -d "text=${msg}" \
       -d "parse_mode=Markdown" >/dev/null 2>&1 || true
@@ -31,7 +32,7 @@ send_telegram() {
 }
 
 echo "================================================================="
-echo "🛡️  Centinela Disk Space Check: $(date -R)"
+echo "🛡️  Sentinel Disk Space Check: $(date -R)"
 echo "⚙️  Threshold: >= ${DISK_ALERT_THRESHOLD}%"
 echo "📂 Mounts: ${MONITORED_MOUNTS}"
 echo "================================================================="
@@ -65,7 +66,7 @@ done
 if [[ "${ALERT_TRIGGERED}" == "false" ]]; then
   echo "[+] ✓ All monitored mounts are healthy (under ${DISK_ALERT_THRESHOLD}%)."
   if [[ "${NOTIFY_ON_HEALTHY}" == "true" ]]; then
-    send_telegram "✅ *Centinela - Disco Saludable* ✅%0A%0A🖥️ *Host:* \`$(hostname)\`%0A💽 Todos los puntos de montaje están por debajo del ${DISK_ALERT_THRESHOLD}% de uso."
+    send_telegram "✅ *Sentinel - Disco Saludable* ✅%0A%0A🖥️ *Host:* \`$(hostname)\`%0A💽 Todos los puntos de montaje están por debajo del ${DISK_ALERT_THRESHOLD}% de uso."
   fi
 fi
 

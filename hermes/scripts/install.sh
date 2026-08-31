@@ -105,21 +105,14 @@ if [[ -f "${HERMES_DIR}/../steel/.env" ]]; then
 fi
 
 mkdir -p "${USER_HOME}/.config/steel/profiles/persistent"
-mkdir -p "${USER_HOME}/.hermes/skills/browser/browser-automation"
-mkdir -p "${USER_HOME}/.hermes/skills/computer-use/desktop-gui-control"
 chown -R "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.config/steel" 2>/dev/null || true
 
-# Remove old deprecated skills if present
-rm -rf "${USER_HOME}/.hermes/skills/browser/steel-browser" 2>/dev/null || true
-rm -rf "${USER_HOME}/.hermes/skills/computer-use/visual-session-control" 2>/dev/null || true
-
-if [[ -f "${HERMES_DIR}/skills/browser-automation/SKILL.md" ]]; then
-  sed -e "s|{{STEEL_DOMAIN}}|${STEEL_DOMAIN}|g" \
-      "${HERMES_DIR}/skills/browser-automation/SKILL.md" > "${USER_HOME}/.hermes/skills/browser/browser-automation/SKILL.md"
-fi
-
-if [[ -f "${HERMES_DIR}/skills/desktop-gui-control/SKILL.md" ]]; then
-  cp "${HERMES_DIR}/skills/desktop-gui-control/SKILL.md" "${USER_HOME}/.hermes/skills/computer-use/desktop-gui-control/SKILL.md"
+# Synchronize curated skills from central catalog
+if [[ -f "${HERMES_DIR}/../skills/scripts/sync_skills.sh" ]]; then
+  bash "${HERMES_DIR}/../skills/scripts/sync_skills.sh" \
+    --target hermes \
+    --user "${HERMES_USER}" \
+    --steel-domain "${STEEL_DOMAIN}"
 fi
 
 if [[ -f "${HERMES_DIR}/templates/SOUL.md" ]]; then
@@ -130,8 +123,6 @@ fi
 if [[ -f "${HERMES_DIR}/scripts/patch-hermes.py" ]]; then
   python3 "${HERMES_DIR}/scripts/patch-hermes.py" "${HERMES_AGENT_PATH}"
 fi
-
-chown -R "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.hermes/skills"
 
 # Build Web Dashboard Frontend
 if [[ -d "${HERMES_AGENT_PATH}/web" ]]; then

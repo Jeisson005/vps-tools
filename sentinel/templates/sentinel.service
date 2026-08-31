@@ -1,0 +1,17 @@
+[Unit]
+Description=Sentinel Autonomous Self-Healing & Task Orchestration MCP Server
+After=network.target
+
+[Service]
+Type=simple
+User={{SENTINEL_USER}}
+WorkingDirectory={{SENTINEL_DIR}}
+EnvironmentFile=-/etc/default/sentinel
+Environment=PYTHONPATH={{SENTINEL_DIR}}
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:{{SENTINEL_DIR}}/venv/bin
+ExecStart={{PYTHON_BIN}} -m uvicorn api.server:app --host {{SENTINEL_HOST}} --port {{SENTINEL_PORT}}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

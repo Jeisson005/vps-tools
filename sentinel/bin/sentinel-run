@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""
+Sentinel Task Runner CLI (sentinel-run)
+Invoked by cron or CLI: sentinel-run --id <task_id> or sentinel-run --path /path/to/script.py
+"""
+import sys
+import argparse
+from pathlib import Path
+
+# Add sentinel parent directory to sys.path
+SENTINEL_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SENTINEL_DIR))
+
+from core.runner import TaskRunner
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Sentinel Polyglot Task Runner with Auto-Healing")
+    parser.add_argument("--id", "-i", dest="task_id", help="Unique identifier of the task")
+    parser.add_argument("--path", "-p", dest="script_path", help="Direct path to an executable script")
+    parser.add_argument("--task", "-t", dest="task_name", help="Human-readable task name (optional override)")
+    
+    args, extra_args = parser.parse_known_args()
+    
+    if not args.task_id and not args.script_path and not extra_args:
+        parser.print_help()
+        sys.exit(1)
+        
+    task_id = args.task_id
+    script_path = args.script_path
+    
+    # Handle direct script execution with -- delimiter
+    if not task_id and extra_args:
+        if extra_args[0] == "--":
+            extra_args = extra_args[1:]
+        if extra_args:
+            script_path = extra_args[0]
+            task_id = Path(script_path).stem
+
+    if not task_id and script_path:
+        task_id = Path(script_path).stem
+
+    res = TaskRunner.run_task(task_id=task_id, custom_script_path=script_path)
+    
+    if not res.get("success", False):
+        sys.exit(1)
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

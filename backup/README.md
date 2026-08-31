@@ -1,91 +1,86 @@
-# 📦 Sistema de Backup Automatizado del VPS a Google Drive
+# 📦 Automated VPS Backup to Google Drive
 
-Sistema integral de copias de seguridad en la nube para el VPS con cifrado simétrico militar **GPG (AES-256)**, subida a **Google Drive** vía **Rclone**, auto-detección de bases de datos Docker y política de retención **GFS (Grandfather-Father-Son)**.
-
----
-
-## 🎯 Características Principales
-
-1. **Respaldos Completos por Defecto:**
-   * Empaqueta todo el directorio de usuario (`$HOME`: proyectos, configuraciones, `.bashrc`, claves SSH, `.env`).
-   * **Filtros inteligentes:** Omite automáticamente cachés (`.cache/`, `.npm/`), `node_modules/`, entornos virtuales (`venv/`, `.venv/`) y logs masivos para que el archivo sea ligero y rápido de subir.
-2. **Auto-descubrimiento de Bases de Datos:**
-   * Detecta automáticamente contenedores activos de **PostgreSQL**, **MySQL/MariaDB**, **MongoDB** y **Redis**.
-   * Realiza volcados consistentes (`pg_dumpall`, `mysqldump`, `mongodump`, `redis bgsave`) antes de empaquetar.
-3. **Cifrado de Seguridad Extremo (GPG AES-256):**
-   * Ninguna contraseña, token o base de datos viaja en texto claro a Google Drive.
-   * El archivo se cifra en el servidor con tu clave maestra antes de ser transmitido.
-4. **Política de Retención GFS (19 Copias Máximo):**
-   * **7 Diarias:** Mantiene exactamente los últimos 7 días en `vps-tools-backups/daily/`.
-   * **12 Mensuales:** Mantiene 1 copia por cada uno de los últimos 12 meses en `vps-tools-backups/monthly/`.
-   * Las copias viejas que superen los límites se eliminan automáticamente de Drive en cada ejecución.
+Comprehensive cloud backup suite for Linux VPS with **GPG (AES-256)** military-grade symmetric encryption, **Google Drive** synchronization via **Rclone**, active Docker database auto-discovery, and **GFS (Grandfather-Father-Son)** retention policy.
 
 ---
 
-## 🚀 Puesta en Marcha Rápida
+## 🎯 Key Features
 
-### 1. Vincular Google Drive con Rclone (Una sola vez)
+1. **Full Home & Config Backup by Default:**
+   * Archives user home directory (`$HOME`: projects, configs, `.bashrc`, SSH keys, `.env` files).
+   * **Smart Exclusions:** Automatically skips heavy caches (`.cache/`, `.npm/`), `node_modules/`, Python virtual environments (`venv/`, `.venv/`), and massive log files to keep archives fast and lightweight.
+2. **Active Database Auto-Discovery:**
+   * Automatically detects running Docker containers for **PostgreSQL**, **MySQL/MariaDB**, **MongoDB**, and **Redis**.
+   * Executes consistent database dumps (`pg_dumpall`, `mysqldump`, `mongodump`, `redis bgsave`) into staging before compression.
+3. **End-to-End Encryption (GPG AES-256):**
+   * No plaintext passwords, keys, or databases are sent to Google Drive.
+   * Files are encrypted on the host before transmission.
+4. **GFS Retention Policy (19 Backups Max):**
+   * **7 Daily:** Retains the last 7 daily archives in `vps-tools-backups/daily/`.
+   * **12 Monthly:** Retains 1 snapshot per month for the last 12 months in `vps-tools-backups/monthly/`.
+   * **Manual Backups:** Saved permanently in `vps-tools-backups/manual/` (never expired).
 
-Ejecuta el asistente interactivo:
+---
+
+## 🚀 Quick Setup
+
+### 1. Link Google Drive with Rclone (Once)
+
+Run the interactive setup helper:
 ```bash
 ./scripts/setup_rclone.sh
 ```
-El asistente instalará `rclone` y abrirá la configuración para conectar tu cuenta de Google Drive bajo el nombre `gdrive`.
+The helper installs `rclone` and guides configuration under the remote name `gdrive`.
 
-### 2. Configurar Variables de Entorno
+### 2. Configure Environment Variables
 
-Copia la plantilla y define tu contraseña maestra de cifrado:
+Copy the template and set your master encryption key:
 ```bash
 cp .env.example .env
 chmod 600 .env
 nano .env
 ```
-Asegúrate de definir:
-* `BACKUP_ENCRYPTION_KEY`: Una contraseña segura para cifrar/descifrar tus backups.
+Ensure you define:
+* `BACKUP_ENCRYPTION_KEY`: A secure passphrase to encrypt/decrypt backups.
 * `RCLONE_REMOTE=gdrive:vps-tools-backups`
 
 ---
 
-## 💻 Uso de los Scripts
+## 💻 Usage
 
-### Ejecutar Backup Diario (GFS, rota según retención)
+### Run Daily Backup (GFS rotation)
 ```bash
 ./scripts/backup.sh
-# O explícitamente:
+# Or explicitly:
 ./scripts/backup.sh daily
 ```
 
-### Ejecutar Backup Manual (Permanente, no expira)
+### Run Manual Backup (Permanent, does not expire)
 ```bash
 ./scripts/backup.sh manual
 ```
 
-### Listar Backups en Google Drive (Daily, Monthly y Manual)
+### List Backups on Google Drive (Daily, Monthly, Manual)
 ```bash
 ./scripts/restore.sh list
 ```
 
-### Probar Integridad de un Backup (Descarga y verifica sin extraer)
+### Test Backup Integrity (Download & verify without extracting)
 ```bash
 ./scripts/restore.sh test backup_daily_20260830_030000.tar.gz.gpg
 ```
 
-### Restaurar Archivos
+### Restore Files to a Target Directory
 ```bash
-./scripts/restore.sh restore backup_daily_20260830_030000.tar.gz.gpg /tmp/recuperacion
+./scripts/restore.sh restore backup_daily_20260830_030000.tar.gz.gpg /tmp/restore_dest
 ```
 
 ---
 
-## ⏰ Programación Automática (Cron)
+## ⏰ Cron Scheduling
 
-Para que el backup se ejecute todos los días a las **3:30 AM** (hora del servidor):
-
-Edita tu crontab con `crontab -e` y añade:
+To execute backups automatically every morning at **3:30 AM**:
 
 ```cron
-# Backup diario del VPS a Google Drive con retención de 7 días y 12 meses
 30 3 * * * /path/to/vps-tools/backup/scripts/backup.sh >> /path/to/vps-tools/cron/logs/backup.log 2>&1
 ```
-
-O revisa la plantilla en [`cron/crontab.example`](file:///home/jeisson/Documents/Artic%20proyectos/vps-tools/cron/crontab.example).
