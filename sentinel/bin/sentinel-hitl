@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""
+Sentinel Human-in-the-Loop Helper CLI & Module (sentinel-hitl)
+Enables scripts to pause and request interactive 2FA authorization from the user via Bot 4 (Green).
+"""
+import sys
+import argparse
+from pathlib import Path
+
+SENTINEL_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SENTINEL_DIR))
+
+from core.hitl_manager import HitlManager
+
+
+def wait_for_user(session_id: str, session_url: str, task_name: str = "Tarea de Navegación", reason: str = "Se requiere 2FA / Verificación", timeout_minutes: int = 15) -> bool:
+    """Python API for scripts to wait for user confirmation."""
+    return HitlManager.wait_for_user_approval(
+        session_id=session_id,
+        session_url=session_url,
+        task_name=task_name,
+        reason=reason,
+        timeout_minutes=timeout_minutes
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Sentinel Human-in-the-loop 2FA Waiter")
+    parser.add_argument("--session-id", required=True, help="Steel Browser Session UUID")
+    parser.add_argument("--url", required=True, help="Live Viewer URL (https://browser.../debug?sessionId=...)")
+    parser.add_argument("--task-name", default="Tarea de Navegación", help="Name of the running task")
+    parser.add_argument("--reason", default="Se requiere verificación 2FA / Login", help="Human-friendly explanation")
+    parser.add_argument("--timeout", type=int, default=15, help="Timeout in minutes (default: 15)")
+
+    args = parser.parse_args()
+    approved = wait_for_user(
+        session_id=args.session_id,
+        session_url=args.url,
+        task_name=args.task_name,
+        reason=args.reason,
+        timeout_minutes=args.timeout
+    )
+    
+    if approved:
+        print("[+] 2FA authorization approved by user in Telegram.")
+        sys.exit(0)
+    else:
+        print("[-] Wait timeout elapsed without user approval.")
+        sys.exit(2)  # Exit code 2 = Clean HITL Timeout
+
+
+if __name__ == "__main__":
+    main()

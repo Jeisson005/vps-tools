@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""
+Sentinel Management CLI (sentinel-ctl)
+Manage tasks, crontab schedules, logs, and manual executions from terminal.
+"""
+import sys
+import os
+import argparse
+import json
+from pathlib import Path
+
+SENTINEL_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SENTINEL_DIR))
+
+from core.config import TASKS_DIR, LOGS_DIR
+from core.cron_manager import CronManager
+from core.runner import TaskRunner
+from core.git_manager import GitManager
+
+
+def cmd_list(args):
+    print("========================================================================")
+    print("  SENTINEL SCHEDULED TASKS")
+    print("========================================================================")
+    has_tasks = False
+    if TASKS_DIR.exists():
+        for d in TASKS_DIR.iterdir():
+            if d.is_dir() and (d / "task.json").exists():
+                has_tasks = True
+                meta = TaskRunner.load_task_meta(d.name) or {}
+                history = GitManager.get_history(d, limit=1)
+                last_commit = history[0]["commit"] if history else "none"
+                print(f"• ID:          {d.name}")
+                print(f"  Name:        {meta.get('name', d.name)}")
+                print(f"  Schedule:    {meta.get('schedule_cron', 'manual')}")
+                print(f"  Language:    {meta.get('language', 'unknown')}")
+                print(f"  Git Version: {last_commit}")
+                print(f"  Directory:   {d}")
+                print("------------------------------------------------------------------------")
+    if not has_tasks:
+        print("  (No scheduled tasks found)")
+
+
+def cmd_run(args):
+    print(f"--> Executing task '{args.task_id}' with auto-healing pipeline...")
+    res = TaskRunner.run_task(args.task_id)
+    print(json.dumps(res, indent=2, ensure_ascii=False))
+
+
+def cmd_logs(args):
+    log_file = LOGS_DIR / f"{args.task_id}.log"
+    if not log_file.exists():
+        print(f"[-] No log file found for task '{args.task_id}'.")
+        return
+    lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    print(f"--- RECENT LOGS FOR '{args.task_id}' ({min(args.lines, len(lines))} lines) ---")
+    print("\n".join(lines[-args.lines:]))
+    
+    print("\n--- GIT COMMIT HISTORY (AUTO-REPAIRS) ---")
+    history = GitManager.get_history(TASKS_DIR / args.task_id, limit=5)
+    for h in history:
+        print(f"[{h['commit']}] {h['date']} - {h['summary']}")
+
+
+def cmd_remove(args):
+    CronManager.remove_task(args.task_id)
+    print(f"[+] Task '{args.task_id}' removed from Sentinel crontab.")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="sentinel-ctl", description="Sentinel Control CLI")
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+    
+    # list
+    subparsers.add_parser("list", help="List all scheduled tasks")
+    
+    # run
+    run_parser = subparsers.add_parser("run", help="Execute a task immediately")
+    run_parser.add_argument("task_id", help="Task ID")
+    
+    # logs
+    log_parser = subparsers.add_parser("logs", help="View task execution logs and git history")
+    log_parser.add_argument("task_id", help="Task ID")
+    log_parser.add_argument("-n", "--lines", type=int, default=50, help="Number of lines to show")
+    
+    # remove
+    rm_parser = subparsers.add_parser("remove", help="Remove task from crontab")
+    rm_parser.add_argument("task_id", help="Task ID")
+
+    args = parser.parse_args()
+    if args.command == "list":
+        cmd_list(args)
+    elif args.command == "run":
+        cmd_run(args)
+    elif args.command == "logs":
+        cmd_logs(args)
+    elif args.command == "remove":
+        cmd_remove(args)
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

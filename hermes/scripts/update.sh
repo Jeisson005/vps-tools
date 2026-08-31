@@ -55,16 +55,16 @@ python3 "${HERMES_DIR}/scripts/patch-hermes.py" "${HERMES_AGENT_PATH}"
 
 # 4. Sync SOUL.md and skills
 if [[ -f "${HERMES_DIR}/templates/SOUL.md" ]]; then
-  echo "[*] Sychronizing SOUL.md system identity..."
+  echo "[*] Synchronizing SOUL.md system identity..."
   cp "${HERMES_DIR}/templates/SOUL.md" "${USER_HOME}/.hermes/SOUL.md"
   chown "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.hermes/SOUL.md"
 fi
 
-if [[ -d "${HERMES_DIR}/skills/webui-workspace" ]]; then
-  echo "[*] Sychronizing webui-workspace skill..."
-  mkdir -p "${USER_HOME}/.hermes/skills/webui-workspace"
-  cp -r "${HERMES_DIR}/skills/webui-workspace/"* "${USER_HOME}/.hermes/skills/webui-workspace/"
-  chown -R "${HERMES_USER}:${HERMES_USER}" "${USER_HOME}/.hermes/skills/webui-workspace"
+if [[ -f "${HERMES_DIR}/../skills/scripts/sync_skills.sh" ]]; then
+  echo "[*] Synchronizing curated skills from central catalog..."
+  bash "${HERMES_DIR}/../skills/scripts/sync_skills.sh" \
+    --target hermes \
+    --user "${HERMES_USER}"
 fi
 
 # 5. Check dependencies in venv

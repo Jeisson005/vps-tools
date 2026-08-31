@@ -157,7 +157,7 @@ def patch_browser_tool(base_dir: str) -> bool:
     return True
 
 def main():
-    target_dir = sys.argv[1] if len(sys.argv) > 1 else "/home/jeisson/.hermes/hermes-agent"
+    target_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/.hermes/hermes-agent")
     print(f"[*] Checking and applying custom Hermes patches on: {target_dir}")
     ok1 = patch_api_server(target_dir)
     ok2 = patch_browser_tool(target_dir)
