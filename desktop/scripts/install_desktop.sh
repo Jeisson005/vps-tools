@@ -79,8 +79,8 @@ if [[ -f /etc/xrdp/xrdp.ini ]]; then
   # Only change the global listening port under [Globals], never session sections like [Xorg]
   sed -i "0,/^port=/s/^port=.*/port=${XRDP_BIND}:${XRDP_PORT}/" /etc/xrdp/xrdp.ini || true
   # Ensure Xorg and Xvnc session handlers use dynamic sesman allocation
-  sed -i "/\[Xorg\]/,/code=20/c\[Xorg]\nname=Xorg\nlib=libxup.so\nusername=ask\npassword=ask\nip=127.0.0.1\nport=-1\ncode=20" /etc/xrdp/xrdp.ini || true
-  sed -i "/\[Xvnc\]/,/code=10/c\[Xvnc]\nname=Xvnc\nlib=libvnc.so\nusername=ask\npassword=ask\nip=127.0.0.1\nport=-1" /etc/xrdp/xrdp.ini || true
+  sed -i "/\[Xorg\]/,/code=20/c\[Xorg]\nname=Xorg\nlib=libxup.so\nusername=ask\npassword=ask\nport=-1\ncode=20" /etc/xrdp/xrdp.ini || true
+  sed -i "/\[Xvnc\]/,/code=10/c\[Xvnc]\nname=Xvnc\nlib=libvnc.so\nusername=ask\npassword=ask\nport=-1" /etc/xrdp/xrdp.ini || true
 fi
 
 # Configure ~/.xsession for target user
