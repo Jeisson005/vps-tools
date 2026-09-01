@@ -582,8 +582,8 @@
           </div>
 
           <div class="btn-group" style="margin-top: 0.5rem;">
-            <button class="btn btn-primary" onclick="copySwitchyRules()">📋 Copiar Reglas SwitchyOmega</button>
-            <button class="btn" onclick="downloadSwitchyRules()">💾 Descargar Reglas (.txt)</button>
+            <button class="btn btn-primary" onclick="copyBlockedRules()">📋 Copiar Reglas de Webs Bloqueadas</button>
+            <button class="btn" onclick="downloadBlockedRules()">💾 Descargar Reglas (.txt)</button>
           </div>
 
           <p style="font-size: 12px; color: var(--text-dim); line-height: 1.4; margin-top: 0.25rem;">
@@ -736,12 +736,26 @@
 
     let lastDiagnosticResults = [];
 
-    function generateBlockedRulesText() {
+    async function getDiagnosedBlockedRulesText() {
       const includeAdult = document.getElementById("chk-include-adult")?.checked || false;
+      
+      // If user hasn't run diagnostics yet, fetch it automatically
+      if (!lastDiagnosticResults || lastDiagnosticResults.length === 0) {
+        showToast("Ejecutando análisis de bloqueos en segundo plano...");
+        try {
+          const res = await fetch("/api/diagnose");
+          const data = await res.json();
+          renderResults(data.results);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
       const blockedDomains = new Set();
 
       lastDiagnosticResults.forEach(r => {
-        if (r.verdict && r.verdict !== "LIBRE") {
+        // STRICT: Only include domains that are genuinely blocked / restricted (NOT LIBRE)
+        if (r.verdict && r.verdict !== "LIBRE" && r.verdict !== "OK") {
           if (!includeAdult && r.category && r.category.toLowerCase() === "adulto") {
             return;
           }
@@ -754,7 +768,6 @@
       const sorted = Array.from(blockedDomains).sort();
       const lines = ["[SwitchyOmega Conditions]", "@with result", ""];
       sorted.forEach(d => {
-        lines.append ? null : null;
         lines.push(`*.${d} +proxy`);
         if (!d.startsWith("web.")) {
           lines.push(`${d} +proxy`);
@@ -767,9 +780,10 @@
     }
 
     async function copyBlockedRules() {
-      const { text, count } = generateBlockedRulesText();
+      showToast("Analizando webs bloqueadas...");
+      const { text, count } = await getDiagnosedBlockedRulesText();
       if (count === 0) {
-        showToast("⚠️ No hay sitios bloqueados detectados. Ejecuta el diagnóstico primero.");
+        showToast("🟢 No se detectaron sitios bloqueados en tu conexión.");
         return;
       }
       try {
@@ -781,9 +795,10 @@
     }
 
     async function downloadBlockedRules() {
-      const { text, count } = generateBlockedRulesText();
+      showToast("Analizando webs bloqueadas...");
+      const { text, count } = await getDiagnosedBlockedRulesText();
       if (count === 0) {
-        showToast("⚠️ No hay sitios bloqueados detectados. Ejecuta el diagnóstico primero.");
+        showToast("🟢 No se detectaron sitios bloqueados en tu conexión.");
         return;
       }
       try {
