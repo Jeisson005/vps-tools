@@ -31,6 +31,8 @@ go/pkg
 .cache
 .gvfs
 .dbus
+.pulse
+.XDG
 .local/share/Trash
 Cache
 cached-data
@@ -43,11 +45,20 @@ chromium/*Cache*
 steel-chrome
 */steel-chrome/*
 */steel/data/*
+*/rustdesk/web-config/*
+*/rustdesk/web-config
 
-# Staging, temp and sockets
+# Staging, temp, locks, and sockets
 tmp
 vps-backups
 *.sock
+*.lock
+.ssh/agent
+.ssh/agent/*
+*/.XDG/*
+*/.dbus/*
+*/.pulse/*
+*/pulse/*
 
 # Rotated and oversized logs
 *.log.1
