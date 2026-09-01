@@ -729,41 +729,59 @@
       setTimeout(() => { t.style.display = "none"; }, 3000);
     }
 
+    async function copyToClipboard(text) {
+      try {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch (e) {
+        console.warn("navigator.clipboard failed, using textarea fallback", e);
+      }
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        textarea.style.top = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const success = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return success;
+      } catch (err) {
+        console.error("ExecCommand copy failed", err);
+        return false;
+      }
+    }
+
     function copyText(str) {
-      navigator.clipboard.writeText(str);
-      showToast("Copiado al portapapeles: " + str);
+      copyToClipboard(str).then(ok => {
+        if (ok) showToast("Copiado al portapapeles: " + str);
+        else prompt("Copia este texto manualmente:", str);
+      });
     }
 
     let lastDiagnosticResults = [];
 
-    async function getDiagnosedBlockedRulesText() {
+    function getDiagnosedBlockedRulesText() {
       const includeAdult = document.getElementById("chk-include-adult")?.checked || false;
-      
-      // If user hasn't run diagnostics yet, fetch it automatically
-      if (!lastDiagnosticResults || lastDiagnosticResults.length === 0) {
-        showToast("Ejecutando análisis de bloqueos en segundo plano...");
-        try {
-          const res = await fetch("/api/diagnose");
-          const data = await res.json();
-          renderResults(data.results);
-        } catch (e) {
-          console.error(e);
-        }
-      }
-
       const blockedDomains = new Set();
 
-      lastDiagnosticResults.forEach(r => {
-        // STRICT: Only include domains that are genuinely blocked / restricted (NOT LIBRE)
-        if (r.verdict && r.verdict !== "LIBRE" && r.verdict !== "OK") {
-          if (!includeAdult && r.category && r.category.toLowerCase() === "adulto") {
-            return;
+      if (lastDiagnosticResults && lastDiagnosticResults.length > 0) {
+        lastDiagnosticResults.forEach(r => {
+          // STRICT: Only include domains that are genuinely blocked / restricted (NOT LIBRE)
+          if (r.verdict && r.verdict !== "LIBRE" && r.verdict !== "OK") {
+            if (!includeAdult && r.category && r.category.toLowerCase() === "adulto") {
+              return;
+            }
+            if (r.domain && !r.domain.replace(".", "").isdigit()) {
+              blockedDomains.add(r.domain);
+            }
           }
-          if (r.domain && !r.domain.replace(".", "").isdigit()) {
-            blockedDomains.add(r.domain);
-          }
-        }
-      });
+        });
+      }
 
       const sorted = Array.from(blockedDomains).sort();
       const lines = ["[SwitchyOmega Conditions]", "@with result", ""];
@@ -780,25 +798,31 @@
     }
 
     async function copyBlockedRules() {
-      showToast("Analizando webs bloqueadas...");
-      const { text, count } = await getDiagnosedBlockedRulesText();
-      if (count === 0) {
-        showToast("🟢 No se detectaron sitios bloqueados en tu conexión.");
+      if (!lastDiagnosticResults || lastDiagnosticResults.length === 0) {
+        showToast("⚠️ Primero haz clic en 'Ejecutar Diagnóstico Completo' para evaluar tus webs.");
         return;
       }
-      try {
-        await navigator.clipboard.writeText(text);
+      const { text, count } = getDiagnosedBlockedRulesText();
+      if (count === 0) {
+        showToast("🟢 No se detectaron sitios bloqueados en el diagnóstico.");
+        return;
+      }
+      const success = await copyToClipboard(text);
+      if (success) {
         showToast(`¡${count} reglas de webs bloqueadas copiadas al portapapeles!`);
-      } catch (err) {
-        alert("Error al copiar reglas: " + err.message);
+      } else {
+        alert("No se pudo copiar automáticamente. Puedes usar el botón de 'Descargar Reglas (.txt)'.");
       }
     }
 
-    async function downloadBlockedRules() {
-      showToast("Analizando webs bloqueadas...");
-      const { text, count } = await getDiagnosedBlockedRulesText();
+    function downloadBlockedRules() {
+      if (!lastDiagnosticResults || lastDiagnosticResults.length === 0) {
+        showToast("⚠️ Primero haz clic en 'Ejecutar Diagnóstico Completo' para evaluar tus webs.");
+        return;
+      }
+      const { text, count } = getDiagnosedBlockedRulesText();
       if (count === 0) {
-        showToast("🟢 No se detectaron sitios bloqueados en tu conexión.");
+        showToast("🟢 No se detectaron sitios bloqueados en el diagnóstico.");
         return;
       }
       try {
