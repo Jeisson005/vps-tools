@@ -12,6 +12,12 @@
 !**/logs/.gitkeep
 **/*.log
 
+# RustDesk runtime data and keys
+**/rustdesk/data/
+**/rustdesk/web-config/
+**/id_ed25519*
+**/*.sqlite3*
+
 # Backups / dumps
 **/backups/
 **/*.sql
