@@ -9,9 +9,14 @@ BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${BASE_DIR}"
 
 USER="${1:-jeisson}"
-EXPIRATION="${2:-24h}"
+EXPIRATION="${2:-100y}"
 REUSABLE="${3:-reusable}"
 TAG="${4:-}"
+
+# Map 'inf', 'never', '100y' to 876000h (100 years)
+if [[ "${EXPIRATION}" == "inf" || "${EXPIRATION}" == "never" || "${EXPIRATION}" == "100y" ]]; then
+  EXPIRATION="876000h"
+fi
 
 REUSABLE_FLAG=""
 if [[ "${REUSABLE}" == "reusable" ]]; then
