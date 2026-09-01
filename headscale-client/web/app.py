@@ -665,7 +665,7 @@ async def clear_all_routes():
 
 # ----------------- DEEP CONNECTIVITY DIAGNOSTICS -----------------
 
-async def check_ip_direct_and_vps(ip: str, domain: str, vps_socks5_url: str) -> Dict[str, Any]:
+async def check_ip_direct_and_vps(ip: str, domain: str, vps_socks5_url: Optional[str], vpn_connected: bool) -> Dict[str, Any]:
     # 1. Local Ping
     ping_res = await ping_ip(ip)
     
@@ -715,25 +715,26 @@ async def check_ip_direct_and_vps(ip: str, domain: str, vps_socks5_url: str) -> 
                 "error": str(e)
             }
 
-    # 5. VPS HTTP check through SOCKS5 proxy
-    vps_http = {"status_code": 0, "latency_ms": 0, "success": False, "error": "No probado"}
-    t0_vps = time.time()
-    try:
-        async with httpx.AsyncClient(proxy=vps_socks5_url, timeout=5.0, verify=False) as client:
-            resp_vps = await client.get(f"https://{domain}/", headers={"User-Agent": "Mozilla/5.0"})
+    # 5. VPS HTTP check through SOCKS5 proxy (only if VPN connected)
+    vps_http = {"status_code": 0, "latency_ms": 0, "success": False, "error": "VPN Desconectada"}
+    if vpn_connected and vps_socks5_url:
+        t0_vps = time.time()
+        try:
+            async with httpx.AsyncClient(proxy=vps_socks5_url, timeout=4.0, verify=False) as client:
+                resp_vps = await client.get(f"https://{domain}/", headers={"User-Agent": "Mozilla/5.0"})
+                vps_http = {
+                    "status_code": resp_vps.status_code,
+                    "latency_ms": int((time.time() - t0_vps) * 1000),
+                    "success": True,
+                    "server": resp_vps.headers.get("server", "N/A")
+                }
+        except Exception as e:
             vps_http = {
-                "status_code": resp_vps.status_code,
+                "status_code": 0,
                 "latency_ms": int((time.time() - t0_vps) * 1000),
-                "success": True,
-                "server": resp_vps.headers.get("server", "N/A")
+                "success": False,
+                "error": str(e)
             }
-    except Exception as e:
-        vps_http = {
-            "status_code": 0,
-            "latency_ms": int((time.time() - t0_vps) * 1000),
-            "success": False,
-            "error": str(e)
-        }
 
     # Per-IP Verdict
     loc_ok = local_http.get("success", False) and (local_http.get("status_code", 0) != 0)
@@ -742,6 +743,8 @@ async def check_ip_direct_and_vps(ip: str, domain: str, vps_socks5_url: str) -> 
     
     if is_routed:
         verdict = "SOLUCIONADO_ENRUTADA"
+    elif not vpn_connected:
+        verdict = "ACCESIBLE_LOCAL" if loc_ok else "FALLA_LOCAL"
     elif not loc_ok and vps_ok:
         verdict = "BLOQUEADA_LOCAL"
     elif loc_ok and vps_ok:
@@ -771,12 +774,15 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
     if not domain:
         raise HTTPException(status_code=400, detail="Dominio inválido")
 
+    vpn_status = is_tailscale_connected()
+    vpn_connected = vpn_status.get("connected", False)
+    vps_socks5_url = "socks5://100.64.0.4:1080" if vpn_connected else None
+
     # 1. Full DNS Discovery
     dns_data = await resolve_all_ips(domain)
-    vps_socks5_url = "socks5://100.64.0.4:1080"
     
     # 2. Detailed Per-IP Diagnostics in parallel (Local vs VPS)
-    ip_tasks = [check_ip_direct_and_vps(ip, domain, vps_socks5_url) for ip in dns_data["ipv4"][:6]]
+    ip_tasks = [check_ip_direct_and_vps(ip, domain, vps_socks5_url, vpn_connected) for ip in dns_data["ipv4"][:6]]
     ip_tests = await asyncio.gather(*ip_tasks) if ip_tasks else []
 
     # 3. Global Domain TLS SNI check (Local)
@@ -786,7 +792,18 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
     http_local = await http_full_lifecycle(domain, proxy=None)
 
     # 5. Global HTTP Full Lifecycle (VPS VPN)
-    http_vps = await http_full_lifecycle(domain, proxy=vps_socks5_url)
+    if vpn_connected and vps_socks5_url:
+        http_vps = await http_full_lifecycle(domain, proxy=vps_socks5_url)
+    else:
+        http_vps = {
+            "success": False,
+            "status_code": 0,
+            "total_time_ms": 0,
+            "error": "VPN Desconectada",
+            "redirects": [],
+            "final_url": "-",
+            "server_header": "N/A"
+        }
 
     # 6. Accurate Analysis & Recommendation
     local_code = http_local.get("status_code", 0)
@@ -795,28 +812,37 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
     has_dns = len(dns_data["ipv4"]) > 0 or len(dns_data["ipv6"]) > 0
     has_tcp = any(t.get("tcp_443", {}).get("success") or t.get("tcp_80", {}).get("success") for t in ip_tests)
     tls_status = tls_local.get("status", "FAIL")
+    local_ok = (has_dns and has_tcp and tls_status == "OK" and local_code != 0)
     
-    unrouted_blocked = [t["ip"] for t in ip_tests if t["verdict"] == "BLOQUEADA_LOCAL"]
+    unrouted_blocked = [t["ip"] for t in ip_tests if t["verdict"] in ["BLOQUEADA_LOCAL", "FALLA_LOCAL"]]
     routed_ips = [t["ip"] for t in ip_tests if t.get("is_routed")]
     vpn_working = (vps_code != 0) and (http_vps.get("success", False))
 
-    if unrouted_blocked:
-        action = "ENROUTE_VPN"
-        reason = f"Se detectaron {len(unrouted_blocked)} IP(s) con bloqueo en tu red local ({', '.join(unrouted_blocked)}). Enrútalas para restaurar el acceso."
-    elif routed_ips and (local_code != 0 or vps_code != 0):
-        action = "SOLUCIONADO"
-        reason = f"🟢 Bloqueo Solucionado: {len(routed_ips)} IP(s) están actualmente enrutadas por la VPN (tailscale0). El acceso al host responde con éxito (HTTP {local_code})."
-    elif has_dns and has_tcp and tls_status == "OK" and local_code != 0:
-        action = "NONE"
-        if local_code == 403:
-            reason = f"Conexión directa y VPN funcionando correctamente. El servidor responde HTTP 403 (Restricción propia de la web/CDN '{http_local.get('server_header', '')}', no es bloqueo de tu red)."
-        elif local_code == 200:
-            reason = "Conexión directa óptima (HTTP 200 OK) tanto en tu red local como por la VPN."
+    if not vpn_connected:
+        if local_ok:
+            action = "NONE"
+            reason = f"🟢 Conexión Local Directa Óptima (HTTP {local_code}). El sitio web funciona con normalidad en tu red local (VPN no activa)."
         else:
-            reason = f"Conexión directa y VPN funcionando por igual (HTTP {local_code}). Sin bloqueos de proveedor."
+            action = "CONNECT_VPN"
+            reason = f"⚠️ Falla de acceso en tu conexión local ({'TLS/DPI o Timeout' if tls_status != 'OK' else 'HTTP 000'}). La VPN está desconectada: actívala para comparar si el sitio abre a través del VPS y poder enrutarlo."
     else:
-        action = "NONE"
-        reason = "El sitio web no responde en ninguna de las dos conexiones (posible caída del servidor remoto o VPN desconectada)."
+        if unrouted_blocked:
+            action = "ENROUTE_VPN"
+            reason = f"Se detectaron {len(unrouted_blocked)} IP(s) con bloqueo en tu red local ({', '.join(unrouted_blocked)}). Enrútalas para restaurar el acceso."
+        elif routed_ips and (local_code != 0 or vps_code != 0):
+            action = "SOLUCIONADO"
+            reason = f"🟢 Bloqueo Solucionado: {len(routed_ips)} IP(s) están actualmente enrutadas por la VPN (tailscale0). El acceso al host responde con éxito (HTTP {local_code})."
+        elif local_ok:
+            action = "NONE"
+            if local_code == 403:
+                reason = f"Conexión directa y VPN funcionando correctamente. El servidor responde HTTP 403 (Restricción propia de la web/CDN '{http_local.get('server_header', '')}', no es bloqueo de tu red)."
+            elif local_code == 200:
+                reason = "Conexión directa óptima (HTTP 200 OK) tanto en tu red local como por la VPN."
+            else:
+                reason = f"Conexión directa y VPN funcionando por igual (HTTP {local_code}). Sin bloqueos de proveedor."
+        else:
+            action = "NONE"
+            reason = "El sitio web no responde en ninguna de las dos conexiones (posible caída del servidor remoto)."
 
     return {
         "domain": domain,
@@ -825,9 +851,11 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
         "tls_local": tls_local,
         "http_local": http_local,
         "http_vps": http_vps,
+        "vpn_connected": vpn_connected,
         "analysis": {
             "local_working": (local_code != 0),
             "vpn_working": vpn_working,
+            "vpn_connected": vpn_connected,
             "recommended_action": action,
             "message": reason,
             "routed_ips_count": len(routed_ips)

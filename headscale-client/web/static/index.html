@@ -1201,26 +1201,34 @@
       const desc = document.getElementById("deep-rec-desc");
       const btnEnroute = document.getElementById("btn-enroute-vpn");
 
-      if (data.analysis.recommended_action === "ENROUTE_VPN") {
+      if (data.analysis.recommended_action === "CONNECT_VPN") {
+        card.style.borderLeftColor = "var(--warning)";
+        title.innerHTML = `⚠️ Falla de Acceso Local (VPN Desconectada) en <strong>${data.domain}</strong>`;
+        desc.innerText = data.analysis.message;
+        btnEnroute.innerText = "🌐 Conectar VPN Tailscale";
+        btnEnroute.onclick = connectVPN;
+        btnEnroute.style.display = "inline-flex";
+      } else if (data.analysis.recommended_action === "ENROUTE_VPN") {
         card.style.borderLeftColor = "var(--warning)";
         title.innerHTML = `⚠️ Bloqueo Detectado en <strong>${data.domain}</strong>`;
         desc.innerText = data.analysis.message || "El sitio no responde en tu conexión local, pero responde perfectamente por el VPS VPN.";
         btnEnroute.innerText = "⚡ Enrutar IPs restantes por la VPN (tailscale0)";
+        btnEnroute.onclick = applyVpnRoutingForCurrentDomain;
         btnEnroute.style.display = "inline-flex";
       } else if (data.analysis.recommended_action === "SOLUCIONADO") {
         card.style.borderLeftColor = "var(--success)";
         title.innerHTML = `🟢 Bloqueo Solucionado en <strong>${data.domain}</strong>`;
         desc.innerText = data.analysis.message || "Las IPs de este dominio están enrutadas por la VPN.";
         btnEnroute.style.display = "none";
-      } else if (data.analysis.local_working && data.analysis.vpn_working) {
+      } else if (data.analysis.local_working && (data.analysis.vpn_working || !data.vpn_connected)) {
         card.style.borderLeftColor = "var(--success)";
         title.innerHTML = `🟢 Sin Bloqueo de Red en <strong>${data.domain}</strong>`;
-        desc.innerText = data.analysis.message || "El sitio responde correctamente tanto por tu conexión local directa como por la VPN.";
+        desc.innerText = data.analysis.message || "El sitio responde correctamente en tu conexión local directa.";
         btnEnroute.style.display = "none";
       } else {
         card.style.borderLeftColor = "var(--error)";
-        title.innerHTML = `🔴 Falla de Conectividad General en <strong>${data.domain}</strong>`;
-        desc.innerText = data.analysis.message || "El sitio web no responde en ninguna de las dos vías.";
+        title.innerHTML = `🔴 Falla de Conectividad en <strong>${data.domain}</strong>`;
+        desc.innerText = data.analysis.message || "El sitio web no responde.";
         btnEnroute.style.display = "none";
       }
 
@@ -1255,23 +1263,36 @@
 
       // 4. VPS VPN Side
       const vpsPill = document.getElementById("vps-status-pill");
-      if (data.http_vps.success) {
+      if (!data.vpn_connected) {
+        vpsPill.className = "status-badge status-offline";
+        vpsPill.innerText = "⚪ VPN Desconectada";
+        document.getElementById("vps-http-code").innerText = "Omitido";
+        document.getElementById("vps-http-time").innerText = "-";
+        document.getElementById("vps-server-header").innerText = "N/A";
+        document.getElementById("vps-final-url").innerText = "-";
+        document.getElementById("vps-redirects-box").innerHTML = "<span>Prueba omitida porque la VPN Tailscale no está activa.</span>";
+      } else if (data.http_vps.success) {
         vpsPill.className = "status-badge status-online";
         vpsPill.innerText = `HTTP ${data.http_vps.status_code}`;
+        document.getElementById("vps-http-code").innerText = data.http_vps.status_code || "000";
+        document.getElementById("vps-http-time").innerText = `${data.http_vps.total_time_ms} ms`;
+        document.getElementById("vps-server-header").innerText = data.http_vps.server_header || "N/A";
+        document.getElementById("vps-final-url").innerText = data.http_vps.final_url || "-";
+
+        const vpsRedir = document.getElementById("vps-redirects-box");
+        if (data.http_vps.redirects && data.http_vps.redirects.length > 1) {
+          vpsRedir.innerHTML = "Saltos: " + data.http_vps.redirects.map(r => `<code>[${r.status_code}] ${r.url}</code>`).join(" ➔ ");
+        } else {
+          vpsRedir.innerHTML = "<span>Saltos / Redirecciones: Ninguno</span>";
+        }
       } else {
         vpsPill.className = "status-badge status-offline";
         vpsPill.innerText = data.http_vps.error || "Falla";
-      }
-      document.getElementById("vps-http-code").innerText = data.http_vps.status_code || "000";
-      document.getElementById("vps-http-time").innerText = `${data.http_vps.total_time_ms} ms`;
-      document.getElementById("vps-server-header").innerText = data.http_vps.server_header || "N/A";
-      document.getElementById("vps-final-url").innerText = data.http_vps.final_url || "-";
-
-      const vpsRedir = document.getElementById("vps-redirects-box");
-      if (data.http_vps.redirects && data.http_vps.redirects.length > 1) {
-        vpsRedir.innerHTML = "Saltos: " + data.http_vps.redirects.map(r => `<code>[${r.status_code}] ${r.url}</code>`).join(" ➔ ");
-      } else {
-        vpsRedir.innerHTML = "<span>Saltos / Redirecciones: Ninguno</span>";
+        document.getElementById("vps-http-code").innerText = data.http_vps.status_code || "000";
+        document.getElementById("vps-http-time").innerText = `${data.http_vps.total_time_ms} ms`;
+        document.getElementById("vps-server-header").innerText = data.http_vps.server_header || "N/A";
+        document.getElementById("vps-final-url").innerText = data.http_vps.final_url || "-";
+        document.getElementById("vps-redirects-box").innerHTML = "<span>Saltos / Redirecciones: Ninguno</span>";
       }
 
       // 5. IP Breakdown Table (8 columns: IP, Local Ping, Local TCP, Local TLS, Local HTTP, VPS HTTP, Verdict, Action)
@@ -1294,13 +1315,20 @@
             ? `<span class="tag tag-ok">HTTP ${t.local_http.status_code} (${t.local_http.latency_ms}ms)</span>`
             : `<span class="tag tag-fail">${t.local_http.error || '000 Timeout'}</span>`;
 
-          const vpsHttpTag = t.vps_http && t.vps_http.success && t.vps_http.status_code !== 0
-            ? `<span class="tag tag-ok">HTTP ${t.vps_http.status_code} (${t.vps_http.latency_ms}ms)</span>`
-            : `<span class="tag tag-fail">${t.vps_http.error || '000 Falla'}</span>`;
+          let vpsHttpTag = `<span class="tag" style="color: var(--text-dim);">⚪ Desconectada</span>`;
+          if (data.vpn_connected) {
+            vpsHttpTag = t.vps_http && t.vps_http.success && t.vps_http.status_code !== 0
+              ? `<span class="tag tag-ok">HTTP ${t.vps_http.status_code} (${t.vps_http.latency_ms}ms)</span>`
+              : `<span class="tag tag-fail">${t.vps_http.error || '000 Falla'}</span>`;
+          }
 
           let verdictTag = `<span class="tag tag-ok">🟢 Libre en ambos</span>`;
           if (t.is_routed || t.verdict === "SOLUCIONADO_ENRUTADA") {
             verdictTag = `<span class="tag tag-ok" style="background: rgba(34, 197, 94, 0.15); color: #22c55e;">🟢 Enrutada por VPN (Solucionado)</span>`;
+          } else if (t.verdict === "ACCESIBLE_LOCAL") {
+            verdictTag = `<span class="tag tag-ok">🟢 Accesible en Local</span>`;
+          } else if (t.verdict === "FALLA_LOCAL") {
+            verdictTag = `<span class="tag tag-fail">⚠️ Falla en Local</span>`;
           } else if (t.verdict === "BLOQUEADA_LOCAL") {
             verdictTag = `<span class="tag tag-fail">⚠️ Bloqueada en Local</span>`;
           } else if (t.verdict === "INACCESIBLE_AMBOS") {
