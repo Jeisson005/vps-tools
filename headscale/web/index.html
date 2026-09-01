@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Headscale VPN Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0f172a;
+      --bg-surface: #1e293b;
+      --bg-card: #1e293b;
+      --border: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #10b981;
+      --primary-hover: #059669;
+      --primary-dim: rgba(16, 185, 129, 0.15);
+      --accent: #3b82f6;
+      --danger: #ef4444;
+      --danger-dim: rgba(239, 68, 68, 0.15);
+      --warning: #f59e0b;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background-color: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: white;
+      font-size: 18px;
+    }
+    .brand-title { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+    .brand-subtitle { font-size: 12px; color: var(--text-muted); }
+    .nav-actions { display: flex; align-items: center; gap: 12px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+    .btn-primary { background: var(--primary); color: #000; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #334155; color: var(--text-main); border-color: #475569; }
+    .btn-secondary:hover { background: #475569; }
+    .btn-danger { background: var(--danger-dim); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn-icon { padding: 6px 10px; font-size: 12px; }
+
+    main {
+      flex: 1;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .stat-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-value { font-size: 24px; font-weight: 700; color: var(--text-main); }
+    .stat-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; width: fit-content; font-weight: 600; }
+    .badge-success { background: var(--primary-dim); color: var(--primary); }
+    .badge-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+    }
+    .tab {
+      padding: 10px 18px;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .table-container { width: 100%; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    th {
+      background: #182234;
+      padding: 12px 16px;
+      color: var(--text-muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+    .status-online { background: var(--primary); box-shadow: 0 0 8px var(--primary); }
+    .status-offline { background: #64748b; }
+
+    .ip-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: #0f172a;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      color: #38bdf8;
+      display: inline-block;
+    }
+    .user-pill {
+      background: rgba(148, 163, 184, 0.15);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    .modal {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 480px;
+      padding: 24px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; }
+    .close-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 20px; }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    input, select {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+    }
+    input:focus, select:focus { border-color: var(--primary); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1e293b;
+      border: 1px solid var(--primary);
+      color: var(--text-main);
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      font-size: 13px;
+      font-weight: 500;
+      display: none;
+      z-index: 200;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">HS</div>
+      <div>
+        <div class="brand-title">Headscale Mesh VPN</div>
+        <div class="brand-subtitle">v0.24.3 Control Plane • jeisson.top</div>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <button class="btn btn-secondary btn-icon" onclick="loadAllData()" title="Refrescar">🔄 Refrescar</button>
+      <button class="btn btn-primary" onclick="openRegisterModal()">➕ Registrar Dispositivo</button>
+      <button class="btn btn-secondary btn-icon" onclick="openSettingsModal()" title="API Config">⚙️ Config</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Dispositivos Totales</div>
+        <div class="stat-value" id="stat-nodes">3</div>
+        <div class="stat-badge badge-success">Red Mesh Activa</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Usuarios</div>
+        <div class="stat-value" id="stat-users">1</div>
+        <div class="stat-badge badge-info">jeisson</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Exit Node (Salida VPS)</div>
+        <div class="stat-value" style="font-size: 18px; color: #38bdf8;">vps-server</div>
+        <div class="stat-badge badge-success">100.64.0.4</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Llave Maestra</div>
+        <div class="stat-value" style="font-size: 16px; color: #a855f7;">100 Años</div>
+        <div class="stat-badge badge-info">Válida hasta 2126</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" id="tab-btn-nodes" onclick="switchTab('nodes')">💻 Dispositivos (Nodes)</div>
+      <div class="tab" id="tab-btn-keys" onclick="switchTab('keys')">🔑 Pre-Auth Keys</div>
+      <div class="tab" id="tab-btn-users" onclick="switchTab('users')">👤 Usuarios</div>
+    </div>
+
+    <!-- NODES TAB -->
+    <div id="tab-nodes" class="card">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Estado</th>
+              <th>Nombre</th>
+              <th>Hostname</th>
+              <th>IP VPN</th>
+              <th>Usuario</th>
+              <th>Última Conexión</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="nodes-table-body">
+            <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando dispositivos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PRE-AUTH KEYS TAB -->
+    <div id="tab-keys" class="card" style="display: none;">
+      <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 14px; font-weight: 600;">Llaves de Pre-Autenticación Disponibles</span>
+        <button class="btn btn-primary btn-icon" onclick="createPreAuthKey()">➕ Generar Nueva Llave</button>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Llave (Pre-Auth Key)</th>
+              <th>Reutilizable</th>
+              <th>Expiración</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="keys-table-body">
+            <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando llaves...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- USERS TAB -->
+    <div id="tab-users" class="card" style="display: none;">
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Usuario</th>
+              <th>Creado</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando usuarios...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- REGISTER MODAL -->
+  <div class="modal-overlay" id="registerModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Registrar Nuevo Dispositivo</div>
+        <button class="close-btn" onclick="closeModal('registerModal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Usuario</label>
+        <select id="regUser">
+          <option value="jeisson">jeisson</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Machine Key (mkey:...)</label>
+        <input type="text" id="regKey" placeholder="mkey:74f301da8c23..." />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('registerModal')">Cancelar</button>
+        <button class="btn btn-primary" onclick="submitRegister()">Registrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RENAME MODAL -->
+  <div class="modal-overlay" id="renameModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Renombrar Dispositivo</div>
+        <button class="close-btn" onclick="closeModal('renameModal')">&times;</button>
+      </div>
+      <input type="hidden" id="renameNodeId" />
+      <div class="form-group">
+        <label>Nuevo Nombre del Dispositivo</label>
+        <input type="text" id="renameNewName" placeholder="Ej: poco, laptop-trabajo" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('renameModal')">Cancelar</button>
+        <button class="btn btn-primary" onclick="submitRename()">Guardar Nombre</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Configuración de API Headscale</div>
+        <button class="close-btn" onclick="closeModal('settingsModal')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Headscale URL</label>
+        <input type="text" id="cfgUrl" value="https://headscale.jeisson.top" />
+      </div>
+      <div class="form-group">
+        <label>Headscale API Key</label>
+        <input type="text" id="cfgKey" placeholder="LtCh2Hr6xQ..." />
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Cerrar</button>
+        <button class="btn btn-primary" onclick="saveSettings()">Guardar y Conectar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">Mensaje</div>
+
+  <script>
+    const DEFAULT_KEY = "***REMOVED***";
+    const DEFAULT_URL = "https://headscale.jeisson.top";
+
+    function getApiKey() {
+      return localStorage.getItem("hs_api_key") || DEFAULT_KEY;
+    }
+    function getApiUrl() {
+      return localStorage.getItem("hs_api_url") || DEFAULT_URL;
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.innerText = msg;
+      t.style.display = "block";
+      setTimeout(() => { t.style.display = "none"; }, 3500);
+    }
+
+    function switchTab(tab) {
+      ['nodes', 'keys', 'users'].forEach(t => {
+        document.getElementById(`tab-${t}`).style.display = t === tab ? 'block' : 'none';
+        document.getElementById(`tab-btn-${t}`).className = t === tab ? 'tab active' : 'tab';
+      });
+    }
+
+    function openModal(id) { document.getElementById(id).style.display = "flex"; }
+    function closeModal(id) { document.getElementById(id).style.display = "none"; }
+    function openRegisterModal() { openModal('registerModal'); }
+    function openSettingsModal() {
+      document.getElementById("cfgUrl").value = getApiUrl();
+      document.getElementById("cfgKey").value = getApiKey();
+      openModal('settingsModal');
+    }
+    function saveSettings() {
+      localStorage.setItem("hs_api_url", document.getElementById("cfgUrl").value.trim());
+      localStorage.setItem("hs_api_key", document.getElementById("cfgKey").value.trim());
+      closeModal('settingsModal');
+      showToast("Configuración guardada");
+      loadAllData();
+    }
+
+    async function apiRequest(endpoint, method = "GET", body = null) {
+      const url = `${getApiUrl()}/api/v1/${endpoint}`;
+      const headers = {
+        "Authorization": `Bearer ${getApiKey()}`,
+        "Content-Type": "application/json"
+      };
+      const opt = { method, headers };
+      if (body) opt.body = JSON.stringify(body);
+      const res = await fetch(url, opt);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+      }
+      return await res.json();
+    }
+
+    async function loadAllData() {
+      loadNodes();
+      loadKeys();
+      loadUsers();
+    }
+
+    async function loadNodes() {
+      try {
+        const data = await apiRequest("node");
+        const nodes = data.nodes || [];
+        document.getElementById("stat-nodes").innerText = nodes.length;
+        const tbody = document.getElementById("nodes-table-body");
+        if (nodes.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">No hay dispositivos registrados</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = nodes.map(n => {
+          const isOnline = n.online || false;
+          const ip = (n.ipAddresses && n.ipAddresses[0]) ? n.ipAddresses[0] : 'N/A';
+          const givenName = n.givenName || n.name || 'Sin nombre';
+          const lastSeen = n.lastSeen ? new Date(n.lastSeen).toLocaleString('es-CO') : 'Reciente';
+          const user = (n.user && n.user.name) ? n.user.name : (n.user || 'jeisson');
+          return `
+            <tr>
+              <td><span class="status-dot ${isOnline ? 'status-online' : 'status-offline'}"></span>${isOnline ? 'Online' : 'Offline'}</td>
+              <td><strong>${givenName}</strong></td>
+              <td style="color: var(--text-muted);">${n.name || n.hostname || '-'}</td>
+              <td><span class="ip-badge">${ip}</span></td>
+              <td><span class="user-pill">${user}</span></td>
+              <td style="color: var(--text-muted); font-size: 12px;">${lastSeen}</td>
+              <td>
+                <div style="display: flex; gap: 6px;">
+                  <button class="btn btn-secondary btn-icon" onclick="openRenameModal('${n.id}', '${givenName}')" title="Renombrar">✏️</button>
+                  <button class="btn btn-danger btn-icon" onclick="deleteNode('${n.id}', '${givenName}')" title="Eliminar">🗑️</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error(err);
+        document.getElementById("nodes-table-body").innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger); padding: 24px;">Error al cargar dispositivos: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function loadKeys() {
+      try {
+        const data = await apiRequest("preauthkey?user=jeisson");
+        const keys = data.preAuthKeys || [];
+        const tbody = document.getElementById("keys-table-body");
+        if (keys.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">No hay llaves registradas</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = keys.map(k => {
+          const exp = k.expiration ? new Date(k.expiration).toLocaleDateString('es-CO') : 'Permanente';
+          return `
+            <tr>
+              <td>${k.id}</td>
+              <td><code class="ip-badge" style="color: #a855f7;">${k.key}</code></td>
+              <td><span class="stat-badge ${k.reusable ? 'badge-success' : 'badge-info'}">${k.reusable ? 'Reutilizable' : '1 solo uso'}</span></td>
+              <td>${exp}</td>
+              <td>
+                <button class="btn btn-secondary btn-icon" onclick="navigator.clipboard.writeText('${k.key}'); showToast('Llave copiada al portapapeles!');">📋 Copiar</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const data = await apiRequest("user");
+        const users = data.users || [];
+        document.getElementById("stat-users").innerText = users.length;
+        const tbody = document.getElementById("users-table-body");
+        tbody.innerHTML = users.map(u => `
+          <tr>
+            <td>${u.id}</td>
+            <td><strong>${u.name}</strong></td>
+            <td>${new Date(u.createdAt).toLocaleDateString('es-CO')}</td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function openRenameModal(id, currentName) {
+      document.getElementById("renameNodeId").value = id;
+      document.getElementById("renameNewName").value = currentName;
+      openModal("renameModal");
+    }
+
+    async function submitRename() {
+      const id = document.getElementById("renameNodeId").value;
+      const newName = document.getElementById("renameNewName").value.trim();
+      if (!newName) return;
+      try {
+        await apiRequest(`node/${id}/rename/${newName}`, "POST");
+        closeModal("renameModal");
+        showToast(`Dispositivo renombrado a ${newName}`);
+        loadNodes();
+      } catch (err) {
+        alert("Error al renombrar: " + err.message);
+      }
+    }
+
+    async function deleteNode(id, name) {
+      if (!confirm(`¿Estás seguro de eliminar el dispositivo "${name}" de tu red VPN?`)) return;
+      try {
+        await apiRequest(`node/${id}`, "DELETE");
+        showToast(`Dispositivo eliminado`);
+        loadNodes();
+      } catch (err) {
+        alert("Error al eliminar: " + err.message);
+      }
+    }
+
+    async function submitRegister() {
+      const user = document.getElementById("regUser").value;
+      const key = document.getElementById("regKey").value.trim();
+      if (!key) { alert("Ingresa la clave mkey:..."); return; }
+      try {
+        await apiRequest(`node/register?user=${user}&key=${encodeURIComponent(key)}`, "POST");
+        closeModal("registerModal");
+        showToast("¡Dispositivo registrado exitosamente!");
+        document.getElementById("regKey").value = "";
+        loadNodes();
+      } catch (err) {
+        alert("Error al registrar: " + err.message);
+      }
+    }
+
+    async function createPreAuthKey() {
+      try {
+        await apiRequest("preauthkey", "POST", {
+          user: "jeisson",
+          reusable: true,
+          ephemeral: false,
+          expiration: "2126-08-08T00:00:00Z"
+        });
+        showToast("Nueva llave creada");
+        loadKeys();
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    // Initial Load
+    loadAllData();
+  </script>
+</body>
+</html>

@@ -39,20 +39,16 @@ services:
 
   headscale-ui:
     container_name: headscale-ui
-    image: ghcr.io/gurucomputing/headscale-ui:latest
+    image: nginx:alpine
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          cpus: "${HEADSCALE_UI_CPUS_LIMIT:-0.25}"
-          memory: "${HEADSCALE_UI_MEM_LIMIT:-128M}"
-        reservations:
-          cpus: "${HEADSCALE_UI_CPUS_RESERVE:-0.05}"
-          memory: "${HEADSCALE_UI_MEM_RESERVE:-32M}"
+    volumes:
+      - ./web/index.html:/usr/share/nginx/html/index.html:ro
+      - ./web/index.html:/usr/share/nginx/html/web/index.html:ro
+      - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "127.0.0.1:8086:80"
+      - "127.0.0.1:8086:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
       interval: 30s
