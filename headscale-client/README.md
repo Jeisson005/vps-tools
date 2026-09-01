@@ -78,7 +78,7 @@ El script `scripts/vpn.sh` te permite controlar todas las facetas de tu VPN:
 ## 🌐 3. Panel Web Local en tu Laptop (3 Pestañas)
 
 Abre en tu navegador:
-👉 **[http://localhost:29485](http://localhost:29485)**
+👉 **[http://localhost:30701](http://localhost:30701)**
 
 ### 📑 Pestañas del Panel:
 1. 🌐 **Control & Malla VPN:**
