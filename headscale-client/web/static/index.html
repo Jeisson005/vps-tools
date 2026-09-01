@@ -519,10 +519,10 @@
       </div>
 
       <div class="grid-2">
-        <!-- SOCKS5 Status & Controls Card -->
+        <!-- Live Control Card -->
         <div class="card">
           <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Control del Proxy SOCKS5</span>
+            <span style="font-size: 14px; font-weight: 600;">Estado en Vivo del Proxy</span>
             <span id="proxy-status-pill" class="status-badge status-offline">
               <span class="status-dot"></span><span id="proxy-status-text">Cargando...</span>
             </span>
@@ -531,25 +531,36 @@
           <div class="meta-list">
             <div class="meta-row"><span>Dirección Local:</span><span class="meta-val">127.0.0.1:1080 (SOCKS5)</span></div>
             <div class="meta-row"><span>Estado Actual:</span><span id="proxy-live-val" class="meta-val">-</span></div>
-            <div class="meta-row"><span>Arranque con Linux:</span><span id="proxy-autostart-val" class="meta-val">-</span></div>
+            <div class="meta-row"><span>Motor:</span><span class="meta-val">tailscaled native</span></div>
           </div>
 
-          <div class="form-group" style="margin-top: 0.25rem;">
-            <label class="form-label">Control Manual Inmediato:</label>
-            <div class="btn-group">
-              <button class="btn btn-primary" id="btn-proxy-now-on" onclick="toggleProxyLive(true)">Activar Proxy Ahora</button>
-              <button class="btn btn-danger" id="btn-proxy-now-off" onclick="toggleProxyLive(false)">Desactivar Proxy Ahora</button>
-            </div>
-          </div>
-
-          <div class="form-group" style="margin-top: 0.25rem;">
-            <label class="form-label">Persistencia al Arrancar el Sistema:</label>
-            <div class="btn-group">
-              <button class="btn" id="btn-proxy-enable" onclick="toggleProxyAutostart(true)">Habilitar al Iniciar</button>
-              <button class="btn" id="btn-proxy-disable" onclick="toggleProxyAutostart(false)">Deshabilitar</button>
-            </div>
+          <div class="btn-group">
+            <button class="btn btn-primary" id="btn-proxy-now-on" onclick="toggleProxyLive(true)">Activar Proxy Ahora</button>
+            <button class="btn btn-danger" id="btn-proxy-now-off" onclick="toggleProxyLive(false)">Desactivar Proxy Ahora</button>
           </div>
         </div>
+
+        <!-- Autostart Persistence Card -->
+        <div class="card">
+          <div class="card-header">
+            <span style="font-size: 14px; font-weight: 600;">Inicio Automático del Proxy</span>
+            <span id="proxy-auto-pill" class="status-badge status-offline">
+              <span class="status-dot"></span><span id="proxy-auto-text">Cargando...</span>
+            </span>
+          </div>
+
+          <div class="meta-list">
+            <div class="meta-row"><span>Configuración:</span><span class="meta-val">/etc/default/tailscaled</span></div>
+            <div class="meta-row"><span>Arranque con Linux:</span><span id="proxy-autostart-val" class="meta-val">-</span></div>
+            <div class="meta-row"><span>Puerto Guardado:</span><span class="meta-val">:1080 (SOCKS5)</span></div>
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-primary" id="btn-proxy-enable" onclick="toggleProxyAutostart(true)">Habilitar al Iniciar</button>
+            <button class="btn btn-danger" id="btn-proxy-disable" onclick="toggleProxyAutostart(false)">Deshabilitar</button>
+          </div>
+        </div>
+      </div>
 
         <!-- Extension Setup Guide Card -->
         <div class="card">
@@ -798,6 +809,8 @@
         const proxyPill = document.getElementById("proxy-status-pill");
         const proxyText = document.getElementById("proxy-status-text");
         const proxyLiveVal = document.getElementById("proxy-live-val");
+        const proxyAutoPill = document.getElementById("proxy-auto-pill");
+        const proxyAutoText = document.getElementById("proxy-auto-text");
         const proxyAutoVal = document.getElementById("proxy-autostart-val");
         const btnProxyOn = document.getElementById("btn-proxy-now-on");
         const btnProxyOff = document.getElementById("btn-proxy-now-off");
@@ -819,7 +832,16 @@
           btnProxyOff.disabled = true;
           btnProxyOff.style.opacity = "0.5";
         }
-        proxyAutoVal.innerText = data.proxy_autostart ? "🟢 Habilitado (:1080)" : "⚪ Deshabilitado";
+        
+        if (data.proxy_autostart) {
+          proxyAutoPill.className = "status-badge status-online";
+          proxyAutoText.innerText = "Habilitado";
+          proxyAutoVal.innerText = "🟢 Habilitado (:1080)";
+        } else {
+          proxyAutoPill.className = "status-badge status-offline";
+          proxyAutoText.innerText = "Deshabilitado";
+          proxyAutoVal.innerText = "⚪ Deshabilitado";
+        }
 
         // VPN Autostart Status in VPN Tab
         const vpnAutoPill = document.getElementById("vpn-autostart-pill");
