@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Headscale Client & Network Diagnostic Suite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #09090b;
+      --bg-secondary: #121215;
+      --bg-card: #18181b;
+      --bg-input: #121215;
+      --border: #27272a;
+      --border-focus: #52525b;
+      --text: #fafafa;
+      --text-muted: #a1a1aa;
+      --text-dim: #71717a;
+      --accent: #27272a;
+      --accent-hover: #3f3f46;
+      --accent-soft: rgba(255, 255, 255, 0.05);
+      --success: #22c55e;
+      --success-soft: rgba(34, 197, 94, 0.12);
+      --error: #ef4444;
+      --error-soft: rgba(239, 68, 68, 0.12);
+      --warning: #f59e0b;
+      --warning-soft: rgba(245, 158, 11, 0.12);
+      --radius: 8px;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .top-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.9rem 2rem;
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .brand-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .brand-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    main {
+      flex: 1;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      margin-bottom: 0.4rem;
+    }
+    .section-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+
+    /* VPN Control Grid */
+    .vpn-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+    .vpn-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .vpn-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .vpn-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      font-family: var(--font-mono);
+    }
+    .status-online { background: var(--success-soft); color: var(--success); }
+    .status-offline { background: var(--error-soft); color: var(--error); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    .meta-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      font-size: 13px;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+    }
+    .meta-val {
+      font-family: var(--font-mono);
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.55rem 1rem;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+      flex: 1;
+    }
+    .btn:hover {
+      background: var(--accent-hover);
+      border-color: var(--border-focus);
+    }
+    .btn-primary {
+      background: #fafafa;
+      color: #09090b;
+      border-color: #fafafa;
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: #e4e4e7; border-color: #e4e4e7; }
+    .btn-active-mode {
+      background: var(--success-soft);
+      border-color: var(--success);
+      color: var(--success);
+      font-weight: 600;
+    }
+
+    /* Diagnostics Section */
+    .diag-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 1rem;
+      border-radius: var(--radius);
+    }
+    .cat-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .pill {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    .pill:hover { color: var(--text); border-color: var(--border-focus); }
+    .pill.active {
+      background: var(--accent-soft);
+      color: var(--text);
+      border-color: var(--text-dim);
+      font-weight: 600;
+    }
+
+    .single-input-group {
+      display: flex;
+      gap: 0.5rem;
+      max-width: 360px;
+      width: 100%;
+    }
+    input {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.5rem 0.75rem;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+      flex: 1;
+    }
+    input:focus { border-color: var(--border-focus); }
+
+    /* Results Table */
+    .card-table {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+    th {
+      background: var(--bg-secondary);
+      padding: 0.75rem 1rem;
+      color: var(--text-dim);
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--accent-soft); }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      font-weight: 500;
+    }
+    .tag-ok { background: var(--success-soft); color: var(--success); }
+    .tag-fail { background: var(--error-soft); color: var(--error); }
+    .tag-warn { background: var(--warning-soft); color: var(--warning); }
+
+    .verdict-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .verdict-libre { background: var(--success-soft); color: var(--success); }
+    .verdict-bloqueo { background: var(--error-soft); color: var(--error); }
+    .verdict-dpi { background: var(--warning-soft); color: var(--warning); }
+
+    .progress-bar {
+      height: 3px;
+      width: 100%;
+      background: var(--border);
+      display: none;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--text);
+      animation: indeterminate 1.5s infinite linear;
+    }
+    @keyframes indeterminate {
+      0% { transform: translateX(-100%); width: 30%; }
+      50% { transform: translateX(50%); width: 60%; }
+      100% { transform: translateX(100%); width: 30%; }
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 18px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      display: none;
+      z-index: 200;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="top-nav">
+    <div class="nav-brand">
+      <span class="brand-title">Headscale Client & Diagnostics</span>
+      <span class="brand-badge">Local Dashboard :29485</span>
+    </div>
+    <button class="btn" style="flex: 0 0 auto;" onclick="refreshAll()">Actualizar Estado</button>
+  </nav>
+
+  <main>
+    <!-- VPN SECTION -->
+    <section>
+      <h2 class="section-title">Control de Tailscale VPN</h2>
+      <p class="section-desc">Gestiona la conexión y alterna entre modo directo y modo túnel completo a través del VPS.</p>
+      
+      <div class="vpn-grid">
+        <div class="vpn-card">
+          <div class="vpn-header">
+            <span style="font-size: 14px; font-weight: 600;">Estado del Cliente</span>
+            <span id="vpn-status-pill" class="vpn-status-badge status-offline">
+              <span class="status-dot"></span><span id="vpn-status-text">Cargando...</span>
+            </span>
+          </div>
+          <div class="meta-list">
+            <div class="meta-row"><span>IP VPN Local:</span><span id="vpn-ip" class="meta-val">-</span></div>
+            <div class="meta-row"><span>Hostname:</span><span id="vpn-host" class="meta-val">-</span></div>
+            <div class="meta-row"><span>Modo Actual:</span><span id="vpn-mode" class="meta-val">-</span></div>
+            <div class="meta-row"><span>Exit Node (VPS):</span><span id="vpn-exit" class="meta-val">-</span></div>
+          </div>
+          <div class="btn-group">
+            <button class="btn" id="btn-connect" onclick="connectVPN()">Conectar</button>
+            <button class="btn" id="btn-disconnect" onclick="disconnectVPN()">Desconectar</button>
+          </div>
+        </div>
+
+        <div class="vpn-card">
+          <div class="vpn-header">
+            <span style="font-size: 14px; font-weight: 600;">Modo de Enrutamiento</span>
+            <span style="font-size: 12px; color: var(--text-muted);">1-Click Switch</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+            <strong>Modo Directo:</strong> Navega con tu conexión local; solo las IPs de la VPN van al VPS.<br>
+            <strong>Modo Full:</strong> Todo tu tráfico de internet sale cifrado por el VPS (IP 100.64.0.4).
+          </p>
+          <div class="btn-group">
+            <button class="btn" id="btn-mode-direct" onclick="setMode('direct')">Modo Directo</button>
+            <button class="btn" id="btn-mode-full" onclick="setMode('full')">Modo Full (VPS)</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DIAGNOSTIC SECTION -->
+    <section>
+      <h2 class="section-title">Diagnóstico Avanzado de Bloqueos & DPI</h2>
+      <p class="section-desc">Evalúa resolución DNS, conexión TCP 443, bloqueo de SNI (DPI) y estado HTTP en tiempo real.</p>
+      
+      <div class="diag-toolbar">
+        <div class="cat-pills">
+          <span class="pill active" onclick="filterCategory('')">Todos</span>
+          <span class="pill" onclick="filterCategory('Core')">Core</span>
+          <span class="pill" onclick="filterCategory('Mensajería')">Mensajería</span>
+          <span class="pill" onclick="filterCategory('Redes Sociales')">Redes Sociales</span>
+          <span class="pill" onclick="filterCategory('IA & Dev')">IA & Dev</span>
+          <span class="pill" onclick="filterCategory('Streaming')">Streaming</span>
+          <span class="pill" onclick="filterCategory('Gaming')">Gaming</span>
+          <span class="pill" onclick="filterCategory('Adulto')">Adulto</span>
+          <span class="pill" onclick="filterCategory('Personalizado')">Personalizados</span>
+        </div>
+
+        <div class="single-input-group">
+          <input type="text" id="single-domain" placeholder="probar-dominio.com" onkeypress="if(event.key==='Enter') testSingle()" />
+          <button class="btn btn-primary" onclick="testSingle()">Probar</button>
+        </div>
+
+        <button class="btn btn-primary" onclick="runDiagnostics()">Ejecutar Diagnóstico Completo</button>
+      </div>
+
+      <div id="prog-bar" class="progress-bar"><div class="progress-fill"></div></div>
+
+      <div class="card-table" style="margin-top: 1rem;">
+        <table>
+          <thead>
+            <tr>
+              <th>Servicio / Dominio</th>
+              <th>Categoría</th>
+              <th>IP Resuelta</th>
+              <th>DNS</th>
+              <th>TCP (443)</th>
+              <th>TLS / SNI</th>
+              <th>HTTP</th>
+              <th>Latencia</th>
+              <th>Veredicto</th>
+            </tr>
+          </thead>
+          <tbody id="diag-tbody">
+            <tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">Presiona "Ejecutar Diagnóstico Completo" o ingresa un dominio para comenzar.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast">Notificación</div>
+
+  <script>
+    let activeCategory = '';
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.innerText = msg;
+      t.style.display = "block";
+      setTimeout(() => { t.style.display = "none"; }, 3000);
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch("/api/status");
+        const data = await res.json();
+        
+        const pill = document.getElementById("vpn-status-pill");
+        const text = document.getElementById("vpn-status-text");
+        const ip = document.getElementById("vpn-ip");
+        const host = document.getElementById("vpn-host");
+        const mode = document.getElementById("vpn-mode");
+        const exit = document.getElementById("vpn-exit");
+
+        if (data.connected) {
+          pill.className = "vpn-status-badge status-online";
+          text.innerText = "Conectado";
+          ip.innerText = data.ipv4;
+          host.innerText = data.hostname;
+          mode.innerText = data.mode === "full" ? "Modo Full (Exit Node)" : "Modo Directo (Mesh)";
+          exit.innerText = data.exit_node_ip || "Ninguno (Directo)";
+
+          document.getElementById("btn-mode-full").className = data.mode === "full" ? "btn btn-active-mode" : "btn";
+          document.getElementById("btn-mode-direct").className = data.mode === "direct" ? "btn btn-active-mode" : "btn";
+        } else {
+          pill.className = "vpn-status-badge status-offline";
+          text.innerText = "Desconectado";
+          ip.innerText = "-";
+          host.innerText = "-";
+          mode.innerText = "-";
+          exit.innerText = "-";
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function setMode(mode) {
+      showToast(`Cambiando a Modo ${mode.toUpperCase()}...`);
+      try {
+        const res = await fetch("/api/mode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Modo ${mode.toUpperCase()} activado`);
+          fetchStatus();
+        } else {
+          alert("Error: " + data.output);
+        }
+      } catch (err) {
+        alert("Error de conexión: " + err.message);
+      }
+    }
+
+    async function connectVPN() {
+      showToast("Conectando Tailscale...");
+      await fetch("/api/connect", { method: "POST" });
+      setTimeout(fetchStatus, 2000);
+    }
+
+    async function disconnectVPN() {
+      showToast("Desconectando Tailscale...");
+      await fetch("/api/disconnect", { method: "POST" });
+      setTimeout(fetchStatus, 1000);
+    }
+
+    function filterCategory(cat) {
+      activeCategory = cat;
+      document.querySelectorAll(".pill").forEach(p => {
+        p.className = (p.innerText === cat || (!cat && p.innerText === "Todos")) ? "pill active" : "pill";
+      });
+      runDiagnostics();
+    }
+
+    async function runDiagnostics() {
+      const prog = document.getElementById("prog-bar");
+      prog.style.display = "block";
+      const tbody = document.getElementById("diag-tbody");
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">Analizando dominios (DNS, TCP, TLS/SNI, HTTP)...</td></tr>`;
+
+      try {
+        const url = activeCategory ? `/api/diagnose?category=${encodeURIComponent(activeCategory)}` : `/api/diagnose`;
+        const res = await fetch(url);
+        const data = await res.json();
+        renderResults(data.results);
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--error); padding: 2rem;">Error al ejecutar diagnóstico: ${err.message}</td></tr>`;
+      } finally {
+        prog.style.display = "none";
+      }
+    }
+
+    async function testSingle() {
+      const domain = document.getElementById("single-domain").value.trim();
+      if (!domain) return;
+      showToast(`Probando ${domain}...`);
+      try {
+        const res = await fetch("/api/diagnose/single", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain })
+        });
+        const result = await res.json();
+        renderResults([result]);
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    function renderResults(results) {
+      const tbody = document.getElementById("diag-tbody");
+      if (!results || results.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">No se encontraron dominios para evaluar.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = results.map(r => {
+        const dnsTag = r.dns === "OK" ? `<span class="tag tag-ok">OK</span>` : `<span class="tag tag-fail">FAIL</span>`;
+        const tcpTag = r.tcp === "OK" ? `<span class="tag tag-ok">OK</span>` : `<span class="tag tag-fail">FAIL</span>`;
+        let tlsTag = `<span class="tag tag-fail">${r.tls}</span>`;
+        if (r.tls === "OK") tlsTag = `<span class="tag tag-ok">OK</span>`;
+        else if (r.tls === "DPI_RESET") tlsTag = `<span class="tag tag-warn">DPI RESET</span>`;
+
+        const httpTag = r.http_code !== "000" ? `<span class="tag tag-ok">${r.http_code}</span>` : `<span class="tag tag-fail">-</span>`;
+
+        let verdictBadge = `<span class="verdict-badge verdict-bloqueo">🔴 ${r.verdict}</span>`;
+        if (r.verdict === "LIBRE") verdictBadge = `<span class="verdict-badge verdict-libre">🟢 LIBRE</span>`;
+        else if (r.verdict === "BLOQUEO_DPI") verdictBadge = `<span class="verdict-badge verdict-dpi">⚠️ BLOQUEO DPI/SNI</span>`;
+
+        return `
+          <tr>
+            <td><strong>${r.name}</strong><br><span style="color: var(--text-dim); font-size: 11px;">${r.domain}</span></td>
+            <td><span style="color: var(--text-muted);">${r.category}</span></td>
+            <td><span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);">${r.ip}</span></td>
+            <td>${dnsTag}</td>
+            <td>${tcpTag}</td>
+            <td>${tlsTag}</td>
+            <td>${httpTag}</td>
+            <td style="font-family: var(--font-mono); font-size: 12px;">${r.latency_ms} ms</td>
+            <td>${verdictBadge}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function refreshAll() {
+      fetchStatus();
+      runDiagnostics();
+    }
+
+    fetchStatus();
+  </script>
+</body>
+</html>
