@@ -76,7 +76,11 @@ fi
 # 3. Configure XRDP (Restricted to loopback / internal)
 echo "--> [3/6] Configuring XRDP..."
 if [[ -f /etc/xrdp/xrdp.ini ]]; then
-  sed -i "s/^port=.*/port=${XRDP_BIND}:${XRDP_PORT}/" /etc/xrdp/xrdp.ini || true
+  # Only change the global listening port under [Globals], never session sections like [Xorg]
+  sed -i "0,/^port=/s/^port=.*/port=${XRDP_BIND}:${XRDP_PORT}/" /etc/xrdp/xrdp.ini || true
+  # Ensure Xorg and Xvnc session handlers use dynamic sesman allocation
+  sed -i "/\[Xorg\]/,/code=20/c\[Xorg]\nname=Xorg\nlib=libxup.so\nusername=ask\npassword=ask\nip=127.0.0.1\nport=-1\ncode=20" /etc/xrdp/xrdp.ini || true
+  sed -i "/\[Xvnc\]/,/code=10/c\[Xvnc]\nname=Xvnc\nlib=libvnc.so\nusername=ask\npassword=ask\nip=127.0.0.1\nport=-1" /etc/xrdp/xrdp.ini || true
 fi
 
 # Configure ~/.xsession for target user
@@ -91,8 +95,8 @@ EOF
 chown "${DESKTOP_USER}:${DESKTOP_USER}" "${USER_HOME}/.xsession"
 chmod 755 "${USER_HOME}/.xsession"
 
-systemctl enable xrdp
-systemctl restart xrdp
+systemctl enable xrdp-sesman xrdp
+systemctl restart xrdp-sesman xrdp
 
 # 4. Configure KasmVNC user environment
 echo "--> [4/6] Configuring KasmVNC user environment for '$DESKTOP_USER'..."
