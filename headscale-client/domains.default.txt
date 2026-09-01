@@ -1,0 +1,52 @@
+# ==============================================================================
+# Baseline Domains List for Network & DPI Blocking Diagnostics
+# Format: DOMAIN|FRIENDLY_NAME|CATEGORY
+# ==============================================================================
+
+# Core & Infrastructure
+google.com|Google Search|Core
+cloudflare.com|Cloudflare CDN|Core
+1.1.1.1|Cloudflare DNS|Core
+8.8.8.8|Google DNS|Core
+github.com|GitHub|Core
+debian.org|Debian Linux|Core
+ubuntu.com|Ubuntu Linux|Core
+
+# Messaging & Communication
+web.whatsapp.com|WhatsApp Web|Mensajería
+web.telegram.org|Telegram Web|Mensajería
+discord.com|Discord|Mensajería
+slack.com|Slack|Mensajería
+zoom.us|Zoom Meetings|Mensajería
+
+# Social Media & Content
+x.com|X (Twitter)|Redes Sociales
+instagram.com|Instagram|Redes Sociales
+facebook.com|Facebook|Redes Sociales
+tiktok.com|TikTok|Redes Sociales
+reddit.com|Reddit|Redes Sociales
+linkedin.com|LinkedIn|Redes Sociales
+
+# AI & Developer Tools
+openai.com|OpenAI / ChatGPT|IA & Dev
+anthropic.com|Anthropic / Claude|IA & Dev
+huggingface.co|Hugging Face|IA & Dev
+
+# Streaming & Media
+youtube.com|YouTube|Streaming
+netflix.com|Netflix|Streaming
+disneyplus.com|Disney+|Streaming
+max.com|Max (HBO)|Streaming
+primevideo.com|Prime Video|Streaming
+twitch.tv|Twitch|Streaming
+spotify.com|Spotify|Streaming
+
+# Gaming & Entertainment
+steampowered.com|Steam Store|Gaming
+epicgames.com|Epic Games|Gaming
+roblox.com|Roblox|Gaming
+
+# High-DPI Inspection & Adult Sites
+pornhub.com|Pornhub|Adulto
+xvideos.com|XVideos|Adulto
+onlyfans.com|OnlyFans|Adulto
