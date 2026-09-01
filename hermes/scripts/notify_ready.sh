@@ -22,16 +22,16 @@ STARTUP_NOTIFICATION="true"
 # 1. Read Hermes personal configuration from ~/.hermes/.env
 if [[ -f "${HERMES_HOME}/.hermes/.env" ]]; then
   while IFS='=' read -r key val || [[ -n "$key" ]]; do
-    key="$(echo "$key" | xargs)"
+    key="$(echo "$key" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     [[ -z "$key" || "$key" =~ ^# ]] && continue
     val="${val%\"}"
     val="${val#\"}"
     val="${val%\'}"
     val="${val#\'}"
     case "$key" in
-      TELEGRAM_BOT_TOKEN) TOKEN="$val" ;;
-      TELEGRAM_ALLOWED_USERS) CHAT_ID="${val%%,*}" ;;
-      WHATSAPP_HOME_CHANNEL) WA_CHAT_ID="$val" ;;
+      TELEGRAM_BOT_TOKEN) [[ -z "$TOKEN" ]] && TOKEN="$val" ;;
+      TELEGRAM_ALLOWED_USERS) [[ -z "$CHAT_ID" ]] && CHAT_ID="${val%%,*}" ;;
+      WHATSAPP_HOME_CHANNEL) [[ -z "$WA_CHAT_ID" ]] && WA_CHAT_ID="$val" ;;
       WHATSAPP_ALLOWED_USERS) [[ -z "$WA_CHAT_ID" ]] && WA_CHAT_ID="${val%%,*}" ;;
     esac
   done < "${HERMES_HOME}/.hermes/.env"
