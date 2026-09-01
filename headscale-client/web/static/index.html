@@ -611,7 +611,14 @@
               <span id="deep-rec-title" style="font-size: 15px; font-weight: 600;">Resultado del Diagnóstico</span>
               <p id="deep-rec-desc" style="font-size: 13px; color: var(--text-muted); margin-top: 0.25rem;">-</p>
             </div>
-            <button id="btn-enroute-vpn" class="btn btn-primary" style="display: none; flex: 0 0 auto;" onclick="applyVpnRoutingForCurrentDomain()">⚡ Enrutar estas IPs por la VPN (tailscale0)</button>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+              <button id="btn-pin-hosts" class="btn btn-primary" style="display: none; flex: 0 0 auto; font-size: 12px; padding: 6px 14px;" onclick="pinBestWorkingIpForCurrentDomain()">
+                📌 Fijar en /etc/hosts + VPN (Solución Definitiva)
+              </button>
+              <button id="btn-enroute-vpn" class="btn" style="display: none; flex: 0 0 auto; font-size: 12px; padding: 6px 14px; background: rgba(255, 255, 255, 0.08);" onclick="applyVpnRoutingForCurrentDomain()">
+                ⚡ Enrutar solo IPs
+              </button>
+            </div>
           </div>
         </div>
 
@@ -703,6 +710,36 @@
           </div>
         </div>
 
+      </div>
+
+      <!-- /etc/hosts Domain Pinning Manager Card -->
+      <div class="card" style="margin-top: 1.5rem; border-top: 3px solid var(--accent);">
+        <div class="card-header">
+          <div>
+            <span style="font-size: 14px; font-weight: 600;">📌 Gestor de Dominios Fijados en `/etc/hosts` (Inmunidad a rotación de CDNs)</span>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Fija dominios a una IP verificada que se enruta automáticamente por la VPN. Neutraliza rotaciones dinámicas de CDNs como Hostinger, Cloudflare o Akamai.</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn" style="padding: 4px 10px; font-size: 11px; flex: 0 0 auto;" onclick="loadHostsEntries()">Actualizar Hosts</button>
+            <button class="btn btn-danger" style="padding: 4px 10px; font-size: 11px; flex: 0 0 auto;" onclick="clearAllHostsEntries()">🧹 Limpiar Todo /etc/hosts</button>
+          </div>
+        </div>
+
+        <div class="card-table" style="margin-top: 0.5rem;">
+          <table>
+            <thead>
+              <tr>
+                <th>Dominio Fijado</th>
+                <th>IP Asignada</th>
+                <th>Enrutamiento VPN (`tailscale0`)</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="hosts-entries-tbody">
+              <tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No hay dominios fijados en /etc/hosts.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- System VPN Routing Rules Manager Card -->
@@ -1194,17 +1231,18 @@
       }
     }
 
-    function renderDeepDiagnosticResults(data) {
       // 1. Recommendation Banner
       const card = document.getElementById("deep-recommendation-card");
       const title = document.getElementById("deep-rec-title");
       const desc = document.getElementById("deep-rec-desc");
+      const btnPinHosts = document.getElementById("btn-pin-hosts");
       const btnEnroute = document.getElementById("btn-enroute-vpn");
 
       if (data.analysis.recommended_action === "CONNECT_VPN") {
         card.style.borderLeftColor = "var(--warning)";
         title.innerHTML = `⚠️ Falla de Acceso Local (VPN Desconectada) en <strong>${data.domain}</strong>`;
         desc.innerText = data.analysis.message;
+        btnPinHosts.style.display = "none";
         btnEnroute.innerText = "🌐 Conectar VPN Tailscale";
         btnEnroute.onclick = connectVPN;
         btnEnroute.style.display = "inline-flex";
@@ -1212,23 +1250,31 @@
         card.style.borderLeftColor = "var(--warning)";
         title.innerHTML = `⚠️ Bloqueo Detectado en <strong>${data.domain}</strong>`;
         desc.innerText = data.analysis.message || "El sitio no responde en tu conexión local, pero responde perfectamente por el VPS VPN.";
-        btnEnroute.innerText = "⚡ Enrutar IPs restantes por la VPN (tailscale0)";
+        
+        btnPinHosts.innerText = `📌 Fijar ${data.best_working_ip || 'IP Óptima'} en /etc/hosts + VPN`;
+        btnPinHosts.onclick = pinBestWorkingIpForCurrentDomain;
+        btnPinHosts.style.display = "inline-flex";
+
+        btnEnroute.innerText = "⚡ Enrutar solo IPs (`ip route`)";
         btnEnroute.onclick = applyVpnRoutingForCurrentDomain;
         btnEnroute.style.display = "inline-flex";
       } else if (data.analysis.recommended_action === "SOLUCIONADO") {
         card.style.borderLeftColor = "var(--success)";
         title.innerHTML = `🟢 Bloqueo Solucionado en <strong>${data.domain}</strong>`;
-        desc.innerText = data.analysis.message || "Las IPs de este dominio están enrutadas por la VPN.";
+        desc.innerText = data.analysis.message || "El dominio o sus IPs están enrutadas con éxito por la VPN.";
+        btnPinHosts.style.display = "none";
         btnEnroute.style.display = "none";
       } else if (data.analysis.local_working && (data.analysis.vpn_working || !data.vpn_connected)) {
         card.style.borderLeftColor = "var(--success)";
         title.innerHTML = `🟢 Sin Bloqueo de Red en <strong>${data.domain}</strong>`;
         desc.innerText = data.analysis.message || "El sitio responde correctamente en tu conexión local directa.";
+        btnPinHosts.style.display = "none";
         btnEnroute.style.display = "none";
       } else {
         card.style.borderLeftColor = "var(--error)";
         title.innerHTML = `🔴 Falla de Conectividad en <strong>${data.domain}</strong>`;
         desc.innerText = data.analysis.message || "El sitio web no responde.";
+        btnPinHosts.style.display = "none";
         btnEnroute.style.display = "none";
       }
 
@@ -1335,23 +1381,124 @@
             verdictTag = `<span class="tag tag-warn">🔴 Inaccesible en ambos</span>`;
           }
 
-          const actionBtn = (t.is_routed || t.verdict === "SOLUCIONADO_ENRUTADA")
-            ? `<span class="tag tag-ok" style="font-size: 11px;">Enrutada por VPN</span>`
-            : `<button class="btn btn-primary" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="routeSingleIp('${t.ip}', '${data.domain}')">⚡ Enrutar</button>`;
+          const isBest = (data.best_working_ip === t.ip);
+          const bestBadge = isBest ? `<span class="brand-badge" style="font-size: 10px; margin-left: 4px; background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4);">⭐ Óptima</span>` : '';
+
+          let actionHtml = '';
+          if (t.is_routed || t.verdict === "SOLUCIONADO_ENRUTADA") {
+            actionHtml = `<span class="tag tag-ok" style="font-size: 11px;">Enrutada por VPN</span>`;
+          } else {
+            actionHtml = `
+              <div style="display: flex; gap: 0.25rem;">
+                <button class="btn btn-primary" style="padding: 2px 6px; font-size: 11px; flex: 0 0 auto;" onclick="pinDomainInHosts('${data.domain}', '${t.ip}')" title="Fijar dominio a esta IP en /etc/hosts y enrutarla por VPN">📌 Fijar</button>
+                <button class="btn" style="padding: 2px 6px; font-size: 11px; background: rgba(255,255,255,0.06); flex: 0 0 auto;" onclick="routeSingleIp('${t.ip}', '${data.domain}')" title="Solo agregar ruta de kernel para esta IP">⚡ Ruta</button>
+              </div>
+            `;
+          }
 
           return `
             <tr>
-              <td><strong style="font-family: var(--font-mono); font-size: 13px;">${t.ip}</strong></td>
+              <td><strong style="font-family: var(--font-mono); font-size: 13px;">${t.ip}</strong>${bestBadge}</td>
               <td>${pingTag}</td>
               <td>${tcpTag}</td>
               <td>${tlsTag}</td>
               <td>${localHttpTag}</td>
               <td>${vpsHttpTag}</td>
               <td>${verdictTag}</td>
-              <td>${actionBtn}</td>
+              <td>${actionHtml}</td>
             </tr>
           `;
         }).join('');
+      }
+    }
+
+    // ----------------- /etc/hosts DOMAIN PINNING MANAGER -----------------
+
+    async function pinBestWorkingIpForCurrentDomain() {
+      if (!lastDeepDiagnosticData || !lastDeepDiagnosticData.best_working_ip) {
+        alert("No hay una IP óptima identificada para fijar.");
+        return;
+      }
+      await pinDomainInHosts(lastDeepDiagnosticData.domain, lastDeepDiagnosticData.best_working_ip);
+    }
+
+    async function pinDomainInHosts(domain, ip) {
+      showToast(`Fijando ${domain} ➔ ${ip} en /etc/hosts y enrutando por VPN...`);
+      try {
+        const res = await fetch("/api/hosts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain, ip })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`¡Dominio ${domain} fijado con éxito a ${ip}!`);
+          loadHostsEntries();
+          loadSystemRoutes();
+          runDeepDiagnostic();
+        } else {
+          alert("Error al fijar en /etc/hosts: " + data.error);
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    async function deleteHostsEntry(domain) {
+      if (!confirm(`¿Eliminar la fijación de ${domain} en /etc/hosts?`)) return;
+      showToast(`Quitando fijación de ${domain}...`);
+      try {
+        const res = await fetch(`/api/hosts/${encodeURIComponent(domain)}`, { method: "DELETE" });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Fijación eliminada.`);
+          loadHostsEntries();
+          if (lastDeepDiagnosticData) runDeepDiagnostic();
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    async function clearAllHostsEntries() {
+      if (!confirm("¿Deseas eliminar TODAS las fijaciones de /etc/hosts gestionadas por esta herramienta?")) return;
+      showToast("Limpiando /etc/hosts...");
+      try {
+        const res = await fetch("/api/hosts", { method: "DELETE" });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Se limpiaron ${data.cleared_count} entradas de /etc/hosts.`);
+          loadHostsEntries();
+          if (lastDeepDiagnosticData) runDeepDiagnostic();
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    async function loadHostsEntries() {
+      const tbody = document.getElementById("hosts-entries-tbody");
+      if (!tbody) return;
+      try {
+        const res = await fetch("/api/hosts");
+        const data = await res.json();
+        const entries = data.entries || [];
+        if (entries.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No hay dominios fijados en /etc/hosts.</td></tr>`;
+        } else {
+          tbody.innerHTML = entries.map(e => `
+            <tr>
+              <td><strong style="font-family: var(--font-mono); color: var(--accent);">${e.domain}</strong></td>
+              <td><span style="font-family: var(--font-mono); font-size: 13px;">${e.ip}</span></td>
+              <td><span class="tag tag-ok">Activo (tailscale0)</span></td>
+              <td>
+                <button class="btn btn-danger" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="deleteHostsEntry('${e.domain}')">🗑️ Quitar Fijación</button>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        console.error("Error loading hosts entries:", err);
       }
     }
 
@@ -1875,9 +2022,12 @@
     function refreshAll() {
       fetchStatus();
       loadSystemRoutes();
+      loadHostsEntries();
     }
 
     fetchStatus();
+    loadSystemRoutes();
+    loadHostsEntries();
   </script>
 </body>
 </html>

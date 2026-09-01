@@ -1,56 +1,8 @@
 [
   {
-    "ip": "88.222.222.0",
-    "domain": "passbolt.articc.top",
-    "created_at": "2026-09-01 20:44:22",
-    "is_active": true
-  },
-  {
-    "ip": "195.35.60.181",
-    "domain": "passbolt.articc.top",
-    "created_at": "2026-09-01 20:50:36",
-    "is_active": true
-  },
-  {
-    "ip": "212.1.212.193",
-    "domain": "passbolt.articc.top",
-    "created_at": "2026-09-01 20:50:36",
-    "is_active": true
-  },
-  {
-    "ip": "191.101.104.5",
-    "domain": "ss.articc.top",
-    "created_at": "2026-09-01 20:53:16",
-    "is_active": true
-  },
-  {
-    "ip": "212.1.212.109",
-    "domain": "ss.articc.top",
-    "created_at": "2026-09-01 20:53:16",
-    "is_active": true
-  },
-  {
-    "ip": "84.32.84.236",
-    "domain": "ss.articc.top",
-    "created_at": "2026-09-01 20:54:27",
-    "is_active": true
-  },
-  {
-    "ip": "2.57.91.102",
-    "domain": "ss.articc.top",
-    "created_at": "2026-09-01 20:54:27",
-    "is_active": true
-  },
-  {
-    "ip": "191.96.144.35",
-    "domain": "ss.articc.top",
-    "created_at": "2026-09-01 20:55:46",
-    "is_active": true
-  },
-  {
     "ip": "212.1.212.71",
     "domain": "ss.articc.top",
-    "created_at": "2026-09-01 20:55:46",
+    "created_at": "2026-09-01 21:05:01",
     "is_active": true
   }
 ]
