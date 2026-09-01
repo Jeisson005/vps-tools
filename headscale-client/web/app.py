@@ -11,22 +11,31 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="Headscale Client Dashboard", version="1.1.0")
+app = FastAPI(title="Headscale Client Dashboard", version="1.2.0")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_DIR = os.path.dirname(BASE_DIR)
 DEFAULT_LIST = os.path.join(CLIENT_DIR, "domains.default.txt")
 CUSTOM_LIST = os.path.join(CLIENT_DIR, "domains.custom.txt")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+TAILSCALED_DEFAULT_CONFIG = "/etc/default/tailscaled"
 
 os.makedirs(STATIC_DIR, exist_ok=True)
 
 class ModeRequest(BaseModel):
-    mode: str # 'full' or 'direct'
+    mode: str # 'full' or 'direct' / 'mesh'
     exit_node: Optional[str] = None
 
 class SingleDiagnoseRequest(BaseModel):
     domain: str
+
+class ProxyRequest(BaseModel):
+    enabled: bool
+    socks5_port: Optional[int] = 1080
+    http_port: Optional[int] = 8080
+
+class AutostartRequest(BaseModel):
+    enabled: bool
 
 def get_env_var(name: str, default: str = "") -> str:
     env_file = os.path.join(CLIENT_DIR, ".env")
@@ -36,6 +45,32 @@ def get_env_var(name: str, default: str = "") -> str:
                 if line.strip().startswith(f"{name}="):
                     return line.strip().split("=", 1)[1].strip('"\'')
     return os.environ.get(name, default)
+
+def check_proxy_listening() -> Dict[str, Any]:
+    socks5_listening = False
+    http_listening = False
+    try:
+        s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s1.settimeout(0.5)
+        if s1.connect_ex(("127.0.0.1", 1080)) == 0:
+            socks5_listening = True
+        s1.close()
+
+        s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s2.settimeout(0.5)
+        if s2.connect_ex(("127.0.0.1", 8080)) == 0:
+            http_listening = True
+        s2.close()
+    except Exception:
+        pass
+    
+    return {
+        "enabled": socks5_listening or http_listening,
+        "socks5_listening": socks5_listening,
+        "http_listening": http_listening,
+        "socks5_port": 1080,
+        "http_port": 8080
+    }
 
 def is_tailscale_connected() -> Dict[str, Any]:
     try:
@@ -85,7 +120,8 @@ def is_tailscale_connected() -> Dict[str, Any]:
                     "online": p_online
                 })
         
-        mode = "full" if (active_exit_ip and backend_state == "Running") else "direct"
+        mode = "full" if (active_exit_ip and backend_state == "Running") else "mesh"
+        proxy_info = check_proxy_listening()
         
         return {
             "connected": backend_state == "Running",
@@ -98,6 +134,7 @@ def is_tailscale_connected() -> Dict[str, Any]:
             "peers": peers_list,
             "peers_count": len(peers_list),
             "exit_nodes": exit_nodes,
+            "proxy": proxy_info,
             "server_url": get_env_var("HEADSCALE_URL", "https://headscale.jeisson.top")
         }
     except Exception as e:
@@ -195,14 +232,14 @@ async def get_status():
 
 @app.post("/api/mode")
 async def set_mode(req: ModeRequest):
-    if req.mode == "full":
+    if req.mode in ["full", "exit"]:
         exit_node = req.exit_node or get_env_var("EXIT_NODE", "100.64.0.4")
         res = subprocess.run(["tailscale", "set", f"--exit-node={exit_node}", "--exit-node-allow-lan-access=true"], capture_output=True, text=True)
         return {"success": res.returncode == 0, "mode": "full", "exit_node": exit_node, "output": res.stdout or res.stderr}
-    elif req.mode == "direct":
+    elif req.mode in ["mesh", "direct"]:
         res = subprocess.run(["tailscale", "set", "--exit-node="], capture_output=True, text=True)
-        return {"success": res.returncode == 0, "mode": "direct", "output": res.stdout or res.stderr}
-    raise HTTPException(status_code=400, detail="Invalid mode. Use 'full' or 'direct'.")
+        return {"success": res.returncode == 0, "mode": "mesh", "output": res.stdout or res.stderr}
+    raise HTTPException(status_code=400, detail="Invalid mode. Use 'full' or 'mesh'.")
 
 @app.post("/api/connect")
 async def connect_vpn():
@@ -219,6 +256,29 @@ async def connect_vpn():
 async def disconnect_vpn():
     res = subprocess.run(["tailscale", "down"], capture_output=True, text=True)
     return {"success": res.returncode == 0, "output": res.stdout or res.stderr}
+
+@app.get("/api/proxy")
+async def get_proxy_status():
+    return check_proxy_listening()
+
+@app.post("/api/proxy")
+async def configure_proxy(req: ProxyRequest):
+    flags = f'--socks5-server=localhost:{req.socks5_port} --outbound-http-proxy-listen=localhost:{req.http_port}' if req.enabled else ''
+    config_content = f'PORT="41641"\nFLAGS="{flags}"\n'
+    
+    try:
+        if os.path.exists(TAILSCALED_DEFAULT_CONFIG) or os.access("/etc/default", os.W_OK):
+            with open(TAILSCALED_DEFAULT_CONFIG, "w") as f:
+                f.write(config_content)
+        else:
+            subprocess.run(["sudo", "bash", "-c", f"cat << 'EOF' > {TAILSCALED_DEFAULT_CONFIG}\n{config_content}\nEOF"], check=True)
+        
+        # Trigger restart if on host or via systemctl
+        subprocess.run(["sudo", "systemctl", "restart", "tailscaled"], capture_output=True, text=True)
+        time.sleep(1)
+        return {"success": True, "proxy": check_proxy_listening()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 @app.get("/api/diagnose")
 async def run_diagnostics(category: Optional[str] = Query(None)):
