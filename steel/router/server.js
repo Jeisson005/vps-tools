@@ -105,7 +105,7 @@ const UUID_REGEX = /([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}
 function extractSessionId(reqUrl, headers = {}) {
   try {
     const parsed = new URL(reqUrl, 'http://localhost');
-    const qSid = parsed.searchParams.get('sessionId');
+    const qSid = parsed.searchParams.get('sessionId') || parsed.searchParams.get('session_id') || parsed.searchParams.get('id');
     if (qSid) {
       const m = qSid.match(UUID_REGEX);
       if (m) return m[1];
@@ -115,7 +115,7 @@ function extractSessionId(reqUrl, headers = {}) {
 
     if (headers && headers.referer) {
       const refUrl = new URL(headers.referer, 'http://localhost');
-      const refSid = refUrl.searchParams.get('sessionId');
+      const refSid = refUrl.searchParams.get('sessionId') || refUrl.searchParams.get('session_id') || refUrl.searchParams.get('id');
       if (refSid) {
         const m = refSid.match(UUID_REGEX);
         if (m) return m[1];
@@ -127,6 +127,11 @@ function extractSessionId(reqUrl, headers = {}) {
     if (headers && headers.cookie) {
       const cMatch = headers.cookie.match(/steel_sid=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/);
       if (cMatch) return cMatch[1];
+    }
+
+    if (headers && headers['x-steel-session-id']) {
+      const hMatch = headers['x-steel-session-id'].match(UUID_REGEX);
+      if (hMatch) return hMatch[1];
     }
   } catch (e) {}
   return null;
@@ -433,7 +438,7 @@ const server = http.createServer(async (req, res) => {
 // WebSocket / Upgrade proxying
 server.on('upgrade', async (req, clientSocket, head) => {
   const sid = extractSessionId(req.url || '', req.headers);
-  const isCast = (req.url || '').startsWith('/v1/sessions/cast');
+  const isCast = (req.url || '').includes('/cast') || (req.url || '').includes('/devtools') || (req.url || '').includes('/ws');
 
   if (isCast && !sid) {
     clientSocket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\nMissing sessionId for live stream');
