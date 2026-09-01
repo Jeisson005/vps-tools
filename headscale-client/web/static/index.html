@@ -522,23 +522,31 @@
         <!-- SOCKS5 Status & Controls Card -->
         <div class="card">
           <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Estado del Proxy SOCKS5</span>
+            <span style="font-size: 14px; font-weight: 600;">Control del Proxy SOCKS5</span>
             <span id="proxy-status-pill" class="status-badge status-offline">
               <span class="status-dot"></span><span id="proxy-status-text">Cargando...</span>
             </span>
           </div>
 
           <div class="meta-list">
-            <div class="meta-row"><span>Servidor Proxy:</span><span class="meta-val">127.0.0.1:1080 (SOCKS5)</span></div>
-            <div class="meta-row"><span>Inicio al arrancar Linux:</span><span id="proxy-autostart-val" class="meta-val">-</span></div>
-            <div class="meta-row"><span>Motor:</span><span class="meta-val">tailscaled native</span></div>
+            <div class="meta-row"><span>Dirección Local:</span><span class="meta-val">127.0.0.1:1080 (SOCKS5)</span></div>
+            <div class="meta-row"><span>Estado Actual:</span><span id="proxy-live-val" class="meta-val">-</span></div>
+            <div class="meta-row"><span>Arranque con Linux:</span><span id="proxy-autostart-val" class="meta-val">-</span></div>
           </div>
 
-          <div class="form-group" style="margin-top: 0.5rem;">
-            <label class="form-label">Arranque del Proxy con Linux:</label>
+          <div class="form-group" style="margin-top: 0.25rem;">
+            <label class="form-label">Control Manual Inmediato:</label>
             <div class="btn-group">
-              <button class="btn btn-primary" id="btn-proxy-enable" onclick="toggleProxyAutostart(true)">Habilitar al Iniciar</button>
-              <button class="btn btn-danger" id="btn-proxy-disable" onclick="toggleProxyAutostart(false)">Deshabilitar</button>
+              <button class="btn btn-primary" id="btn-proxy-now-on" onclick="toggleProxyLive(true)">Activar Proxy Ahora</button>
+              <button class="btn btn-danger" id="btn-proxy-now-off" onclick="toggleProxyLive(false)">Desactivar Proxy Ahora</button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 0.25rem;">
+            <label class="form-label">Persistencia al Arrancar el Sistema:</label>
+            <div class="btn-group">
+              <button class="btn" id="btn-proxy-enable" onclick="toggleProxyAutostart(true)">Habilitar al Iniciar</button>
+              <button class="btn" id="btn-proxy-disable" onclick="toggleProxyAutostart(false)">Deshabilitar</button>
             </div>
           </div>
         </div>
@@ -789,13 +797,27 @@
         // SOCKS5 Proxy Status in Proxy Tab
         const proxyPill = document.getElementById("proxy-status-pill");
         const proxyText = document.getElementById("proxy-status-text");
+        const proxyLiveVal = document.getElementById("proxy-live-val");
         const proxyAutoVal = document.getElementById("proxy-autostart-val");
+        const btnProxyOn = document.getElementById("btn-proxy-now-on");
+        const btnProxyOff = document.getElementById("btn-proxy-now-off");
+
         if (data.proxy_listening) {
           proxyPill.className = "status-badge status-online";
           proxyText.innerText = "Activo (:1080)";
+          proxyLiveVal.innerText = "🟢 Escuchando en 127.0.0.1:1080";
+          btnProxyOn.disabled = true;
+          btnProxyOn.style.opacity = "0.5";
+          btnProxyOff.disabled = false;
+          btnProxyOff.style.opacity = "1";
         } else {
           proxyPill.className = "status-badge status-offline";
           proxyText.innerText = "Inactivo";
+          proxyLiveVal.innerText = "⚪ Inactivo";
+          btnProxyOn.disabled = false;
+          btnProxyOn.style.opacity = "1";
+          btnProxyOff.disabled = true;
+          btnProxyOff.style.opacity = "0.5";
         }
         proxyAutoVal.innerText = data.proxy_autostart ? "🟢 Habilitado (:1080)" : "⚪ Deshabilitado";
 
@@ -893,6 +915,26 @@
       }
     }
 
+    async function toggleProxyLive(enabled) {
+      showToast(`${enabled ? 'Activando' : 'Desactivando'} Proxy SOCKS5 en 127.0.0.1:1080...`);
+      try {
+        const res = await fetch("/api/autostart/proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Proxy SOCKS5 ${enabled ? 'Activado' : 'Desactivado'}`);
+          fetchStatus();
+        } else {
+          alert("Error al cambiar estado del proxy: " + data.error);
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
     async function toggleProxyAutostart(enabled) {
       showToast(`${enabled ? 'Habilitando' : 'Deshabilitando'} Proxy SOCKS5 :1080 al arrancar...`);
       try {
@@ -903,7 +945,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          showToast(`Proxy SOCKS5 ${enabled ? 'Habilitado' : 'Deshabilitado'}`);
+          showToast(`Arranque de Proxy SOCKS5 ${enabled ? 'Habilitado' : 'Deshabilitado'}`);
           fetchStatus();
         } else {
           alert("Error al configurar proxy: " + data.error);
