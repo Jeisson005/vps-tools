@@ -1121,5 +1121,5 @@ async def serve_index():
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(get_env_var("WEB_PORT", "29485"))
+    port = int(get_env_var("WEB_PORT", "30701"))
     uvicorn.run(app, host="0.0.0.0", port=port)

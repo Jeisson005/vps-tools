@@ -10,7 +10,7 @@ services:
       - HEADSCALE_AUTH_KEY=${HEADSCALE_AUTH_KEY:-ccf3d9a6b227d5f4ae3a9dfdc0eab8ad701096ba21e8117b}
       - CLIENT_HOSTNAME=${CLIENT_HOSTNAME:-jeisson-laptop}
       - EXIT_NODE=${EXIT_NODE:-100.64.0.4}
-      - WEB_PORT=${WEB_PORT:-29485}
+      - WEB_PORT=${WEB_PORT:-30701}
     volumes:
       - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
       - /etc/default/tailscaled:/etc/default/tailscaled

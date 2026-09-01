@@ -16,6 +16,6 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app/
 
-EXPOSE 29485
+EXPOSE 30701
 
 CMD ["python", "web/app.py"]
