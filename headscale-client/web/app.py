@@ -964,11 +964,38 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
     managed_hosts = get_managed_hosts_entries()
     pinned_entry = next((e for e in managed_hosts if e["domain"].lower() == domain.lower()), None)
 
-    # Pick the best working IP for domain pinning
+    # Pick the best working IP for domain pinning using multi-metric scoring
+    def score_ip_candidate(t: Dict[str, Any]) -> float:
+        # Lower score is better
+        score = 0.0
+        vps_ok = t.get("vps_http", {}).get("success", False) and (t.get("vps_http", {}).get("status_code", 0) != 0)
+        if not vps_ok:
+            score += 100000.0
+        
+        # Factor in VPS latency
+        score += t.get("vps_http", {}).get("latency_ms", 2000)
+        
+        # Prefer IPs that have 0% packet loss on Ping
+        if not t.get("ping", {}).get("success", False):
+            score += 800.0
+        else:
+            score += min(float(t.get("ping", {}).get("avg_rtt_ms") or 200), 500.0) * 0.3
+            
+        # Prefer IPs that successfully negotiate TLS/SNI (healthy server)
+        if t.get("tls_local", {}).get("status") != "OK":
+            score += 1500.0
+        else:
+            score += min(float(t.get("tls_local", {}).get("latency_ms") or 300), 500.0) * 0.3
+            
+        # TCP port 443 connectivity
+        if not t.get("tcp_443", {}).get("success", False):
+            score += 1000.0
+            
+        return score
+
     working_vps_ips = [t for t in ip_tests if t.get("vps_http", {}).get("success") and t.get("vps_http", {}).get("status_code", 0) != 0]
     if working_vps_ips:
-        # Sort by VPS latency
-        working_vps_ips.sort(key=lambda x: x.get("vps_http", {}).get("latency_ms", 9999))
+        working_vps_ips.sort(key=score_ip_candidate)
         best_working_ip = working_vps_ips[0]["ip"]
     elif dns_data["ipv4"]:
         best_working_ip = dns_data["ipv4"][0]
