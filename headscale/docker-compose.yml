@@ -3,7 +3,7 @@ services:
     container_name: headscale
     image: headscale/headscale:0.24.3
     restart: unless-stopped
-    command: headscale serve
+    command: serve
     security_opt:
       - no-new-privileges:true
     deploy:
