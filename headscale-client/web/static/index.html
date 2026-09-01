@@ -628,12 +628,17 @@
           </div>
         </div>
 
-        <!-- Side-by-Side Comparison (Local vs VPS VPN) -->
+        <!-- Global Domain Resolution Cards -->
+        <div>
+          <span style="font-size: 14px; font-weight: 600;">2. Resumen de Conexión Global del Dominio (`Host: Hostname`)</span>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Respuesta de balanceador de carga o proxy inverso del dominio completo.</p>
+        </div>
+
         <div class="grid-2">
           <!-- Local ISP Direct Card -->
           <div class="card" style="border-top: 3px solid #64748b;">
             <div class="card-header">
-              <span style="font-size: 14px; font-weight: 600;">🏠 Conexión Directa Local (ISP)</span>
+              <span style="font-size: 14px; font-weight: 600;">🏠 Red Local ISP (Conexión Directa)</span>
               <span id="local-status-pill" class="status-badge status-offline">Cargando...</span>
             </div>
             <div class="meta-list">
@@ -644,14 +649,14 @@
               <div class="meta-row"><span>URL Final:</span><span id="local-final-url" class="meta-val" style="font-size: 11px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</span></div>
             </div>
             <div id="local-redirects-box" style="font-size: 12px; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 0.5rem;">
-              <span>Saltos / Redirecciones: Ninguno</span>
+              <span>Saltos / Redirecciones: Ninguno (Respuesta directa)</span>
             </div>
           </div>
 
           <!-- VPS VPN Card -->
           <div class="card" style="border-top: 3px solid var(--success);">
             <div class="card-header">
-              <span style="font-size: 14px; font-weight: 600;">🏰 Conexión Vía VPS VPN (100.64.0.4)</span>
+              <span style="font-size: 14px; font-weight: 600;">🏰 Vía VPS VPN (100.64.0.4:1080)</span>
               <span id="vps-status-pill" class="status-badge status-online">Cargando...</span>
             </div>
             <div class="meta-list">
@@ -668,21 +673,34 @@
         </div>
 
         <!-- IP-Level Ping & TCP Breakdown Table -->
-        <div class="card-table">
-          <table>
-            <thead>
-              <tr>
-                <th>IP de Destino</th>
-                <th>Ping ICMP (RTT)</th>
-                <th>TCP Puerto 80 (HTTP)</th>
-                <th>TCP Puerto 443 (HTTPS)</th>
-                <th>Estado de Red</th>
-              </tr>
-            </thead>
-            <tbody id="ip-breakdown-tbody">
-              <tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">Sin datos de IPs.</td></tr>
-            </tbody>
-          </table>
+        <div class="card" style="padding: 0; overflow: hidden;">
+          <div style="padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); background: var(--bg-card); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <span style="font-size: 14px; font-weight: 600;">3. 📊 Comparativa Detallada IP por IP (Red Local vs VPS VPN)</span>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Diagnóstico de conectividad individual de cada dirección IP y servidor CDN asociado al dominio.</p>
+            </div>
+            <span id="ip-table-badge" class="brand-badge">0 IPs analizadas</span>
+          </div>
+
+          <div class="card-table" style="border: none; border-radius: 0;">
+            <table>
+              <thead>
+                <tr>
+                  <th>IP Servidor / CDN</th>
+                  <th>Local: Ping (RTT)</th>
+                  <th>Local: TCP (80/443)</th>
+                  <th>Local: TLS/SNI</th>
+                  <th>Local: HTTP</th>
+                  <th>VPS VPN: HTTP (:1080)</th>
+                  <th>Diagnóstico Individual</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="ip-breakdown-tbody">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">Sin datos de IPs.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
       </div>
@@ -1250,27 +1268,73 @@
         vpsRedir.innerHTML = "<span>Saltos / Redirecciones: Ninguno</span>";
       }
 
-      // 5. IP Breakdown Table
+      // 5. IP Breakdown Table (8 columns: IP, Local Ping, Local TCP, Local TLS, Local HTTP, VPS HTTP, Verdict, Action)
       const ipTbody = document.getElementById("ip-breakdown-tbody");
+      const ipBadge = document.getElementById("ip-table-badge");
+      if (ipBadge) ipBadge.innerText = `${(data.ip_tests || []).length} IPs analizadas`;
+
       if (!data.ip_tests || data.ip_tests.length === 0) {
-        ipTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No se pudieron resolver IPs IPv4 para pruebas ICMP/TCP.</td></tr>`;
+        ipTbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No se pudieron resolver IPs IPv4 para pruebas individuales.</td></tr>`;
       } else {
         ipTbody.innerHTML = data.ip_tests.map(t => {
           const pingTag = t.ping.success ? `<span class="tag tag-ok">${t.ping.avg_rtt_ms} ms</span>` : `<span class="tag tag-fail">100% loss</span>`;
-          const tcp80Tag = t.tcp_80.success ? `<span class="tag tag-ok">${t.tcp_80.latency_ms} ms</span>` : `<span class="tag tag-fail">Cerrado</span>`;
-          const tcp443Tag = t.tcp_443.success ? `<span class="tag tag-ok">${t.tcp_443.latency_ms} ms</span>` : `<span class="tag tag-fail">Bloqueado / Timeout</span>`;
-          const stateTag = (t.tcp_443.success || t.tcp_80.success) ? `<span class="tag tag-ok">Accesible</span>` : `<span class="tag tag-fail">Inaccesible</span>`;
+          const tcpTag = `<span class="tag ${t.tcp_80.success ? 'tag-ok' : 'tag-fail'}">80: ${t.tcp_80.success ? t.tcp_80.latency_ms + 'ms' : 'X'}</span> <span class="tag ${t.tcp_443.success ? 'tag-ok' : 'tag-fail'}">443: ${t.tcp_443.success ? t.tcp_443.latency_ms + 'ms' : 'X'}</span>`;
+          
+          let tlsTag = `<span class="tag tag-fail">FAIL</span>`;
+          if (t.tls_local && t.tls_local.status === "OK") tlsTag = `<span class="tag tag-ok">OK (${t.tls_local.latency_ms}ms)</span>`;
+          else if (t.tls_local && t.tls_local.status === "DPI_RESET") tlsTag = `<span class="tag tag-warn">DPI RESET</span>`;
+
+          const localHttpTag = t.local_http && t.local_http.success && t.local_http.status_code !== 0
+            ? `<span class="tag tag-ok">HTTP ${t.local_http.status_code} (${t.local_http.latency_ms}ms)</span>`
+            : `<span class="tag tag-fail">${t.local_http.error || '000 Timeout'}</span>`;
+
+          const vpsHttpTag = t.vps_http && t.vps_http.success && t.vps_http.status_code !== 0
+            ? `<span class="tag tag-ok">HTTP ${t.vps_http.status_code} (${t.vps_http.latency_ms}ms)</span>`
+            : `<span class="tag tag-fail">${t.vps_http.error || '000 Falla'}</span>`;
+
+          let verdictTag = `<span class="tag tag-ok">🟢 Libre en ambos</span>`;
+          if (t.verdict === "BLOQUEADA_LOCAL") {
+            verdictTag = `<span class="tag tag-fail">⚠️ Bloqueada en Local</span>`;
+          } else if (t.verdict === "INACCESIBLE_AMBOS") {
+            verdictTag = `<span class="tag tag-warn">🔴 Inaccesible en ambos</span>`;
+          }
+
+          const actionBtn = t.is_routed
+            ? `<span class="tag tag-ok" style="font-size: 11px;">Enrutada por VPN</span>`
+            : `<button class="btn btn-primary" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="routeSingleIp('${t.ip}', '${data.domain}')">⚡ Enrutar</button>`;
 
           return `
             <tr>
-              <td><strong style="font-family: var(--font-mono);">${t.ip}</strong></td>
+              <td><strong style="font-family: var(--font-mono); font-size: 13px;">${t.ip}</strong></td>
               <td>${pingTag}</td>
-              <td>${tcp80Tag}</td>
-              <td>${tcp443Tag}</td>
-              <td>${stateTag}</td>
+              <td>${tcpTag}</td>
+              <td>${tlsTag}</td>
+              <td>${localHttpTag}</td>
+              <td>${vpsHttpTag}</td>
+              <td>${verdictTag}</td>
+              <td>${actionBtn}</td>
             </tr>
           `;
         }).join('');
+      }
+    }
+
+    async function routeSingleIp(ip, domain) {
+      showToast(`Enrutando ${ip} por la VPN (tailscale0)...`);
+      try {
+        const res = await fetch("/api/routes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain, ips: [ip] })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`¡Ruta ${ip}/32 aplicada!`);
+          loadSystemRoutes();
+          runDeepDiagnostic();
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
       }
     }
 
