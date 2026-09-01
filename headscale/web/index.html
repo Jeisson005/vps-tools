@@ -3,369 +3,385 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Headscale VPN Dashboard</title>
+  <title>Headscale Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-base: #0f172a;
-      --bg-surface: #1e293b;
-      --bg-card: #1e293b;
-      --border: #334155;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --primary: #10b981;
-      --primary-hover: #059669;
-      --primary-dim: rgba(16, 185, 129, 0.15);
-      --accent: #3b82f6;
-      --danger: #ef4444;
-      --danger-dim: rgba(239, 68, 68, 0.15);
-      --warning: #f59e0b;
-      --radius: 10px;
+      --bg-primary: #09090b;
+      --bg-secondary: #121215;
+      --bg-card: #18181b;
+      --bg-input: #121215;
+      --border: #27272a;
+      --border-focus: #52525b;
+      --text: #fafafa;
+      --text-muted: #a1a1aa;
+      --text-dim: #71717a;
+      --accent: #27272a;
+      --accent-hover: #3f3f46;
+      --accent-soft: rgba(255, 255, 255, 0.06);
+      --success: #22c55e;
+      --success-soft: rgba(34, 197, 94, 0.12);
+      --error: #ef4444;
+      --error-soft: rgba(239, 68, 68, 0.12);
+      --radius: 6px;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Inter', sans-serif;
-      background-color: var(--bg-base);
-      color: var(--text-main);
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      -webkit-font-smoothing: antialiased;
     }
-    header {
-      background-color: var(--bg-surface);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 24px;
+
+    .top-nav {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 50;
+      padding: 0.85rem 2rem;
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
     }
-    .brand {
+    .nav-brand {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 0.75rem;
     }
-    .brand-icon {
-      width: 38px;
-      height: 38px;
-      background: linear-gradient(135deg, var(--primary), var(--accent));
-      border-radius: 8px;
+    .brand-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .brand-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      color: var(--text);
+    }
+    .nav-actions {
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      color: white;
-      font-size: 18px;
+      gap: 0.6rem;
     }
-    .brand-title { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
-    .brand-subtitle { font-size: 12px; color: var(--text-muted); }
-    .nav-actions { display: flex; align-items: center; gap: 12px; }
+
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
+      gap: 0.4rem;
+      padding: 0.45rem 0.85rem;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       border-radius: var(--radius);
-      border: 1px solid transparent;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
       cursor: pointer;
       transition: all 0.15s ease;
       font-family: inherit;
     }
-    .btn-primary { background: var(--primary); color: #000; }
-    .btn-primary:hover { background: var(--primary-hover); }
-    .btn-secondary { background: #334155; color: var(--text-main); border-color: #475569; }
-    .btn-secondary:hover { background: #475569; }
-    .btn-danger { background: var(--danger-dim); color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
-    .btn-danger:hover { background: var(--danger); color: #fff; }
-    .btn-icon { padding: 6px 10px; font-size: 12px; }
+    .btn:hover {
+      background: var(--accent-hover);
+      border-color: var(--border-focus);
+    }
+    .btn-primary {
+      background: #fafafa;
+      color: #09090b;
+      border-color: #fafafa;
+      font-weight: 600;
+    }
+    .btn-primary:hover {
+      background: #e4e4e7;
+      border-color: #e4e4e7;
+    }
+    .btn-danger {
+      background: var(--error-soft);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.25);
+    }
+    .btn-danger:hover {
+      background: var(--error);
+      color: #fff;
+    }
+    .btn-sm {
+      padding: 0.3rem 0.6rem;
+      font-size: 12px;
+    }
 
     main {
       flex: 1;
-      max-width: 1280px;
+      max-width: 1200px;
       width: 100%;
       margin: 0 auto;
-      padding: 24px;
+      padding: 2rem;
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      gap: 1.5rem;
     }
 
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-    }
-    .stat-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px;
+    .header-bar {
       display: flex;
-      flex-direction: column;
-      gap: 6px;
+      justify-content: space-between;
+      align-items: center;
     }
-    .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-value { font-size: 24px; font-weight: 700; color: var(--text-main); }
-    .stat-badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; width: fit-content; font-weight: 600; }
-    .badge-success { background: var(--primary-dim); color: var(--primary); }
-    .badge-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .page-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+    .page-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
 
     .tabs {
       display: flex;
+      gap: 0.4rem;
       border-bottom: 1px solid var(--border);
-      gap: 8px;
+      padding-bottom: -1px;
     }
-    .tab {
-      padding: 10px 18px;
+    .tab-btn {
+      padding: 0.5rem 0.9rem;
+      font-size: 13px;
+      font-weight: 500;
       color: var(--text-muted);
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
+      background: none;
+      border: none;
       border-bottom: 2px solid transparent;
+      cursor: pointer;
       transition: all 0.15s ease;
+      font-family: inherit;
     }
-    .tab.active {
-      color: var(--primary);
-      border-bottom-color: var(--primary);
+    .tab-btn:hover {
+      color: var(--text);
+    }
+    .tab-btn.active {
+      color: var(--text);
+      border-bottom-color: #fafafa;
+      font-weight: 600;
     }
 
     .card {
-      background: var(--bg-surface);
+      background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       overflow: hidden;
     }
-    .table-container { width: 100%; overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
     th {
-      background: #182234;
-      padding: 12px 16px;
-      color: var(--text-muted);
-      font-weight: 600;
-      border-bottom: 1px solid var(--border);
-      text-transform: uppercase;
+      background: var(--bg-secondary);
+      padding: 0.75rem 1rem;
+      color: var(--text-dim);
+      font-weight: 500;
       font-size: 11px;
+      text-transform: uppercase;
       letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
     }
     td {
-      padding: 14px 16px;
+      padding: 0.85rem 1rem;
       border-bottom: 1px solid var(--border);
-      vertical-align: middle;
+      color: var(--text);
     }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+    tr:hover td { background: var(--accent-soft); }
 
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-      margin-right: 6px;
-    }
-    .status-online { background: var(--primary); box-shadow: 0 0 8px var(--primary); }
-    .status-offline { background: #64748b; }
-
-    .ip-badge {
-      font-family: 'JetBrains Mono', monospace;
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       font-size: 12px;
-      background: #0f172a;
-      padding: 4px 8px;
-      border-radius: 6px;
-      border: 1px solid #334155;
-      color: #38bdf8;
-      display: inline-block;
-    }
-    .user-pill {
-      background: rgba(148, 163, 184, 0.15);
-      padding: 3px 8px;
-      border-radius: 6px;
       font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+    }
+    .badge-online {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+    .badge-offline {
+      background: var(--accent-soft);
+      color: var(--text-dim);
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .ip-text {
+      font-family: var(--font-mono);
       font-size: 12px;
+      color: var(--text-muted);
     }
 
     .modal-overlay {
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(4px);
       display: none;
       align-items: center;
       justify-content: center;
       z-index: 100;
-      padding: 20px;
+      padding: 1rem;
     }
     .modal {
-      background: var(--bg-surface);
+      background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 8px;
       width: 100%;
-      max-width: 480px;
-      padding: 24px;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      max-width: 440px;
+      padding: 1.5rem;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 1.25rem;
     }
     .modal-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 12px;
     }
-    .modal-title { font-size: 16px; font-weight: 700; }
-    .close-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 20px; }
+    .modal-title { font-size: 15px; font-weight: 600; }
+    .close-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; }
+    
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 0.4rem;
     }
-    label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
-    input, select {
-      background: #0f172a;
+    label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+    input {
+      background: var(--bg-input);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 12px;
-      color: var(--text-main);
+      border-radius: var(--radius);
+      padding: 0.55rem 0.75rem;
+      color: var(--text);
       font-size: 13px;
       outline: none;
       font-family: inherit;
     }
-    input:focus, select:focus { border-color: var(--primary); }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+    input:focus { border-color: var(--border-focus); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
 
     .toast {
       position: fixed;
       bottom: 24px;
       right: 24px;
-      background: #1e293b;
-      border: 1px solid var(--primary);
-      color: var(--text-main);
-      padding: 12px 20px;
-      border-radius: 8px;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 18px;
+      border-radius: var(--radius);
       font-size: 13px;
-      font-weight: 500;
       display: none;
       z-index: 200;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
     }
   </style>
 </head>
 <body>
 
-  <header>
-    <div class="brand">
-      <div class="brand-icon">HS</div>
-      <div>
-        <div class="brand-title">Headscale Mesh VPN</div>
-        <div class="brand-subtitle">v0.24.3 Control Plane • jeisson.top</div>
-      </div>
+  <nav class="top-nav">
+    <div class="nav-brand">
+      <span class="brand-title">Headscale Mesh</span>
+      <span class="brand-badge">v0.24.3</span>
     </div>
     <div class="nav-actions">
-      <button class="btn btn-secondary btn-icon" onclick="loadAllData()" title="Refrescar">🔄 Refrescar</button>
-      <button class="btn btn-primary" onclick="openRegisterModal()">➕ Registrar Dispositivo</button>
-      <button class="btn btn-secondary btn-icon" onclick="openSettingsModal()" title="API Config">⚙️ Config</button>
+      <button class="btn btn-sm" onclick="loadAllData()">Actualizar</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('registerModal')">+ Dispositivo</button>
     </div>
-  </header>
+  </nav>
 
   <main>
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Dispositivos Totales</div>
-        <div class="stat-value" id="stat-nodes">3</div>
-        <div class="stat-badge badge-success">Red Mesh Activa</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Usuarios</div>
-        <div class="stat-value" id="stat-users">1</div>
-        <div class="stat-badge badge-info">jeisson</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Exit Node (Salida VPS)</div>
-        <div class="stat-value" style="font-size: 18px; color: #38bdf8;">vps-server</div>
-        <div class="stat-badge badge-success">100.64.0.4</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Llave Maestra</div>
-        <div class="stat-value" style="font-size: 16px; color: #a855f7;">100 Años</div>
-        <div class="stat-badge badge-info">Válida hasta 2126</div>
+    <div class="header-bar">
+      <div>
+        <h1 class="page-title">Red Privada WireGuard</h1>
+        <p class="page-desc" id="mesh-summary">Cargando estado de la red...</p>
       </div>
     </div>
 
     <div class="tabs">
-      <div class="tab active" id="tab-btn-nodes" onclick="switchTab('nodes')">💻 Dispositivos (Nodes)</div>
-      <div class="tab" id="tab-btn-keys" onclick="switchTab('keys')">🔑 Pre-Auth Keys</div>
-      <div class="tab" id="tab-btn-users" onclick="switchTab('users')">👤 Usuarios</div>
+      <button class="tab-btn active" id="tab-btn-nodes" onclick="switchTab('nodes')">Dispositivos</button>
+      <button class="tab-btn" id="tab-btn-keys" onclick="switchTab('keys')">Pre-Auth Keys</button>
+      <button class="tab-btn" id="tab-btn-users" onclick="switchTab('users')">Usuarios</button>
     </div>
 
     <!-- NODES TAB -->
     <div id="tab-nodes" class="card">
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>Estado</th>
-              <th>Nombre</th>
-              <th>Hostname</th>
-              <th>IP VPN</th>
-              <th>Usuario</th>
-              <th>Última Conexión</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="nodes-table-body">
-            <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando dispositivos...</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Estado</th>
+            <th>Nombre</th>
+            <th>Hostname</th>
+            <th>IP Asignada</th>
+            <th>Usuario</th>
+            <th>Última Conexión</th>
+            <th style="text-align: right;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="nodes-tbody">
+          <tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 2rem;">Cargando dispositivos...</td></tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- PRE-AUTH KEYS TAB -->
+    <!-- KEYS TAB -->
     <div id="tab-keys" class="card" style="display: none;">
-      <div style="padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 14px; font-weight: 600;">Llaves de Pre-Autenticación Disponibles</span>
-        <button class="btn btn-primary btn-icon" onclick="createPreAuthKey()">➕ Generar Nueva Llave</button>
+      <div style="padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 13px; color: var(--text-muted);">Llaves de Registro Activas</span>
+        <button class="btn btn-sm" onclick="createPreAuthKey()">Generar Llave</button>
       </div>
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Llave (Pre-Auth Key)</th>
-              <th>Reutilizable</th>
-              <th>Expiración</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="keys-table-body">
-            <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando llaves...</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Pre-Auth Key</th>
+            <th>Tipo</th>
+            <th>Expiración</th>
+            <th style="text-align: right;">Acción</th>
+          </tr>
+        </thead>
+        <tbody id="keys-tbody">
+          <tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 2rem;">Cargando llaves...</td></tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- USERS TAB -->
     <div id="tab-users" class="card" style="display: none;">
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Usuario</th>
-              <th>Creado</th>
-            </tr>
-          </thead>
-          <tbody id="users-table-body">
-            <tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando usuarios...</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nombre de Usuario</th>
+            <th>Fecha de Creación</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr><td colspan="3" style="text-align: center; color: var(--text-dim); padding: 2rem;">Cargando usuarios...</td></tr>
+        </tbody>
+      </table>
     </div>
   </main>
 
@@ -373,21 +389,19 @@
   <div class="modal-overlay" id="registerModal">
     <div class="modal">
       <div class="modal-header">
-        <div class="modal-title">Registrar Nuevo Dispositivo</div>
+        <div class="modal-title">Registrar Dispositivo</div>
         <button class="close-btn" onclick="closeModal('registerModal')">&times;</button>
       </div>
       <div class="form-group">
         <label>Usuario</label>
-        <select id="regUser">
-          <option value="jeisson">jeisson</option>
-        </select>
+        <input type="text" id="regUser" value="jeisson" readonly style="opacity: 0.8;" />
       </div>
       <div class="form-group">
-        <label>Machine Key (mkey:...)</label>
+        <label>Machine Key</label>
         <input type="text" id="regKey" placeholder="mkey:74f301da8c23..." />
       </div>
       <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="closeModal('registerModal')">Cancelar</button>
+        <button class="btn" onclick="closeModal('registerModal')">Cancelar</button>
         <button class="btn btn-primary" onclick="submitRegister()">Registrar</button>
       </div>
     </div>
@@ -402,93 +416,51 @@
       </div>
       <input type="hidden" id="renameNodeId" />
       <div class="form-group">
-        <label>Nuevo Nombre del Dispositivo</label>
-        <input type="text" id="renameNewName" placeholder="Ej: poco, laptop-trabajo" />
+        <label>Nuevo Nombre</label>
+        <input type="text" id="renameNewName" placeholder="poco, laptop, etc." />
       </div>
       <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="closeModal('renameModal')">Cancelar</button>
-        <button class="btn btn-primary" onclick="submitRename()">Guardar Nombre</button>
+        <button class="btn" onclick="closeModal('renameModal')">Cancelar</button>
+        <button class="btn btn-primary" onclick="submitRename()">Guardar</button>
       </div>
     </div>
   </div>
 
-  <!-- SETTINGS MODAL -->
-  <div class="modal-overlay" id="settingsModal">
-    <div class="modal">
-      <div class="modal-header">
-        <div class="modal-title">Configuración de API Headscale</div>
-        <button class="close-btn" onclick="closeModal('settingsModal')">&times;</button>
-      </div>
-      <div class="form-group">
-        <label>Headscale URL</label>
-        <input type="text" id="cfgUrl" value="https://headscale.jeisson.top" />
-      </div>
-      <div class="form-group">
-        <label>Headscale API Key</label>
-        <input type="text" id="cfgKey" placeholder="LtCh2Hr6xQ..." />
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="closeModal('settingsModal')">Cerrar</button>
-        <button class="btn btn-primary" onclick="saveSettings()">Guardar y Conectar</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="toast" class="toast">Mensaje</div>
+  <div id="toast" class="toast">Notificación</div>
 
   <script>
-    const DEFAULT_KEY = "***REMOVED***";
-    const DEFAULT_URL = "https://headscale.jeisson.top";
-
-    function getApiKey() {
-      return localStorage.getItem("hs_api_key") || DEFAULT_KEY;
-    }
-    function getApiUrl() {
-      return localStorage.getItem("hs_api_url") || DEFAULT_URL;
-    }
+    const API_KEY = "***REMOVED***";
+    const API_BASE = window.location.origin;
 
     function showToast(msg) {
       const t = document.getElementById("toast");
       t.innerText = msg;
       t.style.display = "block";
-      setTimeout(() => { t.style.display = "none"; }, 3500);
+      setTimeout(() => { t.style.display = "none"; }, 3000);
     }
 
     function switchTab(tab) {
       ['nodes', 'keys', 'users'].forEach(t => {
         document.getElementById(`tab-${t}`).style.display = t === tab ? 'block' : 'none';
-        document.getElementById(`tab-btn-${t}`).className = t === tab ? 'tab active' : 'tab';
+        document.getElementById(`tab-btn-${t}`).className = t === tab ? 'tab-btn active' : 'tab-btn';
       });
     }
 
     function openModal(id) { document.getElementById(id).style.display = "flex"; }
     function closeModal(id) { document.getElementById(id).style.display = "none"; }
-    function openRegisterModal() { openModal('registerModal'); }
-    function openSettingsModal() {
-      document.getElementById("cfgUrl").value = getApiUrl();
-      document.getElementById("cfgKey").value = getApiKey();
-      openModal('settingsModal');
-    }
-    function saveSettings() {
-      localStorage.setItem("hs_api_url", document.getElementById("cfgUrl").value.trim());
-      localStorage.setItem("hs_api_key", document.getElementById("cfgKey").value.trim());
-      closeModal('settingsModal');
-      showToast("Configuración guardada");
-      loadAllData();
-    }
 
     async function apiRequest(endpoint, method = "GET", body = null) {
-      const url = `${getApiUrl()}/api/v1/${endpoint}`;
-      const headers = {
-        "Authorization": `Bearer ${getApiKey()}`,
-        "Content-Type": "application/json"
+      const url = `${API_BASE}/api/v1/${endpoint}`;
+      const opt = {
+        method,
+        headers: {
+          "Authorization": `Bearer ${API_KEY}`,
+          "Content-Type": "application/json"
+        }
       };
-      const opt = { method, headers };
       if (body) opt.body = JSON.stringify(body);
       const res = await fetch(url, opt);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-      }
+      if (!res.ok) throw new Error(`Error HTTP ${res.status}`);
       return await res.json();
     }
 
@@ -502,38 +474,40 @@
       try {
         const data = await apiRequest("node");
         const nodes = data.nodes || [];
-        document.getElementById("stat-nodes").innerText = nodes.length;
-        const tbody = document.getElementById("nodes-table-body");
+        const onlineCount = nodes.filter(n => n.online).length;
+        document.getElementById("mesh-summary").innerText = `${nodes.length} dispositivos registrados • ${onlineCount} conectados ahora`;
+        const tbody = document.getElementById("nodes-tbody");
         if (nodes.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">No hay dispositivos registrados</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 2rem;">No hay dispositivos registrados</td></tr>`;
           return;
         }
         tbody.innerHTML = nodes.map(n => {
           const isOnline = n.online || false;
-          const ip = (n.ipAddresses && n.ipAddresses[0]) ? n.ipAddresses[0] : 'N/A';
-          const givenName = n.givenName || n.name || 'Sin nombre';
-          const lastSeen = n.lastSeen ? new Date(n.lastSeen).toLocaleString('es-CO') : 'Reciente';
+          const ip = (n.ipAddresses && n.ipAddresses[0]) ? n.ipAddresses[0] : '-';
+          const name = n.givenName || n.name || '-';
+          const lastSeen = n.lastSeen ? new Date(n.lastSeen).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : 'Reciente';
           const user = (n.user && n.user.name) ? n.user.name : (n.user || 'jeisson');
           return `
             <tr>
-              <td><span class="status-dot ${isOnline ? 'status-online' : 'status-offline'}"></span>${isOnline ? 'Online' : 'Offline'}</td>
-              <td><strong>${givenName}</strong></td>
-              <td style="color: var(--text-muted);">${n.name || n.hostname || '-'}</td>
-              <td><span class="ip-badge">${ip}</span></td>
-              <td><span class="user-pill">${user}</span></td>
-              <td style="color: var(--text-muted); font-size: 12px;">${lastSeen}</td>
               <td>
-                <div style="display: flex; gap: 6px;">
-                  <button class="btn btn-secondary btn-icon" onclick="openRenameModal('${n.id}', '${givenName}')" title="Renombrar">✏️</button>
-                  <button class="btn btn-danger btn-icon" onclick="deleteNode('${n.id}', '${givenName}')" title="Eliminar">🗑️</button>
-                </div>
+                <span class="badge ${isOnline ? 'badge-online' : 'badge-offline'}">
+                  <span class="dot"></span>${isOnline ? 'online' : 'offline'}
+                </span>
+              </td>
+              <td><strong>${name}</strong></td>
+              <td style="color: var(--text-dim);">${n.name || n.hostname || '-'}</td>
+              <td><span class="ip-text">${ip}</span></td>
+              <td style="color: var(--text-muted);">${user}</td>
+              <td style="color: var(--text-dim); font-size: 12px;">${lastSeen}</td>
+              <td style="text-align: right;">
+                <button class="btn btn-sm" onclick="openRenameModal('${n.id}', '${name}')">Renombrar</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteNode('${n.id}', '${name}')">Eliminar</button>
               </td>
             </tr>
           `;
         }).join('');
       } catch (err) {
-        console.error(err);
-        document.getElementById("nodes-table-body").innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger); padding: 24px;">Error al cargar dispositivos: ${err.message}</td></tr>`;
+        document.getElementById("nodes-tbody").innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--error); padding: 2rem;">Error al cargar dispositivos: ${err.message}</td></tr>`;
       }
     }
 
@@ -541,21 +515,21 @@
       try {
         const data = await apiRequest("preauthkey?user=jeisson");
         const keys = data.preAuthKeys || [];
-        const tbody = document.getElementById("keys-table-body");
+        const tbody = document.getElementById("keys-tbody");
         if (keys.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">No hay llaves registradas</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 2rem;">No hay llaves activas</td></tr>`;
           return;
         }
         tbody.innerHTML = keys.map(k => {
           const exp = k.expiration ? new Date(k.expiration).toLocaleDateString('es-CO') : 'Permanente';
           return `
             <tr>
-              <td>${k.id}</td>
-              <td><code class="ip-badge" style="color: #a855f7;">${k.key}</code></td>
-              <td><span class="stat-badge ${k.reusable ? 'badge-success' : 'badge-info'}">${k.reusable ? 'Reutilizable' : '1 solo uso'}</span></td>
-              <td>${exp}</td>
-              <td>
-                <button class="btn btn-secondary btn-icon" onclick="navigator.clipboard.writeText('${k.key}'); showToast('Llave copiada al portapapeles!');">📋 Copiar</button>
+              <td style="color: var(--text-dim);">${k.id}</td>
+              <td><span class="ip-text">${k.key}</span></td>
+              <td style="color: var(--text-muted);">${k.reusable ? 'Reutilizable' : '1 uso'}</td>
+              <td style="color: var(--text-dim);">${exp}</td>
+              <td style="text-align: right;">
+                <button class="btn btn-sm" onclick="navigator.clipboard.writeText('${k.key}'); showToast('Llave copiada');">Copiar</button>
               </td>
             </tr>
           `;
@@ -569,13 +543,12 @@
       try {
         const data = await apiRequest("user");
         const users = data.users || [];
-        document.getElementById("stat-users").innerText = users.length;
-        const tbody = document.getElementById("users-table-body");
+        const tbody = document.getElementById("users-tbody");
         tbody.innerHTML = users.map(u => `
           <tr>
-            <td>${u.id}</td>
+            <td style="color: var(--text-dim);">${u.id}</td>
             <td><strong>${u.name}</strong></td>
-            <td>${new Date(u.createdAt).toLocaleDateString('es-CO')}</td>
+            <td style="color: var(--text-dim);">${new Date(u.createdAt).toLocaleDateString('es-CO')}</td>
           </tr>
         `).join('');
       } catch (err) {
@@ -599,18 +572,18 @@
         showToast(`Dispositivo renombrado a ${newName}`);
         loadNodes();
       } catch (err) {
-        alert("Error al renombrar: " + err.message);
+        alert("Error: " + err.message);
       }
     }
 
     async function deleteNode(id, name) {
-      if (!confirm(`¿Estás seguro de eliminar el dispositivo "${name}" de tu red VPN?`)) return;
+      if (!confirm(`¿Eliminar "${name}" de la red VPN?`)) return;
       try {
         await apiRequest(`node/${id}`, "DELETE");
-        showToast(`Dispositivo eliminado`);
+        showToast("Dispositivo eliminado");
         loadNodes();
       } catch (err) {
-        alert("Error al eliminar: " + err.message);
+        alert("Error: " + err.message);
       }
     }
 
@@ -621,11 +594,11 @@
       try {
         await apiRequest(`node/register?user=${user}&key=${encodeURIComponent(key)}`, "POST");
         closeModal("registerModal");
-        showToast("¡Dispositivo registrado exitosamente!");
+        showToast("Dispositivo registrado");
         document.getElementById("regKey").value = "";
         loadNodes();
       } catch (err) {
-        alert("Error al registrar: " + err.message);
+        alert("Error: " + err.message);
       }
     }
 
@@ -644,7 +617,6 @@
       }
     }
 
-    // Initial Load
     loadAllData();
   </script>
 </body>
