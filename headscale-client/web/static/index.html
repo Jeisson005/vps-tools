@@ -596,40 +596,66 @@
     <!-- TAB 3: CREDENTIALS & CONNECTION SETUP -->
     <div id="tab-config" class="tab-content">
       <div>
-        <h2 class="section-title">Credenciales y Configuración de Conexión</h2>
-        <p class="section-desc">Configura el servidor Headscale y la clave de autenticación para registrar o reconectar este equipo.</p>
+        <h2 class="section-title">Configuración del Cliente & Dominios Personalizados</h2>
+        <p class="section-desc">Administra los parámetros de conexión de Headscale y gestiona la lista de dominios personalizados.</p>
       </div>
 
-      <div class="card" style="max-width: 700px;">
-        <div class="card-header">
-          <span style="font-size: 14px; font-weight: 600;">Parámetros del Cliente (.env)</span>
-          <span class="brand-badge">Persistente</span>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Servidor Headscale (Control Server URL):</label>
-          <input type="text" id="cfg-server" placeholder="https://headscale.jeisson.top" />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Pre-Auth Key / Llave de Registro:</label>
-          <input type="password" id="cfg-key" placeholder="ccf3d9a6b227d5f4ae3a9dfdc0eab8ad..." />
-        </div>
-
-        <div class="grid-2" style="gap: 0.75rem;">
-          <div class="form-group">
-            <label class="form-label">Hostname del Dispositivo:</label>
-            <input type="text" id="cfg-host" placeholder="jeisson-laptop" />
+      <div class="grid-2">
+        <!-- Client Settings Card -->
+        <div class="card">
+          <div class="card-header">
+            <span style="font-size: 14px; font-weight: 600;">Parámetros del Cliente (.env)</span>
+            <span class="brand-badge">Persistente</span>
           </div>
+
           <div class="form-group">
-            <label class="form-label">Exit Node Predeterminado (VPS):</label>
-            <input type="text" id="cfg-exit" placeholder="100.64.0.4" />
+            <label class="form-label">Servidor Headscale (Control Server URL):</label>
+            <input type="text" id="cfg-server" placeholder="https://headscale.jeisson.top" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Pre-Auth Key / Llave de Registro:</label>
+            <input type="password" id="cfg-key" placeholder="ccf3d9a6b227d5f4ae3a9dfdc0eab8ad..." />
+          </div>
+
+          <div class="grid-2" style="gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label">Hostname del Dispositivo:</label>
+              <input type="text" id="cfg-host" placeholder="jeisson-laptop" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Exit Node Predeterminado (VPS):</label>
+              <input type="text" id="cfg-exit" placeholder="100.64.0.4" />
+            </div>
+          </div>
+
+          <div class="btn-group" style="margin-top: 0.5rem;">
+            <button class="btn" onclick="saveConfigOnly()">Guardar Parámetros</button>
+            <button class="btn btn-primary" onclick="saveAndConnect()">Guardar y Conectar Ahora</button>
           </div>
         </div>
 
-        <div class="btn-group" style="margin-top: 0.5rem;">
-          <button class="btn" onclick="saveConfigOnly()">Guardar Parámetros</button>
-          <button class="btn btn-primary" onclick="saveAndConnect()">Guardar y Conectar Ahora</button>
+        <!-- Custom Domains Manager Card -->
+        <div class="card">
+          <div class="card-header">
+            <span style="font-size: 14px; font-weight: 600;">Dominios Personalizados</span>
+            <span id="custom-domains-badge" class="brand-badge">0 dominios</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+            Agrega tus dominios privados o empresariales para que sean incluidos en los diagnósticos y reglas.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label">Nuevo Dominio:</label>
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="text" id="new-custom-domain" placeholder="ej: passbolt.midominio.top" style="flex: 1;" onkeypress="if(event.key==='Enter') addCustomDomain()" />
+              <button class="btn btn-primary" style="flex: 0 0 auto;" onclick="addCustomDomain()">+ Agregar</button>
+            </div>
+          </div>
+
+          <div class="meta-list" id="custom-domains-list" style="max-height: 220px; overflow-y: auto; margin-top: 0.25rem;">
+            <div class="meta-row"><span>Cargando dominios personalizados...</span></div>
+          </div>
         </div>
       </div>
     </div>
@@ -713,6 +739,34 @@
       </div>
     </div>
   </main>
+
+  <!-- SwitchyOmega Rules Modal Dialog -->
+  <div id="rules-modal" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 500; padding: 1.5rem;">
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); width: 100%; max-width: 650px; display: flex; flex-direction: column; gap: 1rem; padding: 1.5rem; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 16px; font-weight: 600;">📋 Reglas SwitchyOmega para Sitios Bloqueados</span>
+          <span id="modal-rules-count" class="brand-badge">0 reglas</span>
+        </div>
+        <button class="btn" style="padding: 4px 8px; font-size: 12px; flex: 0 0 auto;" onclick="closeRulesModal()">✕</button>
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+        Copia el texto a continuación y pégalo en <strong>"Edit source code"</strong> de tu perfil <code>auto switch</code> en ZeroOmega / SwitchyOmega:
+      </p>
+
+      <textarea id="modal-rules-textarea" readonly style="width: 100%; height: 260px; font-family: var(--font-mono); font-size: 12px; background: var(--bg-primary); color: #22c55e; border: 1px solid var(--border); padding: 0.75rem; border-radius: var(--radius); resize: vertical; outline: none;"></textarea>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <div class="btn-group" style="flex: 1;">
+          <button class="btn btn-primary" onclick="copyFromModal()">📋 Copiar al Portapapeles</button>
+          <button class="btn" onclick="selectModalTextarea()">Seleccionar Todo</button>
+          <button class="btn" onclick="downloadBlockedRules()">💾 Descargar (.txt)</button>
+        </div>
+        <button class="btn" style="flex: 0 0 auto;" onclick="closeRulesModal()">Cerrar</button>
+      </div>
+    </div>
+  </div>
 
   <div id="toast" class="toast">Notificación</div>
 
@@ -805,52 +859,61 @@
       return { text: lines.join("\n"), count: sorted.length };
     }
 
+    function openRulesModal(text, count) {
+      const modal = document.getElementById("rules-modal");
+      const textarea = document.getElementById("modal-rules-textarea");
+      const badge = document.getElementById("modal-rules-count");
+      
+      if (textarea) textarea.value = text;
+      if (badge) badge.innerText = `${count} reglas`;
+      if (modal) modal.style.display = "flex";
+
+      setTimeout(() => {
+        if (textarea) {
+          textarea.focus();
+          textarea.select();
+        }
+      }, 50);
+
+      // Attempt immediate copy
+      copyToClipboard(text);
+    }
+
+    function closeRulesModal() {
+      const modal = document.getElementById("rules-modal");
+      if (modal) modal.style.display = "none";
+    }
+
+    function selectModalTextarea() {
+      const textarea = document.getElementById("modal-rules-textarea");
+      if (textarea) {
+        textarea.focus();
+        textarea.select();
+        showToast("Texto seleccionado");
+      }
+    }
+
+    function copyFromModal() {
+      const textarea = document.getElementById("modal-rules-textarea");
+      if (textarea) {
+        textarea.focus();
+        textarea.select();
+        const success = copyToClipboard(textarea.value);
+        if (success) showToast("¡Reglas copiadas al portapapeles!");
+        else showToast("Texto seleccionado. Usa Ctrl+C");
+      }
+    }
+
     async function copyBlockedRules() {
       if (!lastDiagnosticResults || lastDiagnosticResults.length === 0) {
         showToast("Ejecutando diagnóstico para obtener sitios bloqueados...");
         await runDiagnostics();
       }
       const { text, count } = getDiagnosedBlockedRulesText();
-      
-      const previewContainer = document.getElementById("rules-preview-container");
-      const previewTextarea = document.getElementById("blocked-rules-preview");
-      if (previewContainer && previewTextarea) {
-        previewTextarea.value = text;
-        previewContainer.style.display = "flex";
-      }
-
-      if (count === 0) {
-        showToast("🟢 No se detectaron sitios bloqueados.");
-        return;
-      }
-
-      const success = await copyToClipboard(text);
-      if (success) {
-        showToast(`¡${count} reglas de webs bloqueadas copiadas al portapapeles!`);
-      } else {
-        if (previewTextarea) {
-          previewTextarea.focus();
-          previewTextarea.select();
-        }
-        showToast(`Reglas listas abajo. Usa Ctrl+C para copiar.`);
-      }
-    }
-
-    function selectAndCopyPreview() {
-      const previewTextarea = document.getElementById("blocked-rules-preview");
-      if (previewTextarea && previewTextarea.value) {
-        previewTextarea.focus();
-        previewTextarea.select();
-        document.execCommand("copy");
-        showToast("¡Texto seleccionado y copiado!");
-      }
+      openRulesModal(text, count);
     }
 
     function downloadBlockedRules() {
-      if (!lastDiagnosticResults || lastDiagnosticResults.length === 0) {
-        showToast("⚠️ Primero haz clic en 'Ejecutar Diagnóstico Completo' para evaluar tus webs.");
-        return;
-      }
       const { text, count } = getDiagnosedBlockedRulesText();
       if (count === 0) {
         showToast("🟢 No se detectaron sitios bloqueados en el diagnóstico.");
@@ -872,7 +935,80 @@
       }
     }
 
+    async function loadCustomDomains() {
+      const listEl = document.getElementById("custom-domains-list");
+      const badgeEl = document.getElementById("custom-domains-badge");
+      try {
+        const res = await fetch("/api/custom-domains");
+        const data = await res.json();
+        const domains = data.domains || [];
+        
+        if (badgeEl) badgeEl.innerText = `${domains.length} dominios`;
+        if (domains.length === 0) {
+          listEl.innerHTML = `<div class="meta-row"><span style="color: var(--text-dim);">No hay dominios personalizados registrados.</span></div>`;
+          return;
+        }
+
+        listEl.innerHTML = domains.map(d => `
+          <div class="meta-row" style="padding: 6px 0; border-bottom: 1px solid var(--border); align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">${d.domain}</strong>
+              ${d.name && d.name !== d.domain ? `<span style="color: var(--text-dim); font-size: 11px; margin-left: 4px;">(${d.name})</span>` : ''}
+              <span class="brand-badge" style="font-size: 10px; margin-left: 6px;">${d.category}</span>
+            </div>
+            <button class="btn btn-danger" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="deleteCustomDomain('${d.domain}')">🗑️ Eliminar</button>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+        listEl.innerHTML = `<div class="meta-row"><span style="color: var(--error);">Error al cargar dominios.</span></div>`;
+      }
+    }
+
+    async function addCustomDomain() {
+      const input = document.getElementById("new-custom-domain");
+      const domain = input.value.trim();
+      if (!domain) return;
+
+      showToast(`Guardando ${domain}...`);
+      try {
+        const res = await fetch("/api/custom-domains", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain })
+        });
+        const data = await res.json();
+        if (data.success) {
+          input.value = "";
+          showToast(`Dominio ${domain} agregado`);
+          loadCustomDomains();
+        } else {
+          alert("Error: " + data.message);
+        }
+      } catch (err) {
+        alert("Error al agregar dominio: " + err.message);
+      }
+    }
+
+    async function deleteCustomDomain(domain) {
+      if (!confirm(`¿Eliminar ${domain} de dominios personalizados?`)) return;
+      showToast(`Eliminando ${domain}...`);
+      try {
+        const res = await fetch(`/api/custom-domains/${encodeURIComponent(domain)}`, {
+          method: "DELETE"
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Dominio ${domain} eliminado`);
+          loadCustomDomains();
+        }
+      } catch (err) {
+        alert("Error al eliminar: " + err.message);
+      }
+    }
+
     async function loadConfig() {
+      loadCustomDomains();
       try {
         const res = await fetch("/api/config");
         const data = await res.json();
