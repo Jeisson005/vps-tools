@@ -32,6 +32,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const { mergeAndWriteContext } = require('./context-merge');
 
 // 1. Resolve environment variables
 const homeDir = os.homedir();
@@ -216,8 +217,8 @@ async function syncAndReleaseSession(sessionId) {
       const ctx = await apiRequest(`/v1/sessions/${sessionId}/context`, 'GET');
       if (ctx && typeof ctx === 'object' && (ctx.cookies || ctx.localStorage)) {
         ensureDirSync(PERSISTENT_DIR);
-        fs.writeFileSync(PERSISTENT_CONTEXT_FILE, JSON.stringify(ctx, null, 2), 'utf8');
-        console.error(`[steel-mcp] Saved ${ctx.cookies ? ctx.cookies.length : 0} cookies to persistent storage.`);
+        const merged = mergeAndWriteContext(PERSISTENT_CONTEXT_FILE, ctx);
+        console.error(`[steel-mcp] Merged ${ctx.cookies ? ctx.cookies.length : 0} cookies into persistent storage (${merged.cookies ? merged.cookies.length : 0} total).`);
       }
     }
   } catch (e) {

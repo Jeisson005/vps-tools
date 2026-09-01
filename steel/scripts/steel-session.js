@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const http = require('http');
+const { mergeAndWriteContext } = require('./context-merge');
 
 // Setup module search paths if needed
 const homeDir = os.homedir();
@@ -202,11 +203,11 @@ async function syncSession(sessionId) {
     const ctx = await apiRequest(`/v1/sessions/${sessionId}/context`, 'GET');
     if (ctx && typeof ctx === 'object' && (ctx.cookies || ctx.localStorage)) {
       ensureDirSync(PERSISTENT_DIR);
-      fs.writeFileSync(PERSISTENT_CONTEXT_FILE, JSON.stringify(ctx, null, 2), 'utf8');
+      const merged = mergeAndWriteContext(PERSISTENT_CONTEXT_FILE, ctx);
       console.log(JSON.stringify({
         success: true,
-        message: `Context for session ${sessionId} synced to persistent storage.`,
-        cookiesCount: ctx.cookies ? ctx.cookies.length : 0,
+        message: `Context for session ${sessionId} merged into persistent storage.`,
+        cookiesCount: merged.cookies ? merged.cookies.length : 0,
         path: PERSISTENT_CONTEXT_FILE
       }, null, 2));
     } else {
@@ -225,7 +226,7 @@ async function releaseSession(sessionId, syncFirst = true) {
       const ctx = await apiRequest(`/v1/sessions/${sessionId}/context`, 'GET');
       if (ctx && typeof ctx === 'object' && (ctx.cookies || ctx.localStorage)) {
         ensureDirSync(PERSISTENT_DIR);
-        fs.writeFileSync(PERSISTENT_CONTEXT_FILE, JSON.stringify(ctx, null, 2), 'utf8');
+        mergeAndWriteContext(PERSISTENT_CONTEXT_FILE, ctx);
       }
     } catch (e) {}
   }
