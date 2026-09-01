@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "ip": "88.222.222.0",
+    "domain": "passbolt.articc.top",
+    "created_at": "2026-09-01 20:44:22",
+    "is_active": true
+  }
+]
