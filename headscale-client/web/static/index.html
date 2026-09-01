@@ -70,7 +70,7 @@
       letter-spacing: -0.2px;
     }
 
-    /* Tabs Header */
+    /* Tabs Bar */
     .tabs-bar {
       display: flex;
       gap: 0.5rem;
@@ -134,7 +134,6 @@
       margin-bottom: 1rem;
     }
 
-    /* Grid Layouts */
     .grid-2 {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -296,7 +295,6 @@
       width: 100%;
     }
 
-    /* Results Table */
     .card-table {
       background: var(--bg-card);
       border: 1px solid var(--border);
@@ -403,7 +401,7 @@
 </head>
 <body>
 
-  <!-- Top Brand Navigation -->
+  <!-- Top Navigation -->
   <nav class="top-nav">
     <div class="nav-brand">
       <span class="brand-title">Headscale Client Manager</span>
@@ -417,30 +415,30 @@
     <button class="tab-btn active" onclick="switchTab('tab-vpn')">
       <span>🌐</span> Control & Malla VPN
     </button>
+    <button class="tab-btn" onclick="switchTab('tab-proxy')">
+      <span>⚡</span> Proxy SOCKS5 (:1080)
+    </button>
     <button class="tab-btn" onclick="switchTab('tab-config')">
       <span>⚙️</span> Credenciales & Conexión
     </button>
-    <button class="tab-btn" onclick="switchTab('tab-system')">
-      <span>⚡</span> Proxy SOCKS5 & Inicio Automático
-    </button>
     <button class="tab-btn" onclick="switchTab('tab-diag')">
-      <span>🔍</span> Diagnóstico de Bloqueos
+      <span>🔍</span> Diagnóstico de Red
     </button>
   </div>
 
   <main>
-    <!-- TAB 1: VPN & MESH CONTROL -->
+    <!-- TAB 1: VPN CONTROL & MESH -->
     <div id="tab-vpn" class="tab-content active">
       <div>
         <h2 class="section-title">Control de Tailscale VPN</h2>
-        <p class="section-desc">Gestiona la conexión y alterna entre Modo Malla (Red privada) y Túnel Completo (Exit Node).</p>
+        <p class="section-desc">Gestiona la conexión, el modo de enrutamiento y el inicio automático con el sistema operativo.</p>
       </div>
 
       <div class="grid-2">
         <!-- Client Status Card -->
         <div class="card">
           <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Estado del Cliente</span>
+            <span style="font-size: 14px; font-weight: 600;">Estado de la VPN</span>
             <span id="vpn-status-pill" class="status-badge status-offline">
               <span class="status-dot"></span><span id="vpn-status-text">Cargando...</span>
             </span>
@@ -483,6 +481,24 @@
         </div>
       </div>
 
+      <!-- VPN Autostart Card (Directly in VPN Tab) -->
+      <div class="card">
+        <div class="card-header">
+          <span style="font-size: 14px; font-weight: 600;">Inicio Automático de la VPN al Arrancar Linux</span>
+          <span id="vpn-autostart-pill" class="status-badge status-offline">
+            <span class="status-dot"></span><span id="vpn-autostart-text">Cargando...</span>
+          </span>
+        </div>
+        <div class="meta-list">
+          <div class="meta-row"><span>Servicio del Sistema:</span><span class="meta-val">tailscaled.service</span></div>
+          <div class="meta-row"><span>Estado de Arranque:</span><span id="vpn-autostart-val" class="meta-val">-</span></div>
+        </div>
+        <div class="btn-group" style="max-width: 420px;">
+          <button class="btn btn-primary" id="btn-vpn-auto-enable" onclick="toggleVpnAutostart(true)">Habilitar al Iniciar</button>
+          <button class="btn btn-danger" id="btn-vpn-auto-disable" onclick="toggleVpnAutostart(false)">Deshabilitar</button>
+        </div>
+      </div>
+
       <!-- Mesh Peers Card -->
       <div class="card">
         <div class="card-header">
@@ -495,11 +511,63 @@
       </div>
     </div>
 
-    <!-- TAB 2: CREDENTIALS & INITIAL SETUP -->
+    <!-- TAB 2: PROXY SOCKS5 (SPLIT TUNNELING) -->
+    <div id="tab-proxy" class="tab-content">
+      <div>
+        <h2 class="section-title">Proxy Nativo SOCKS5 (:1080)</h2>
+        <p class="section-desc">Permite enrutar selectivamente dominios en tu navegador (Split Tunneling) sin desviar el resto de tu internet.</p>
+      </div>
+
+      <div class="grid-2">
+        <!-- SOCKS5 Status & Controls Card -->
+        <div class="card">
+          <div class="card-header">
+            <span style="font-size: 14px; font-weight: 600;">Estado del Proxy SOCKS5</span>
+            <span id="proxy-status-pill" class="status-badge status-offline">
+              <span class="status-dot"></span><span id="proxy-status-text">Cargando...</span>
+            </span>
+          </div>
+
+          <div class="meta-list">
+            <div class="meta-row"><span>Servidor Proxy:</span><span class="meta-val">127.0.0.1:1080 (SOCKS5)</span></div>
+            <div class="meta-row"><span>Inicio al arrancar Linux:</span><span id="proxy-autostart-val" class="meta-val">-</span></div>
+            <div class="meta-row"><span>Motor:</span><span class="meta-val">tailscaled native</span></div>
+          </div>
+
+          <div class="form-group" style="margin-top: 0.5rem;">
+            <label class="form-label">Arranque del Proxy con Linux:</label>
+            <div class="btn-group">
+              <button class="btn btn-primary" id="btn-proxy-enable" onclick="toggleProxyAutostart(true)">Habilitar al Iniciar</button>
+              <button class="btn btn-danger" id="btn-proxy-disable" onclick="toggleProxyAutostart(false)">Deshabilitar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Extension Setup Guide Card -->
+        <div class="card">
+          <div class="card-header">
+            <span style="font-size: 14px; font-weight: 600;">Configuración en Extensiones (ZeroOmega / SwitchyOmega)</span>
+            <span class="brand-badge">Split Tunneling</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+            1. En la extensión, crea un perfil tipo <strong>SOCKS5</strong> con:
+          </p>
+          <div class="code-box">
+            <span>Host: 127.0.0.1 | Puerto: 1080</span>
+            <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="copyText('127.0.0.1:1080')">Copiar</button>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+            2. En el perfil <strong>Auto Switch</strong>, añade las reglas para los dominios que quieras desviar por el VPS (ej: <code>*.netflix.com</code>, <code>*.xvideos.com</code>). El resto de sitios navegarán directo por tu conexión habitual.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: CREDENTIALS & CONNECTION SETUP -->
     <div id="tab-config" class="tab-content">
       <div>
         <h2 class="section-title">Credenciales y Configuración de Conexión</h2>
-        <p class="section-desc">Configura el servidor Headscale y tu clave de autenticación para registrar o reconectar este equipo.</p>
+        <p class="section-desc">Configura el servidor Headscale y la clave de autenticación para registrar o reconectar este equipo.</p>
       </div>
 
       <div class="card" style="max-width: 700px;">
@@ -533,75 +601,6 @@
           <button class="btn" onclick="saveConfigOnly()">Guardar Parámetros</button>
           <button class="btn btn-primary" onclick="saveAndConnect()">Guardar y Conectar Ahora</button>
         </div>
-      </div>
-    </div>
-
-    <!-- TAB 3: SOCKS5 PROXY & AUTOSTART -->
-    <div id="tab-system" class="tab-content">
-      <div>
-        <h2 class="section-title">Proxy SOCKS5 & Inicio Automático con Linux</h2>
-        <p class="section-desc">Administra el Proxy SOCKS5 nativo de Tailscale en el puerto 1080 y la persistencia de servicios al arrancar el sistema.</p>
-      </div>
-
-      <div class="grid-2">
-        <!-- SOCKS5 Proxy Card -->
-        <div class="card">
-          <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Proxy SOCKS5 Nativo (:1080)</span>
-            <span id="proxy-status-pill" class="status-badge status-offline">
-              <span class="status-dot"></span><span id="proxy-status-text">Cargando...</span>
-            </span>
-          </div>
-
-          <div class="meta-list">
-            <div class="meta-row"><span>Dirección SOCKS5:</span><span class="meta-val">127.0.0.1:1080</span></div>
-            <div class="meta-row"><span>Inicio al arrancar Linux:</span><span id="proxy-autostart-val" class="meta-val">-</span></div>
-            <div class="meta-row"><span>Daemon:</span><span class="meta-val">tailscaled native</span></div>
-          </div>
-
-          <div class="btn-group">
-            <button class="btn btn-primary" id="btn-proxy-enable" onclick="toggleProxyAutostart(true)">Habilitar al Iniciar</button>
-            <button class="btn btn-danger" id="btn-proxy-disable" onclick="toggleProxyAutostart(false)">Deshabilitar</button>
-          </div>
-        </div>
-
-        <!-- VPN Systemd Autostart Card -->
-        <div class="card">
-          <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Inicio Automático de Tailscale VPN</span>
-            <span id="vpn-autostart-pill" class="status-badge status-offline">
-              <span class="status-dot"></span><span id="vpn-autostart-text">Cargando...</span>
-            </span>
-          </div>
-
-          <div class="meta-list">
-            <div class="meta-row"><span>Servicio del Sistema:</span><span class="meta-val">tailscaled.service</span></div>
-            <div class="meta-row"><span>Arranque con el SO:</span><span id="vpn-autostart-val" class="meta-val">-</span></div>
-          </div>
-
-          <div class="btn-group">
-            <button class="btn btn-primary" id="btn-vpn-auto-enable" onclick="toggleVpnAutostart(true)">Habilitar al Iniciar</button>
-            <button class="btn btn-danger" id="btn-vpn-auto-disable" onclick="toggleVpnAutostart(false)">Deshabilitar</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Extension Guide Card -->
-      <div class="card">
-        <div class="card-header">
-          <span style="font-size: 14px; font-weight: 600;">Configuración en Extensiones (ZeroOmega / Proxy SwitchyOmega)</span>
-          <span class="brand-badge">Split Tunneling</span>
-        </div>
-        <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-          1. En tu navegador, crea un perfil de Proxy <strong>SOCKS5</strong> con:
-        </p>
-        <div class="code-box">
-          <span>Host: 127.0.0.1 | Puerto: 1080 (Solo SOCKS5)</span>
-          <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="copyText('127.0.0.1:1080')">Copiar</button>
-        </div>
-        <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-          2. En el perfil <strong>Auto Switch</strong>, asigna los dominios que quieras desbloquear (ej: <code>*.netflix.com</code>, <code>*.xvideos.com</code>) hacia este perfil. El resto de tu tráfico seguirá saliendo por tu conexión directa local sin desviar todo tu ancho de banda.
-        </p>
       </div>
     </div>
 
@@ -664,7 +663,7 @@
     let activeCategory = '';
 
     function switchTab(tabId) {
-      const tabIds = ['tab-vpn', 'tab-config', 'tab-system', 'tab-diag'];
+      const tabIds = ['tab-vpn', 'tab-proxy', 'tab-config', 'tab-diag'];
       document.querySelectorAll(".tab-btn").forEach((b, idx) => {
         b.className = tabIds[idx] === tabId ? "tab-btn active" : "tab-btn";
       });
@@ -787,31 +786,31 @@
           peersList.innerHTML = `<div class="meta-row"><span>No se detectaron otros peers.</span></div>`;
         }
 
-        // SOCKS5 Proxy Status
+        // SOCKS5 Proxy Status in Proxy Tab
         const proxyPill = document.getElementById("proxy-status-pill");
         const proxyText = document.getElementById("proxy-status-text");
         const proxyAutoVal = document.getElementById("proxy-autostart-val");
         if (data.proxy_listening) {
           proxyPill.className = "status-badge status-online";
-          proxyText.innerText = "Escuchando en :1080";
+          proxyText.innerText = "Activo (:1080)";
         } else {
           proxyPill.className = "status-badge status-offline";
           proxyText.innerText = "Inactivo";
         }
         proxyAutoVal.innerText = data.proxy_autostart ? "🟢 Habilitado (:1080)" : "⚪ Deshabilitado";
 
-        // VPN Systemd Autostart Status
+        // VPN Autostart Status in VPN Tab
         const vpnAutoPill = document.getElementById("vpn-autostart-pill");
         const vpnAutoText = document.getElementById("vpn-autostart-text");
         const vpnAutoVal = document.getElementById("vpn-autostart-val");
         if (data.vpn_autostart) {
           vpnAutoPill.className = "status-badge status-online";
           vpnAutoText.innerText = "Habilitado";
-          vpnAutoVal.innerText = "🟢 Inicia con Linux (systemd)";
+          vpnAutoVal.innerText = "🟢 Inicia automáticamente con Linux (systemd)";
         } else {
           vpnAutoPill.className = "status-badge status-offline";
           vpnAutoText.innerText = "Deshabilitado";
-          vpnAutoVal.innerText = "⚪ Manual";
+          vpnAutoVal.innerText = "⚪ Inicio manual";
         }
 
         // VPN Connection State
@@ -907,7 +906,7 @@
           showToast(`Proxy SOCKS5 ${enabled ? 'Habilitado' : 'Deshabilitado'}`);
           fetchStatus();
         } else {
-          alert("Error: " + data.error);
+          alert("Error al configurar proxy: " + data.error);
         }
       } catch (err) {
         alert("Error: " + err.message);
@@ -915,7 +914,7 @@
     }
 
     async function toggleVpnAutostart(enabled) {
-      showToast(`${enabled ? 'Habilitando' : 'Deshabilitando'} arranque de VPN con el sistema...`);
+      showToast(`${enabled ? 'Habilitando' : 'Deshabilitando'} arranque de VPN con Linux...`);
       try {
         const res = await fetch("/api/autostart/vpn", {
           method: "POST",
