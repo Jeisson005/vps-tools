@@ -1135,7 +1135,9 @@
       document.querySelectorAll(".pill").forEach(p => {
         p.className = (p.innerText === cat || (!cat && p.innerText === "Todos")) ? "pill active" : "pill";
       });
-      runDiagnostics();
+      if (lastDiagnosticResults && lastDiagnosticResults.length > 0) {
+        renderResults(lastDiagnosticResults);
+      }
     }
 
     async function runDiagnostics() {
@@ -1145,8 +1147,7 @@
       tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">Analizando dominios (DNS, TCP, TLS/SNI, HTTP)...</td></tr>`;
 
       try {
-        const url = activeCategory ? `/api/diagnose?category=${encodeURIComponent(activeCategory)}` : `/api/diagnose`;
-        const res = await fetch(url);
+        const res = await fetch("/api/diagnose");
         const data = await res.json();
         renderResults(data.results);
       } catch (err) {
@@ -1167,7 +1168,13 @@
           body: JSON.stringify({ domain })
         });
         const result = await res.json();
-        renderResults([result]);
+        const existingIdx = lastDiagnosticResults.findIndex(r => r.domain.toLowerCase() === result.domain.toLowerCase());
+        if (existingIdx >= 0) {
+          lastDiagnosticResults[existingIdx] = result;
+        } else {
+          lastDiagnosticResults.unshift(result);
+        }
+        renderResults(lastDiagnosticResults);
       } catch (err) {
         alert("Error: " + err.message);
       }
@@ -1184,11 +1191,16 @@
         badge.style.color = blockedCount > 0 ? "var(--error)" : "var(--success)";
       }
 
-      if (!results || results.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">No se encontraron dominios para evaluar.</td></tr>`;
+      const filtered = activeCategory 
+        ? lastDiagnosticResults.filter(r => r.category && r.category.toLowerCase() === activeCategory.toLowerCase())
+        : lastDiagnosticResults;
+
+      if (!filtered || filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">${lastDiagnosticResults.length > 0 ? 'No hay dominios evaluados en esta categoría.' : 'Presiona "Ejecutar Diagnóstico Completo" para analizar los bloqueos de tu conexión.'}</td></tr>`;
         return;
       }
-      tbody.innerHTML = results.map(r => {
+
+      tbody.innerHTML = filtered.map(r => {
         const dnsTag = r.dns === "OK" ? `<span class="tag tag-ok">OK</span>` : `<span class="tag tag-fail">FAIL</span>`;
         const tcpTag = r.tcp === "OK" ? `<span class="tag tag-ok">OK</span>` : `<span class="tag tag-fail">FAIL</span>`;
         let tlsTag = `<span class="tag tag-fail">${r.tls}</span>`;
