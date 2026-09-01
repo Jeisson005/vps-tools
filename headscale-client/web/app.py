@@ -6,12 +6,12 @@ import socket
 import ssl
 import time
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, Query, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="Headscale Client Dashboard", version="1.0.0")
+app = FastAPI(title="Headscale Client Dashboard", version="1.1.0")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_DIR = os.path.dirname(BASE_DIR)
@@ -23,55 +23,85 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 
 class ModeRequest(BaseModel):
     mode: str # 'full' or 'direct'
+    exit_node: Optional[str] = None
 
 class SingleDiagnoseRequest(BaseModel):
     domain: str
 
 def get_env_var(name: str, default: str = "") -> str:
     env_file = os.path.join(CLIENT_DIR, ".env")
-    if os.path.exists(env_file):
+    if os.path.isfile(env_file):
         with open(env_file) as f:
             for line in f:
                 if line.strip().startswith(f"{name}="):
                     return line.strip().split("=", 1)[1].strip('"\'')
     return os.environ.get(name, default)
 
-def run_cmd(cmd: List[str]) -> str:
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-        return res.stdout.strip()
-    except Exception as e:
-        return f"Error: {e}"
-
 def is_tailscale_connected() -> Dict[str, Any]:
     try:
         res = subprocess.run(["tailscale", "status", "--json"], capture_output=True, text=True, timeout=5)
         if res.returncode != 0:
-            return {"connected": False, "raw": "Tailscale not running"}
+            return {"connected": False, "backend_state": "Stopped", "raw": "Tailscale daemon stopped"}
+        
         data = json.loads(res.stdout)
+        backend_state = data.get("BackendState", "Stopped")
         
         self_node = data.get("Self", {})
         ips = self_node.get("TailscaleIPs", [])
         ipv4 = ips[0] if ips else "N/A"
         ipv6 = ips[1] if len(ips) > 1 else ""
-        exit_node_ip = data.get("ExitNodeIP", "") or self_node.get("ExitNodeIP", "")
         
-        peers_count = len(data.get("Peer", {}))
+        # Discover all available exit nodes and peers
+        exit_nodes = []
+        peers_list = []
+        active_exit_ip = data.get("ExitNodeIP", "") or self_node.get("ExitNodeIP", "")
+        if active_exit_ip == "null":
+            active_exit_ip = ""
+
+        for p_id, peer in data.get("Peer", {}).items():
+            p_ips = peer.get("TailscaleIPs", [])
+            p_ipv4 = p_ips[0] if p_ips else ""
+            p_name = peer.get("HostName", "peer")
+            p_online = peer.get("Online", False)
+            offers_exit = peer.get("ExitNodeOption", False) or ("0.0.0.0/0" in peer.get("AllowedIPs", []))
+            is_active_exit = peer.get("ExitNode", False)
+            
+            if is_active_exit and p_ipv4:
+                active_exit_ip = p_ipv4
+            
+            peers_list.append({
+                "name": p_name,
+                "ip": p_ipv4,
+                "os": peer.get("OS", "linux"),
+                "online": p_online,
+                "offers_exit": offers_exit,
+                "is_active_exit": is_active_exit
+            })
+            
+            if offers_exit and p_ipv4:
+                exit_nodes.append({
+                    "ip": p_ipv4,
+                    "name": p_name,
+                    "online": p_online
+                })
         
-        mode = "full" if exit_node_ip and exit_node_ip != "null" else "direct"
+        mode = "full" if (active_exit_ip and backend_state == "Running") else "direct"
         
         return {
-            "connected": True,
-            "ipv4": ipv4,
-            "ipv6": ipv6,
+            "connected": backend_state == "Running",
+            "backend_state": backend_state,
+            "ipv4": ipv4 if backend_state == "Running" else "-",
+            "ipv6": ipv6 if backend_state == "Running" else "-",
             "mode": mode,
-            "exit_node_ip": exit_node_ip if mode == "full" else None,
+            "exit_node_ip": active_exit_ip if mode == "full" else None,
             "hostname": self_node.get("HostName", "laptop"),
-            "peers_count": peers_count,
+            "peers": peers_list,
+            "peers_count": len(peers_list),
+            "exit_nodes": exit_nodes,
             "server_url": get_env_var("HEADSCALE_URL", "https://headscale.jeisson.top")
         }
     except Exception as e:
-        return {"connected": False, "error": str(e)}
+        return {"connected": False, "backend_state": "Error", "error": str(e)}
 
 async def check_domain_deep(domain: str, name: str, category: str) -> Dict[str, Any]:
     domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
@@ -165,13 +195,13 @@ async def get_status():
 
 @app.post("/api/mode")
 async def set_mode(req: ModeRequest):
-    exit_node = get_env_var("EXIT_NODE", "100.64.0.4")
     if req.mode == "full":
-        res = subprocess.run(["sudo", "tailscale", "set", f"--exit-node={exit_node}", "--exit-node-allow-lan-access=true"], capture_output=True, text=True)
-        return {"success": res.returncode == 0, "mode": "full", "output": res.stdout}
+        exit_node = req.exit_node or get_env_var("EXIT_NODE", "100.64.0.4")
+        res = subprocess.run(["tailscale", "set", f"--exit-node={exit_node}", "--exit-node-allow-lan-access=true"], capture_output=True, text=True)
+        return {"success": res.returncode == 0, "mode": "full", "exit_node": exit_node, "output": res.stdout or res.stderr}
     elif req.mode == "direct":
-        res = subprocess.run(["sudo", "tailscale", "set", "--exit-node="], capture_output=True, text=True)
-        return {"success": res.returncode == 0, "mode": "direct", "output": res.stdout}
+        res = subprocess.run(["tailscale", "set", "--exit-node="], capture_output=True, text=True)
+        return {"success": res.returncode == 0, "mode": "direct", "output": res.stdout or res.stderr}
     raise HTTPException(status_code=400, detail="Invalid mode. Use 'full' or 'direct'.")
 
 @app.post("/api/connect")
@@ -179,7 +209,7 @@ async def connect_vpn():
     server = get_env_var("HEADSCALE_URL", "https://headscale.jeisson.top")
     key = get_env_var("HEADSCALE_AUTH_KEY", "")
     hostname = get_env_var("CLIENT_HOSTNAME", "jeisson-laptop")
-    cmd = ["sudo", "tailscale", "up", f"--login-server={server}", f"--hostname={hostname}", "--accept-routes", "--reset"]
+    cmd = ["tailscale", "up", f"--login-server={server}", f"--hostname={hostname}", "--accept-routes", "--reset"]
     if key:
         cmd.append(f"--authkey={key}")
     res = subprocess.run(cmd, capture_output=True, text=True)
@@ -187,8 +217,8 @@ async def connect_vpn():
 
 @app.post("/api/disconnect")
 async def disconnect_vpn():
-    res = subprocess.run(["sudo", "tailscale", "down"], capture_output=True, text=True)
-    return {"success": res.returncode == 0, "output": res.stdout}
+    res = subprocess.run(["tailscale", "down"], capture_output=True, text=True)
+    return {"success": res.returncode == 0, "output": res.stdout or res.stderr}
 
 @app.get("/api/diagnose")
 async def run_diagnostics(category: Optional[str] = Query(None)):

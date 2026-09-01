@@ -96,8 +96,8 @@
     /* VPN Control Grid */
     .vpn-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 1.25rem;
     }
     .vpn-card {
       background: var(--bg-card);
@@ -144,6 +144,29 @@
       font-weight: 500;
     }
 
+    .select-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .select-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    select {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.55rem 0.75rem;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    select:focus { border-color: var(--border-focus); }
+
     .btn-group {
       display: flex;
       gap: 0.5rem;
@@ -176,6 +199,12 @@
       font-weight: 600;
     }
     .btn-primary:hover { background: #e4e4e7; border-color: #e4e4e7; }
+    .btn-danger {
+      background: var(--error-soft);
+      border-color: var(--error);
+      color: var(--error);
+    }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.2); }
     .btn-active-mode {
       background: var(--success-soft);
       border-color: var(--success);
@@ -344,9 +373,10 @@
     <!-- VPN SECTION -->
     <section>
       <h2 class="section-title">Control de Tailscale VPN</h2>
-      <p class="section-desc">Gestiona la conexión y alterna entre modo directo y modo túnel completo a través del VPS.</p>
+      <p class="section-desc">Gestiona la conexión y selecciona tu nodo de salida para alternar entre modo directo y modo full.</p>
       
       <div class="vpn-grid">
+        <!-- Client Status Card -->
         <div class="vpn-card">
           <div class="vpn-header">
             <span style="font-size: 14px; font-weight: 600;">Estado del Cliente</span>
@@ -358,26 +388,36 @@
             <div class="meta-row"><span>IP VPN Local:</span><span id="vpn-ip" class="meta-val">-</span></div>
             <div class="meta-row"><span>Hostname:</span><span id="vpn-host" class="meta-val">-</span></div>
             <div class="meta-row"><span>Modo Actual:</span><span id="vpn-mode" class="meta-val">-</span></div>
-            <div class="meta-row"><span>Exit Node (VPS):</span><span id="vpn-exit" class="meta-val">-</span></div>
+            <div class="meta-row"><span>Exit Node Activo:</span><span id="vpn-exit" class="meta-val">-</span></div>
           </div>
           <div class="btn-group">
-            <button class="btn" id="btn-connect" onclick="connectVPN()">Conectar</button>
-            <button class="btn" id="btn-disconnect" onclick="disconnectVPN()">Desconectar</button>
+            <button class="btn btn-primary" id="btn-connect" onclick="connectVPN()">Conectar</button>
+            <button class="btn btn-danger" id="btn-disconnect" onclick="disconnectVPN()">Desconectar</button>
           </div>
         </div>
 
+        <!-- Routing & Exit Node Selector Card -->
         <div class="vpn-card">
           <div class="vpn-header">
             <span style="font-size: 14px; font-weight: 600;">Modo de Enrutamiento</span>
-            <span style="font-size: 12px; color: var(--text-muted);">1-Click Switch</span>
+            <span style="font-size: 12px; color: var(--text-muted);">Exit Node Selector</span>
           </div>
+          
+          <div class="select-wrapper">
+            <label class="select-label" for="exit-node-select">Seleccionar Nodo de Salida (Exit Node):</label>
+            <select id="exit-node-select">
+              <option value="100.64.0.4">vps-server (100.64.0.4)</option>
+            </select>
+          </div>
+
           <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-            <strong>Modo Directo:</strong> Navega con tu conexión local; solo las IPs de la VPN van al VPS.<br>
-            <strong>Modo Full:</strong> Todo tu tráfico de internet sale cifrado por el VPS (IP 100.64.0.4).
+            <strong>Modo Directo:</strong> Solo el tráfico privado de VPN pasa por el VPS.<br>
+            <strong>Modo Full:</strong> Todo tu tráfico general de internet sale cifrado por el Exit Node seleccionado.
           </p>
+
           <div class="btn-group">
             <button class="btn" id="btn-mode-direct" onclick="setMode('direct')">Modo Directo</button>
-            <button class="btn" id="btn-mode-full" onclick="setMode('full')">Modo Full (VPS)</button>
+            <button class="btn" id="btn-mode-full" onclick="setMode('full')">Activar Modo Full</button>
           </div>
         </div>
       </div>
@@ -457,6 +497,19 @@
         const host = document.getElementById("vpn-host");
         const mode = document.getElementById("vpn-mode");
         const exit = document.getElementById("vpn-exit");
+        const btnConnect = document.getElementById("btn-connect");
+        const btnDisconnect = document.getElementById("btn-disconnect");
+        const exitSelect = document.getElementById("exit-node-select");
+
+        // Populate Exit Node Selector
+        if (data.exit_nodes && data.exit_nodes.length > 0) {
+          exitSelect.innerHTML = data.exit_nodes.map(n => {
+            const statusIcon = n.online ? "🟢" : "⚪";
+            return `<option value="${n.ip}">${n.name} (${n.ip}) ${statusIcon}</option>`;
+          }).join('');
+        } else {
+          exitSelect.innerHTML = `<option value="100.64.0.4">vps-server (100.64.0.4)</option>`;
+        }
 
         if (data.connected) {
           pill.className = "vpn-status-badge status-online";
@@ -468,13 +521,26 @@
 
           document.getElementById("btn-mode-full").className = data.mode === "full" ? "btn btn-active-mode" : "btn";
           document.getElementById("btn-mode-direct").className = data.mode === "direct" ? "btn btn-active-mode" : "btn";
+          
+          btnConnect.disabled = true;
+          btnConnect.style.opacity = "0.5";
+          btnDisconnect.disabled = false;
+          btnDisconnect.style.opacity = "1";
         } else {
           pill.className = "vpn-status-badge status-offline";
-          text.innerText = "Desconectado";
+          text.innerText = data.backend_state === "Stopped" ? "Desconectado" : `Estado: ${data.backend_state || 'Desconectado'}`;
           ip.innerText = "-";
-          host.innerText = "-";
-          mode.innerText = "-";
+          host.innerText = data.hostname || "-";
+          mode.innerText = "Desconectado";
           exit.innerText = "-";
+
+          document.getElementById("btn-mode-full").className = "btn";
+          document.getElementById("btn-mode-direct").className = "btn";
+
+          btnConnect.disabled = false;
+          btnConnect.style.opacity = "1";
+          btnDisconnect.disabled = true;
+          btnDisconnect.style.opacity = "0.5";
         }
       } catch (err) {
         console.error(err);
@@ -482,17 +548,21 @@
     }
 
     async function setMode(mode) {
+      const selectedExit = document.getElementById("exit-node-select").value;
       showToast(`Cambiando a Modo ${mode.toUpperCase()}...`);
       try {
         const res = await fetch("/api/mode", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode })
+          body: JSON.stringify({ 
+            mode: mode,
+            exit_node: selectedExit
+          })
         });
         const data = await res.json();
         if (data.success) {
           showToast(`Modo ${mode.toUpperCase()} activado`);
-          fetchStatus();
+          await fetchStatus();
         } else {
           alert("Error: " + data.output);
         }
@@ -503,14 +573,22 @@
 
     async function connectVPN() {
       showToast("Conectando Tailscale...");
-      await fetch("/api/connect", { method: "POST" });
-      setTimeout(fetchStatus, 2000);
+      try {
+        await fetch("/api/connect", { method: "POST" });
+        setTimeout(fetchStatus, 1500);
+      } catch (err) {
+        alert("Error al conectar: " + err.message);
+      }
     }
 
     async function disconnectVPN() {
       showToast("Desconectando Tailscale...");
-      await fetch("/api/disconnect", { method: "POST" });
-      setTimeout(fetchStatus, 1000);
+      try {
+        await fetch("/api/disconnect", { method: "POST" });
+        setTimeout(fetchStatus, 1000);
+      } catch (err) {
+        alert("Error al desconectar: " + err.message);
+      }
     }
 
     function filterCategory(cat) {
