@@ -8,8 +8,12 @@
 domains.custom.txt
 !domains.custom.txt.example
 
+# Local runtime states and routes
+routes.json
+
 # Logs and cache
 *.log
 __pycache__/
 *.pyc
 .pytest_cache/
+

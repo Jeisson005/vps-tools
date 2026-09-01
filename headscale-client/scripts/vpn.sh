@@ -17,7 +17,7 @@ elif [[ -f "${CLIENT_DIR}/.env.example" ]]; then
 fi
 
 HEADSCALE_URL="${HEADSCALE_URL:-https://headscale.jeisson.top}"
-HEADSCALE_AUTH_KEY="${HEADSCALE_AUTH_KEY:-REDACTED_leaked_headscale_preauth_key_2026}"
+HEADSCALE_AUTH_KEY="${HEADSCALE_AUTH_KEY:-}"
 CLIENT_HOSTNAME="${CLIENT_HOSTNAME:-$(hostname)}"
 EXIT_NODE="${EXIT_NODE:-100.64.0.4}"
 
