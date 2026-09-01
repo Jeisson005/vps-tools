@@ -228,45 +228,64 @@ def is_tailscale_connected() -> Dict[str, Any]:
     except Exception as e:
         return {"connected": False, "backend_state": "Error", "error": str(e)}
 
-# ----------------- DIAGNOSTICS HELPERS -----------------
-
 async def resolve_all_ips(domain: str) -> Dict[str, Any]:
     loop = asyncio.get_event_loop()
-    ipv4_list = []
-    ipv6_list = []
-    cnames = []
+    ipv4_set = set()
+    ipv6_set = set()
+    cnames = set()
     
+    # 1. Standard getaddrinfo
     try:
-        # Standard getaddrinfo for all records
         infos = await loop.getaddrinfo(domain, 443, proto=socket.IPPROTO_TCP)
         for item in infos:
             ip = item[4][0]
             if ":" in ip:
-                if ip not in ipv6_list:
-                    ipv6_list.append(ip)
+                ipv6_set.add(ip)
             else:
-                if ip not in ipv4_list:
-                    ipv4_list.append(ip)
+                ipv4_set.add(ip)
     except Exception:
         pass
 
-    # Dig CNAME and extra IPs if available
-    try:
-        proc = await asyncio.create_subprocess_exec("dig", "+short", "CNAME", domain, stdout=asyncio.subprocess.PIPE)
-        out, _ = await proc.communicate()
-        for line in out.decode().splitlines():
-            line = line.strip().rstrip(".")
-            if line and line not in cnames:
-                cnames.append(line)
-    except Exception:
-        pass
+    # 2. Query multiple DNS resolvers in parallel to discover full Anycast/CDN pool
+    async def query_dns_server(server: Optional[str], rtype: str):
+        cmd = ["dig", "+short", "+time=1", "+tries=1", rtype, domain]
+        if server:
+            cmd.append(f"@{server}")
+        try:
+            proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=1.5)
+            for line in out.decode().splitlines():
+                line = line.strip()
+                if not line or line.startswith(";"):
+                    continue
+                if rtype == "A" and "." in line and not line.endswith("."):
+                    ipv4_set.add(line)
+                elif rtype == "AAAA" and ":" in line:
+                    ipv6_set.add(line)
+                elif rtype == "CNAME":
+                    cnames.add(line.rstrip("."))
+        except Exception:
+            pass
+
+    dns_resolvers = [None, "1.1.1.1", "8.8.8.8", "9.9.9.9", "208.67.222.222"]
+    dns_tasks = []
+    for r in dns_resolvers:
+        dns_tasks.append(query_dns_server(r, "A"))
+        dns_tasks.append(query_dns_server(r, "AAAA"))
+        dns_tasks.append(query_dns_server(r, "CNAME"))
+
+    await asyncio.gather(*dns_tasks, return_exceptions=True)
+
+    sorted_ipv4 = sorted(list(ipv4_set))
+    sorted_ipv6 = sorted(list(ipv6_set))
+    sorted_cnames = sorted(list(cnames))
 
     return {
         "domain": domain,
-        "ipv4": ipv4_list,
-        "ipv6": ipv6_list,
-        "cnames": cnames,
-        "total_ips": len(ipv4_list) + len(ipv6_list)
+        "ipv4": sorted_ipv4,
+        "ipv6": sorted_ipv6,
+        "cnames": sorted_cnames,
+        "total_ips": len(sorted_ipv4) + len(sorted_ipv6)
     }
 
 async def ping_ip(ip: str) -> Dict[str, Any]:
