@@ -11,19 +11,20 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="Headscale Client Dashboard", version="1.2.0")
+app = FastAPI(title="Headscale Client Dashboard", version="1.3.1")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_DIR = os.path.dirname(BASE_DIR)
 DEFAULT_LIST = os.path.join(CLIENT_DIR, "domains.default.txt")
 CUSTOM_LIST = os.path.join(CLIENT_DIR, "domains.custom.txt")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+ENV_FILE = os.path.join(CLIENT_DIR, ".env")
 TAILSCALED_DEFAULT_CONFIG = "/etc/default/tailscaled"
 
 os.makedirs(STATIC_DIR, exist_ok=True)
 
 class ModeRequest(BaseModel):
-    mode: str # 'full' or 'direct' / 'mesh'
+    mode: str # 'full' or 'mesh'
     exit_node: Optional[str] = None
 
 class SingleDiagnoseRequest(BaseModel):
@@ -31,52 +32,84 @@ class SingleDiagnoseRequest(BaseModel):
 
 class ProxyRequest(BaseModel):
     enabled: bool
-    socks5_port: Optional[int] = 1080
-    http_port: Optional[int] = 8080
+    port: Optional[int] = 1080
 
 class AutostartRequest(BaseModel):
     enabled: bool
 
+class ConfigUpdateRequest(BaseModel):
+    server_url: str
+    auth_key: str
+    hostname: str
+    exit_node: Optional[str] = "100.64.0.4"
+
+class ConnectRequest(BaseModel):
+    server_url: Optional[str] = None
+    auth_key: Optional[str] = None
+    hostname: Optional[str] = None
+
 def get_env_var(name: str, default: str = "") -> str:
-    env_file = os.path.join(CLIENT_DIR, ".env")
-    if os.path.isfile(env_file):
-        with open(env_file) as f:
+    if os.path.isfile(ENV_FILE):
+        with open(ENV_FILE) as f:
             for line in f:
-                if line.strip().startswith(f"{name}="):
-                    return line.strip().split("=", 1)[1].strip('"\'')
+                line = line.strip()
+                if line.startswith(f"{name}="):
+                    return line.split("=", 1)[1].strip('"\'')
     return os.environ.get(name, default)
 
-def check_proxy_listening() -> Dict[str, Any]:
-    socks5_listening = False
-    http_listening = False
-    try:
-        s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s1.settimeout(0.5)
-        if s1.connect_ex(("127.0.0.1", 1080)) == 0:
-            socks5_listening = True
-        s1.close()
+def set_env_vars(data: Dict[str, str]):
+    current = {}
+    if os.path.isfile(ENV_FILE):
+        with open(ENV_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    current[k.strip()] = v.strip('"\'')
+    
+    current.update(data)
+    
+    with open(ENV_FILE, "w") as f:
+        f.write("# Headscale Client Environment Configuration\n")
+        for k, v in current.items():
+            f.write(f'{k}="{v}"\n')
 
-        s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s2.settimeout(0.5)
-        if s2.connect_ex(("127.0.0.1", 8080)) == 0:
-            http_listening = True
-        s2.close()
+def check_socks5_listening(port: int = 1080) -> bool:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.4)
+        result = s.connect_ex(("127.0.0.1", port)) == 0
+        s.close()
+        return result
+    except Exception:
+        return False
+
+def check_vpn_autostart() -> bool:
+    wants_path = "/etc/systemd/system/multi-user.target.wants/tailscaled.service"
+    return os.path.exists(wants_path) or os.path.islink(wants_path)
+
+def check_proxy_autostart() -> bool:
+    try:
+        if os.path.isfile(TAILSCALED_DEFAULT_CONFIG):
+            with open(TAILSCALED_DEFAULT_CONFIG) as f:
+                content = f.read()
+                return "socks5-server" in content
     except Exception:
         pass
-    
-    return {
-        "enabled": socks5_listening or http_listening,
-        "socks5_listening": socks5_listening,
-        "http_listening": http_listening,
-        "socks5_port": 1080,
-        "http_port": 8080
-    }
+    return False
 
 def is_tailscale_connected() -> Dict[str, Any]:
     try:
         res = subprocess.run(["tailscale", "status", "--json"], capture_output=True, text=True, timeout=5)
         if res.returncode != 0:
-            return {"connected": False, "backend_state": "Stopped", "raw": "Tailscale daemon stopped"}
+            return {
+                "connected": False,
+                "backend_state": "Stopped",
+                "raw": "Tailscale daemon stopped",
+                "vpn_autostart": check_vpn_autostart(),
+                "proxy_autostart": check_proxy_autostart(),
+                "proxy_listening": check_socks5_listening(1080)
+            }
         
         data = json.loads(res.stdout)
         backend_state = data.get("BackendState", "Stopped")
@@ -121,7 +154,6 @@ def is_tailscale_connected() -> Dict[str, Any]:
                 })
         
         mode = "full" if (active_exit_ip and backend_state == "Running") else "mesh"
-        proxy_info = check_proxy_listening()
         
         return {
             "connected": backend_state == "Running",
@@ -134,7 +166,9 @@ def is_tailscale_connected() -> Dict[str, Any]:
             "peers": peers_list,
             "peers_count": len(peers_list),
             "exit_nodes": exit_nodes,
-            "proxy": proxy_info,
+            "vpn_autostart": check_vpn_autostart(),
+            "proxy_autostart": check_proxy_autostart(),
+            "proxy_listening": check_socks5_listening(1080),
             "server_url": get_env_var("HEADSCALE_URL", "https://headscale.jeisson.top")
         }
     except Exception as e:
@@ -230,6 +264,25 @@ async def check_domain_deep(domain: str, name: str, category: str) -> Dict[str, 
 async def get_status():
     return is_tailscale_connected()
 
+@app.get("/api/config")
+async def get_config():
+    return {
+        "server_url": get_env_var("HEADSCALE_URL", "https://headscale.jeisson.top"),
+        "auth_key": get_env_var("HEADSCALE_AUTH_KEY", ""),
+        "hostname": get_env_var("CLIENT_HOSTNAME", "jeisson-laptop"),
+        "exit_node": get_env_var("EXIT_NODE", "100.64.0.4")
+    }
+
+@app.post("/api/config")
+async def update_config(req: ConfigUpdateRequest):
+    set_env_vars({
+        "HEADSCALE_URL": req.server_url.strip(),
+        "HEADSCALE_AUTH_KEY": req.auth_key.strip(),
+        "CLIENT_HOSTNAME": req.hostname.strip(),
+        "EXIT_NODE": req.exit_node.strip() if req.exit_node else "100.64.0.4"
+    })
+    return {"success": True, "message": "Configuración guardada correctamente en .env"}
+
 @app.post("/api/mode")
 async def set_mode(req: ModeRequest):
     if req.mode in ["full", "exit"]:
@@ -242,10 +295,11 @@ async def set_mode(req: ModeRequest):
     raise HTTPException(status_code=400, detail="Invalid mode. Use 'full' or 'mesh'.")
 
 @app.post("/api/connect")
-async def connect_vpn():
-    server = get_env_var("HEADSCALE_URL", "https://headscale.jeisson.top")
-    key = get_env_var("HEADSCALE_AUTH_KEY", "")
-    hostname = get_env_var("CLIENT_HOSTNAME", "jeisson-laptop")
+async def connect_vpn(req: Optional[ConnectRequest] = None):
+    server = (req.server_url if req and req.server_url else "") or get_env_var("HEADSCALE_URL", "https://headscale.jeisson.top")
+    key = (req.auth_key if req and req.auth_key else "") or get_env_var("HEADSCALE_AUTH_KEY", "")
+    hostname = (req.hostname if req and req.hostname else "") or get_env_var("CLIENT_HOSTNAME", "jeisson-laptop")
+    
     cmd = ["tailscale", "up", f"--login-server={server}", f"--hostname={hostname}", "--accept-routes", "--reset"]
     if key:
         cmd.append(f"--authkey={key}")
@@ -257,26 +311,37 @@ async def disconnect_vpn():
     res = subprocess.run(["tailscale", "down"], capture_output=True, text=True)
     return {"success": res.returncode == 0, "output": res.stdout or res.stderr}
 
-@app.get("/api/proxy")
-async def get_proxy_status():
-    return check_proxy_listening()
-
-@app.post("/api/proxy")
-async def configure_proxy(req: ProxyRequest):
-    flags = f'--socks5-server=localhost:{req.socks5_port} --outbound-http-proxy-listen=localhost:{req.http_port}' if req.enabled else ''
-    config_content = f'PORT="41641"\nFLAGS="{flags}"\n'
-    
-    try:
-        if os.path.exists(TAILSCALED_DEFAULT_CONFIG) or os.access("/etc/default", os.W_OK):
-            with open(TAILSCALED_DEFAULT_CONFIG, "w") as f:
-                f.write(config_content)
-        else:
-            subprocess.run(["sudo", "bash", "-c", f"cat << 'EOF' > {TAILSCALED_DEFAULT_CONFIG}\n{config_content}\nEOF"], check=True)
+@app.post("/api/autostart/vpn")
+async def toggle_vpn_autostart(req: AutostartRequest):
+    wants_path = "/etc/systemd/system/multi-user.target.wants/tailscaled.service"
+    service_path = "/usr/lib/systemd/system/tailscaled.service"
+    if not os.path.exists(service_path):
+        service_path = "/lib/systemd/system/tailscaled.service"
         
-        # Trigger restart if on host or via systemctl
-        subprocess.run(["sudo", "systemctl", "restart", "tailscaled"], capture_output=True, text=True)
-        time.sleep(1)
-        return {"success": True, "proxy": check_proxy_listening()}
+    try:
+        if req.enabled:
+            os.makedirs(os.path.dirname(wants_path), exist_ok=True)
+            if not (os.path.exists(wants_path) or os.path.islink(wants_path)):
+                os.symlink(service_path, wants_path)
+        else:
+            if os.path.islink(wants_path) or os.path.exists(wants_path):
+                os.remove(wants_path)
+        return {"success": True, "vpn_autostart": check_vpn_autostart()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.post("/api/autostart/proxy")
+async def toggle_proxy_autostart(req: AutostartRequest):
+    flags = '--socks5-server=localhost:1080' if req.enabled else ''
+    config_content = f'PORT="41641"\nFLAGS="{flags}"\n'
+    try:
+        with open(TAILSCALED_DEFAULT_CONFIG, "w") as f:
+            f.write(config_content)
+        return {
+            "success": True,
+            "proxy_autostart": check_proxy_autostart(),
+            "proxy_listening": check_socks5_listening(1080)
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
