@@ -168,6 +168,8 @@ fi
 # 4. Empaquetado del Sistema con Filtros de Exclusión
 echo "[+] Creating archive from ${SOURCE_DIR}..."
 TAR_ARGS=(
+  --warning=no-file-changed
+  --ignore-failed-read
   -czf "${TAR_FILE}"
 )
 
