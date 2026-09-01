@@ -1,0 +1,10 @@
+# ==============================================================================
+# Custom & Private Domains List (Untracked in Git)
+# Copy this file to 'domains.custom.txt' to add your private/custom domains.
+# Format: DOMAIN|FRIENDLY_NAME|CATEGORY
+# ==============================================================================
+
+# Example corporate or client internal domains
+# internal.company.com|Corporate Portal|Trabajo
+# staging.myproject.dev|Staging API|Dev
+# vps.jeisson.top|VPS Dashboard|Personal
