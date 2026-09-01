@@ -838,7 +838,7 @@
             if (!includeAdult && r.category && r.category.toLowerCase() === "adulto") {
               return;
             }
-            if (r.domain && !r.domain.replace(".", "").isdigit()) {
+            if (r.domain && !/^\d+$/.test(r.domain.replace(/\./g, ''))) {
               blockedDomains.add(r.domain);
             }
           }
