@@ -434,7 +434,26 @@ async def run_diagnostics(category: Optional[str] = Query(None)):
 
 @app.post("/api/diagnose/single")
 async def diagnose_single(req: SingleDiagnoseRequest):
-    res = await check_domain_deep(req.domain, req.domain, "Personalizado")
+    domain = req.domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+    res = await check_domain_deep(domain, domain, "Personalizado")
+    
+    # Persist domain into domains.custom.txt if not already present
+    try:
+        existing_domains = set()
+        if os.path.isfile(CUSTOM_LIST):
+            with open(CUSTOM_LIST, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        parts = line.split("|")
+                        existing_domains.add(parts[0].strip().lower())
+        
+        if domain and domain not in existing_domains and not domain.replace(".", "").isdigit():
+            with open(CUSTOM_LIST, "a") as f:
+                f.write(f"{domain}|{domain}|Personalizado\n")
+    except Exception as e:
+        print(f"Error persisting custom domain: {e}")
+        
     return res
 
 @app.get("/")

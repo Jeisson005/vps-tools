@@ -15,5 +15,5 @@ services:
       - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
       - /etc/default/tailscaled:/etc/default/tailscaled
       - /etc/systemd/system:/etc/systemd/system
-      - ./:/app:ro
+      - ./:/app
     network_mode: host
