@@ -23,6 +23,15 @@ set +a
 mkdir -p data web-config/.config/rustdesk
 chmod 755 data web-config
 
+# Check & configure UFW rules if UFW is installed
+if command -v ufw >/dev/null 2>&1; then
+  if sudo ufw status | grep -q "Status: active"; then
+    echo "[+] Ensuring RustDesk UFW firewall ports are open..."
+    sudo ufw allow 21115:21119/tcp comment 'RustDesk Server TCP (hbbs/hbbr)' >/dev/null 2>&1 || true
+    sudo ufw allow 21116/udp comment 'RustDesk Server UDP (hbbs discovery)' >/dev/null 2>&1 || true
+  fi
+fi
+
 echo "[+] Starting RustDesk Server (hbbs & hbbr)..."
 docker compose up -d hbbs hbbr
 

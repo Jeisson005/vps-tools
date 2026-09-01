@@ -2,8 +2,18 @@ services:
   hbbs:
     container_name: rustdesk-hbbs
     image: rustdesk/rustdesk-server:latest
-    command: hbbs -r ${RUSTDESK_DOMAIN:-rustdesk.jeisson.top}:21117 -k _
+    command: hbbs -r ${RUSTDESK_DOMAIN:-rustdesk.jeisson.top}:21117 -k ${RUSTDESK_KEY:-_}
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "${RUSTDESK_HBBS_CPUS_LIMIT:-0.50}"
+          memory: "${RUSTDESK_HBBS_MEM_LIMIT:-256M}"
+        reservations:
+          cpus: "${RUSTDESK_HBBS_CPUS_RESERVE:-0.10}"
+          memory: "${RUSTDESK_HBBS_MEM_RESERVE:-64M}"
     volumes:
       - ./data:/root
     ports:
@@ -11,6 +21,18 @@ services:
       - "21116:21116"
       - "21116:21116/udp"
       - "21118:21118"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 21115 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "rustdesk_hbbs_{{.Name}}"
     networks:
       - rustdesk-net
       - default
@@ -19,13 +41,35 @@ services:
   hbbr:
     container_name: rustdesk-hbbr
     image: rustdesk/rustdesk-server:latest
-    command: hbbr -k _
+    command: hbbr -k ${RUSTDESK_KEY:-_}
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "${RUSTDESK_HBBR_CPUS_LIMIT:-0.50}"
+          memory: "${RUSTDESK_HBBR_MEM_LIMIT:-256M}"
+        reservations:
+          cpus: "${RUSTDESK_HBBR_CPUS_RESERVE:-0.10}"
+          memory: "${RUSTDESK_HBBR_MEM_RESERVE:-64M}"
     volumes:
       - ./data:/root
     ports:
       - "21117:21117"
       - "21119:21119"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 21117 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "rustdesk_hbbr_{{.Name}}"
     networks:
       - rustdesk-net
       - default
@@ -35,6 +79,16 @@ services:
     container_name: rustdesk-web
     image: lscr.io/linuxserver/rustdesk:latest
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "${RUSTDESK_WEB_CPUS_LIMIT:-1.00}"
+          memory: "${RUSTDESK_WEB_MEM_LIMIT:-1024M}"
+        reservations:
+          cpus: "${RUSTDESK_WEB_CPUS_RESERVE:-0.20}"
+          memory: "${RUSTDESK_WEB_MEM_RESERVE:-256M}"
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
@@ -45,6 +99,18 @@ services:
       - ./web-config:/config
     ports:
       - "127.0.0.1:21120:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "rustdesk_web_{{.Name}}"
     networks:
       - rustdesk-net
       - default
