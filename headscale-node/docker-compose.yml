@@ -13,7 +13,7 @@ services:
       - ./state:/var/lib/tailscale
       - /lib/modules:/lib/modules:ro
     environment:
-      - TS_SERVER=${HEADSCALE_SERVER_URL:-https://headscale.jeisson.top}
+      - TS_LOGIN_SERVER=${HEADSCALE_SERVER_URL:-https://headscale.jeisson.top}
       - TS_AUTHKEY=${TS_AUTHKEY:-}
       - TS_ROUTES=${ADVERTISE_ROUTES:-}
       - TS_EXTRA_ARGS=${TS_EXTRA_ARGS:---accept-routes}
