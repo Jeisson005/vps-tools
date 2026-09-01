@@ -1,0 +1,30 @@
+services:
+  tailscale-node:
+    container_name: ${CONTAINER_NAME:-tailscale-bridge}
+    image: tailscale/tailscale:latest
+    restart: unless-stopped
+    hostname: ${NODE_HOSTNAME:-bridge-node}
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./state:/var/lib/tailscale
+      - /lib/modules:/lib/modules:ro
+    environment:
+      - TS_SERVER=${HEADSCALE_SERVER_URL:-https://headscale.jeisson.top}
+      - TS_AUTHKEY=${TS_AUTHKEY:-}
+      - TS_ROUTES=${ADVERTISE_ROUTES:-}
+      - TS_EXTRA_ARGS=${TS_EXTRA_ARGS:---accept-routes}
+      - TS_USERSPACE=false
+      - TS_STATE_DIR=/var/lib/tailscale
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "tailscale_node_{{.Name}}"

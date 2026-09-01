@@ -18,6 +18,13 @@
 **/id_ed25519*
 **/*.sqlite3*
 
+# Headscale runtime data and keys
+**/headscale/data/
+**/headscale/config/config.yaml
+**/headscale-node/state/
+**/*.sqlite*
+**/*_private.key
+
 # Backups / dumps
 **/backups/
 **/*.sql

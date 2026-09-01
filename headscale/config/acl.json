@@ -1,0 +1,25 @@
+{
+  "acls": [
+    {
+      "action": "accept",
+      "src": ["*"],
+      "dst": ["*:*"]
+    }
+  ],
+  "tagOwners": {
+    "tag:server": ["jeisson"],
+    "tag:bridge": ["jeisson"],
+    "tag:exit-node": ["jeisson"],
+    "tag:client": ["jeisson"]
+  },
+  "autoApprovers": {
+    "routes": {
+      "10.0.0.0/8": ["tag:bridge", "jeisson"],
+      "172.16.0.0/12": ["tag:bridge", "jeisson"],
+      "192.168.0.0/16": ["tag:bridge", "jeisson"],
+      "0.0.0.0/0": ["tag:exit-node", "jeisson"],
+      "::/0": ["tag:exit-node", "jeisson"]
+    },
+    "exitNode": ["tag:exit-node", "jeisson"]
+  }
+}
