@@ -566,17 +566,17 @@
         <div class="card">
           <div class="card-header">
             <span style="font-size: 14px; font-weight: 600;">Configuración en Extensiones (ZeroOmega / SwitchyOmega)</span>
-            <span class="brand-badge">Split Tunneling</span>
+            <span class="brand-badge">Split Tunneling VPS</span>
           </div>
           <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-            1. En la extensión, crea un perfil tipo <strong>SOCKS5</strong> con:
+            Para que los dominios seleccionados <strong>salgan a internet con la IP pública de tu VPS (169.58.231.155)</strong> mientras tu laptop sigue en Modo Malla rápido:
           </p>
           <div class="code-box">
-            <span>Host: 127.0.0.1 | Puerto: 1080</span>
-            <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="copyText('127.0.0.1:1080')">Copiar</button>
+            <span>Host: 100.64.0.4 | Puerto: 1080 (SOCKS5 VPS)</span>
+            <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="copyText('100.64.0.4:1080')">Copiar</button>
           </div>
           <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-            2. En el perfil <strong>Auto Switch</strong>, añade las reglas para los dominios que quieras desviar por el VPS (ej: <code>*.netflix.com</code>, <code>*.xvideos.com</code>). El resto de sitios navegarán directo por tu conexión habitual.
+            En el perfil <strong>Auto Switch</strong> de la extensión, asigna los dominios que quieras desviar por el VPS (ej: <code>*.netflix.com</code>, <code>*.xvideos.com</code>). El resto de sitios navegarán directo por tu conexión habitual sin desviar tu ancho de banda.
           </p>
         </div>
       </div>
