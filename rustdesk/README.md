@@ -4,17 +4,22 @@ Fully autonomous self-hosted **RustDesk Server** (`hbbs` + `hbbr`) and official 
 
 ---
 
-## 🎯 Architecture & Components
+## 🎯 Architecture & Ports
 
-1. **`hbbs` (ID & Rendezvous Server):**
-   * Handles peer discovery, TCP hole-punching, authentication, and heartbeats.
-   * Ports: `21115/tcp` (NAT test), `21116/tcp` + `21116/udp` (Signaling & ID registration), `21118/tcp` (WebSocket).
-2. **`hbbr` (Relay Server):**
-   * Encrypted relay server for peer connections when direct P2P connection cannot be established.
-   * Ports: `21117/tcp` (Relay stream), `21119/tcp` (Relay WebSocket).
-3. **`rustdesk-web` (Self-Hosted Web Client):**
-   * Browser-accessible remote control interface on `https://desk.jeisson.top`.
-   * Directly connects to controlled endpoints with audio, clipboard, and full display support.
+RustDesk requires the following ports open on your firewall (`ufw`):
+* `21115/tcp`: NAT type test
+* `21116/tcp`: TCP hole-punching / ID registration
+* `21116/udp`: UDP heartbeat / peer discovery
+* `21117/tcp`: Encrypted relay service
+* `21118/tcp`: Web client WebSocket (hbbs)
+* `21119/tcp`: Web client WebSocket (hbbr)
+
+```bash
+# Allow in UFW Firewall:
+sudo ufw allow 21115:21119/tcp comment "RustDesk Server TCP (hbbs/hbbr)"
+sudo ufw allow 21116/udp comment "RustDesk Server UDP (hbbs discovery)"
+sudo ufw reload
+```
 
 ---
 
