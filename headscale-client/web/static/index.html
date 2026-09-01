@@ -679,6 +679,14 @@
           <button class="btn btn-primary" id="btn-copy-blocked-rules" onclick="copyBlockedRules()">📋 Copiar Reglas de Webs Bloqueadas</button>
           <button class="btn" id="btn-dl-blocked-rules" onclick="downloadBlockedRules()">💾 Descargar Reglas (.txt)</button>
         </div>
+
+        <div id="rules-preview-container" style="display: none; flex-direction: column; gap: 0.35rem; margin-top: 0.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-dim);">Vista previa de reglas generadas:</span>
+            <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="selectAndCopyPreview()">Seleccionar y Copiar Todo</button>
+          </div>
+          <textarea id="blocked-rules-preview" readonly style="width: 100%; height: 130px; font-family: var(--font-mono); font-size: 12px; background: var(--bg-primary); color: #22c55e; border: 1px solid var(--border); padding: 0.6rem; border-radius: var(--radius); resize: vertical; outline: none;"></textarea>
+        </div>
       </div>
 
       <div id="prog-bar" class="progress-bar"><div class="progress-fill"></div></div>
@@ -799,19 +807,42 @@
 
     async function copyBlockedRules() {
       if (!lastDiagnosticResults || lastDiagnosticResults.length === 0) {
-        showToast("⚠️ Primero haz clic en 'Ejecutar Diagnóstico Completo' para evaluar tus webs.");
-        return;
+        showToast("Ejecutando diagnóstico para obtener sitios bloqueados...");
+        await runDiagnostics();
       }
       const { text, count } = getDiagnosedBlockedRulesText();
+      
+      const previewContainer = document.getElementById("rules-preview-container");
+      const previewTextarea = document.getElementById("blocked-rules-preview");
+      if (previewContainer && previewTextarea) {
+        previewTextarea.value = text;
+        previewContainer.style.display = "flex";
+      }
+
       if (count === 0) {
-        showToast("🟢 No se detectaron sitios bloqueados en el diagnóstico.");
+        showToast("🟢 No se detectaron sitios bloqueados.");
         return;
       }
+
       const success = await copyToClipboard(text);
       if (success) {
         showToast(`¡${count} reglas de webs bloqueadas copiadas al portapapeles!`);
       } else {
-        alert("No se pudo copiar automáticamente. Puedes usar el botón de 'Descargar Reglas (.txt)'.");
+        if (previewTextarea) {
+          previewTextarea.focus();
+          previewTextarea.select();
+        }
+        showToast(`Reglas listas abajo. Usa Ctrl+C para copiar.`);
+      }
+    }
+
+    function selectAndCopyPreview() {
+      const previewTextarea = document.getElementById("blocked-rules-preview");
+      if (previewTextarea && previewTextarea.value) {
+        previewTextarea.focus();
+        previewTextarea.select();
+        document.execCommand("copy");
+        showToast("¡Texto seleccionado y copiado!");
       }
     }
 
