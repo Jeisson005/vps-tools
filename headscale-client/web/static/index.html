@@ -413,16 +413,16 @@
   <!-- Navigation Tabs -->
   <div class="tabs-bar">
     <button class="tab-btn active" onclick="switchTab('tab-vpn')">
-      <span>🌐</span> Control & Malla VPN
+      <span>🌐</span> VPN Tailscale
     </button>
     <button class="tab-btn" onclick="switchTab('tab-proxy')">
-      <span>⚡</span> Proxy SOCKS5 (:1080)
-    </button>
-    <button class="tab-btn" onclick="switchTab('tab-config')">
-      <span>⚙️</span> Credenciales & Conexión
+      <span>⚡</span> Proxy SOCKS5
     </button>
     <button class="tab-btn" onclick="switchTab('tab-diag')">
-      <span>🔍</span> Diagnóstico de Red
+      <span>🔍</span> Diagnóstico de bloqueos
+    </button>
+    <button class="tab-btn" onclick="switchTab('tab-config')">
+      <span>⚙️</span> Configuración
     </button>
   </div>
 
@@ -682,7 +682,7 @@
     let activeCategory = '';
 
     function switchTab(tabId) {
-      const tabIds = ['tab-vpn', 'tab-proxy', 'tab-config', 'tab-diag'];
+      const tabIds = ['tab-vpn', 'tab-proxy', 'tab-diag', 'tab-config'];
       document.querySelectorAll(".tab-btn").forEach((b, idx) => {
         b.className = tabIds[idx] === tabId ? "tab-btn active" : "tab-btn";
       });
