@@ -918,7 +918,8 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
 
     vpn_status = is_tailscale_connected()
     vpn_connected = vpn_status.get("connected", False)
-    vps_socks5_url = "socks5://100.64.0.4:1080" if vpn_connected else None
+    exit_node_ip = get_env_var("EXIT_NODE", "100.64.0.4")
+    vps_socks5_url = f"socks5://{exit_node_ip}:1080" if vpn_connected else None
 
     # 1. Full DNS Discovery
     dns_data = await resolve_all_ips(domain)
