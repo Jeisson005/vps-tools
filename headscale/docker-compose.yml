@@ -1,0 +1,78 @@
+services:
+  headscale:
+    container_name: headscale
+    image: headscale/headscale:0.24.3
+    restart: unless-stopped
+    command: headscale serve
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "${HEADSCALE_CPUS_LIMIT:-0.50}"
+          memory: "${HEADSCALE_MEM_LIMIT:-256M}"
+        reservations:
+          cpus: "${HEADSCALE_CPUS_RESERVE:-0.10}"
+          memory: "${HEADSCALE_MEM_RESERVE:-64M}"
+    volumes:
+      - ./config:/etc/headscale
+      - ./data:/var/lib/headscale
+      - /var/run/headscale:/var/run/headscale
+    ports:
+      - "127.0.0.1:8085:8080"
+    healthcheck:
+      test: ["CMD", "headscale", "version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "headscale_core_{{.Name}}"
+    networks:
+      - headscale-net
+      - default
+      - nginx-network
+
+  headscale-ui:
+    container_name: headscale-ui
+    image: ghcr.io/gurucomputing/headscale-ui:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "${HEADSCALE_UI_CPUS_LIMIT:-0.25}"
+          memory: "${HEADSCALE_UI_MEM_LIMIT:-128M}"
+        reservations:
+          cpus: "${HEADSCALE_UI_CPUS_RESERVE:-0.05}"
+          memory: "${HEADSCALE_UI_MEM_RESERVE:-32M}"
+    ports:
+      - "127.0.0.1:8086:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "headscale_ui_{{.Name}}"
+    networks:
+      - headscale-net
+      - default
+      - nginx-network
+
+networks:
+  headscale-net:
+    driver: bridge
+  nginx-network:
+    name: ${NGINX_NETWORK:-nginx_default}
+    external: true

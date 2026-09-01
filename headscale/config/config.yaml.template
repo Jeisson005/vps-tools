@@ -1,0 +1,67 @@
+# ==============================================================================
+# Headscale Server Configuration Template
+# ==============================================================================
+
+server_url: ${HEADSCALE_SERVER_URL}
+listen_addr: 0.0.0.0:8080
+metrics_listen_addr: 0.0.0.0:9090
+grpc_listen_addr: 0.0.0.0:50443
+grpc_allow_insecure: true
+
+ip_prefixes:
+  - ${HEADSCALE_IP_PREFIX_V4}
+  - ${HEADSCALE_IP_PREFIX_V6}
+
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+
+prefixes:
+  v4: ${HEADSCALE_IP_PREFIX_V4}
+  v6: ${HEADSCALE_IP_PREFIX_V6}
+  allocation: sequential
+
+derp:
+  server:
+    enabled: true
+    region_id: 999
+    region_code: "vps"
+    region_name: "Headscale VPS Embedded DERP"
+    stun_listen_addr: "0.0.0.0:3478"
+    private_key_path: /var/lib/headscale/derp_server_private.key
+    automatically_add_embedded_derp_region: true
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  paths: []
+  auto_update_enabled: true
+  update_frequency: 24h
+
+disable_check_updates: true
+ephemeral_node_inactivity_timeout: 30m
+
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+
+acls_path: /etc/headscale/acl.json
+
+dns:
+  magic_dns: true
+  base_domain: ${HEADSCALE_BASE_DOMAIN}
+  nameservers:
+    split: {}
+    global:
+      - 1.1.1.1
+      - 1.0.0.1
+  search_domains: []
+  extra_records: []
+
+log:
+  format: text
+  level: info
+
+logtail:
+  enabled: false
+
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"
