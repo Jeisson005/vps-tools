@@ -24,6 +24,7 @@ RestartPreventExitStatus=78
 KillMode=mixed
 KillSignal=SIGTERM
 ExecReload=/bin/kill -USR1 $MAINPID
+ExecStartPost=-{{HERMES_HOME}}/vps-tools/hermes/scripts/notify_ready.sh
 ExecStopPost=-{{HERMES_HOME}}/.hermes/hermes-agent/venv/bin/python -m gateway.cgroup_cleanup
 TimeoutStopSec=60
 StandardOutput=journal
