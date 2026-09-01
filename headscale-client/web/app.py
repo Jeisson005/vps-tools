@@ -432,28 +432,79 @@ async def run_diagnostics(category: Optional[str] = Query(None)):
         "results": results
     }
 
+class CustomDomainRequest(BaseModel):
+    domain: str
+    name: Optional[str] = None
+    category: Optional[str] = "Personalizado"
+
+@app.get("/api/custom-domains")
+async def get_custom_domains():
+    items = []
+    if os.path.isfile(CUSTOM_LIST):
+        with open(CUSTOM_LIST, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("|")
+                    items.append({
+                        "domain": parts[0].strip(),
+                        "name": parts[1].strip() if len(parts) > 1 else parts[0].strip(),
+                        "category": parts[2].strip() if len(parts) > 2 else "Personalizado"
+                    })
+    return {"domains": items}
+
+@app.post("/api/custom-domains")
+async def add_custom_domain(req: CustomDomainRequest):
+    domain = req.domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+    if not domain:
+        raise HTTPException(status_code=400, detail="Dominio inválido")
+    
+    name = req.name.strip() if req.name else domain
+    category = req.category.strip() if req.category else "Personalizado"
+    
+    # Read existing
+    existing = []
+    if os.path.isfile(CUSTOM_LIST):
+        with open(CUSTOM_LIST, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("|")
+                    if parts[0].strip().lower() == domain:
+                        return {"success": True, "message": "El dominio ya existe"}
+                    existing.append(line)
+    
+    existing.append(f"{domain}|{name}|{category}")
+    with open(CUSTOM_LIST, "w") as f:
+        f.write("\n".join(existing) + "\n")
+        
+    return {"success": True, "message": f"Dominio {domain} agregado correctamente"}
+
+@app.delete("/api/custom-domains/{domain}")
+async def delete_custom_domain(domain: str):
+    domain_clean = domain.strip().lower()
+    existing = []
+    found = False
+    if os.path.isfile(CUSTOM_LIST):
+        with open(CUSTOM_LIST, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("|")
+                    if parts[0].strip().lower() == domain_clean:
+                        found = True
+                        continue
+                    existing.append(line)
+    
+    with open(CUSTOM_LIST, "w") as f:
+        f.write("\n".join(existing) + ("\n" if existing else ""))
+        
+    return {"success": True, "deleted": found}
+
 @app.post("/api/diagnose/single")
 async def diagnose_single(req: SingleDiagnoseRequest):
     domain = req.domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
     res = await check_domain_deep(domain, domain, "Personalizado")
-    
-    # Persist domain into domains.custom.txt if not already present
-    try:
-        existing_domains = set()
-        if os.path.isfile(CUSTOM_LIST):
-            with open(CUSTOM_LIST, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#"):
-                        parts = line.split("|")
-                        existing_domains.add(parts[0].strip().lower())
-        
-        if domain and domain not in existing_domains and not domain.replace(".", "").isdigit():
-            with open(CUSTOM_LIST, "a") as f:
-                f.write(f"{domain}|{domain}|Personalizado\n")
-    except Exception as e:
-        print(f"Error persisting custom domain: {e}")
-        
     return res
 
 @app.get("/")
