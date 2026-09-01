@@ -64,11 +64,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # Executed from the nginx folder.
 0 7 15 * * cd /path/to/vps-tools/nginx && ./scripts/certbot_renew.sh >> logs/renew_$(date +\%Y\%m\%d).log 2>&1
 
-# 6. Zitadel PAT Rotation (Quarterly - 1st of every 3rd month at 7:00 AM UTC / 2:00 AM UTC-5)
-# Executed from the zitadel folder using default PAT settings.
-0 7 1 */3 * cd /path/to/vps-tools/zitadel && ./scripts/rotate_pats.sh >> logs/rotate_$(date +\%Y\%m\%d).log 2>&1
-
-# 7. Log Cleanup (Daily at 8:00 AM UTC / 3:00 AM UTC-5)
+# 6. Log Cleanup (Daily at 8:00 AM UTC / 3:00 AM UTC-5)
 # Note: Cleanup is crucial when using date-based filenames to avoid disk fill-up.
 0 8 * * * cd /path/to/vps-tools/cron && export LOG_RETENTION_DAYS=30 && ./cleanup_logs.sh >> logs/cleanup.log 2>&1
 

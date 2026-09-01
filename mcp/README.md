@@ -30,7 +30,7 @@ Lightweight, modular **Model Context Protocol (MCP)** Gateway and Admin Dashboar
                      ┌────────────▼─────────┐    ┌─────────▼────────────┐
                      │   Service: Passbolt  │    │   Future Services    │
                      │ - GPG Auth & Decrypt │    │ - Docker / System    │
-                     │ - Secret Search & Read│   │ - WireGuard / Zitadel│
+                     │ - Secret Search & Read│   │ - WireGuard / Headscale│
                      └──────────────────────┘    └──────────────────────┘
 ```
 

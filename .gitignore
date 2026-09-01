@@ -42,8 +42,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Zitadel PATs
-**/*.pat
-**/*.pat.expiry
-
-tmp
+# Temporary scratch files
+tmp/
+/tmp/
