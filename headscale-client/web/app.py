@@ -682,6 +682,129 @@ async def clear_all_routes():
     save_persisted_routes([])
     return {"success": True, "cleared_count": len(persisted)}
 
+# ----------------- /etc/hosts DOMAIN PINNING API -----------------
+
+HOSTS_FILE_PATH = "/etc/hosts"
+
+class HostsEntryRequest(BaseModel):
+    domain: str
+    ip: str
+
+def get_managed_hosts_entries() -> List[Dict[str, Any]]:
+    entries = []
+    if not os.path.exists(HOSTS_FILE_PATH):
+        return entries
+    try:
+        with open(HOSTS_FILE_PATH, "r") as f:
+            for line in f:
+                line = line.strip()
+                if "# vps-tools-managed" in line:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        ip = parts[0]
+                        domain = parts[1]
+                        entries.append({
+                            "ip": ip,
+                            "domain": domain,
+                            "is_routed": check_active_system_route(ip),
+                            "line": line
+                        })
+    except Exception as e:
+        print(f"Error reading hosts file: {e}")
+    return entries
+
+def add_managed_hosts_entry(ip: str, domain: str) -> bool:
+    remove_managed_hosts_entry(domain)
+    try:
+        with open(HOSTS_FILE_PATH, "a") as f:
+            f.write(f"\n{ip}\t{domain}\t# vps-tools-managed\n")
+        return True
+    except Exception as e:
+        print(f"Error writing to hosts file: {e}")
+        return False
+
+def remove_managed_hosts_entry(domain: str) -> bool:
+    if not os.path.exists(HOSTS_FILE_PATH):
+        return False
+    try:
+        with open(HOSTS_FILE_PATH, "r") as f:
+            lines = f.readlines()
+        
+        new_lines = []
+        domain_clean = domain.strip().lower()
+        for line in lines:
+            if "# vps-tools-managed" in line and domain_clean in line.lower():
+                continue
+            new_lines.append(line)
+            
+        with open(HOSTS_FILE_PATH, "w") as f:
+            f.writelines(new_lines)
+        return True
+    except Exception as e:
+        print(f"Error removing from hosts file: {e}")
+        return False
+
+def clear_all_managed_hosts_entries() -> int:
+    if not os.path.exists(HOSTS_FILE_PATH):
+        return 0
+    try:
+        with open(HOSTS_FILE_PATH, "r") as f:
+            lines = f.readlines()
+        count = 0
+        new_lines = []
+        for line in lines:
+            if "# vps-tools-managed" in line:
+                count += 1
+                continue
+            new_lines.append(line)
+        with open(HOSTS_FILE_PATH, "w") as f:
+            f.writelines(new_lines)
+        return count
+    except Exception as e:
+        print(f"Error clearing hosts file: {e}")
+        return 0
+
+@app.get("/api/hosts")
+async def get_hosts_entries():
+    return {"entries": get_managed_hosts_entries()}
+
+@app.post("/api/hosts")
+async def add_hosts_entry(req: HostsEntryRequest):
+    domain = req.domain.strip().lower()
+    ip = req.ip.strip()
+    if not domain or not ip:
+        raise HTTPException(status_code=400, detail="Dominio e IP requeridos")
+    
+    # 1. Add to /etc/hosts
+    ok = add_managed_hosts_entry(ip, domain)
+    if not ok:
+        raise HTTPException(status_code=500, detail="No se pudo escribir en /etc/hosts (permisos insuficientes)")
+    
+    # 2. Automatically inject & persist route for this IP
+    apply_system_route(ip)
+    persisted = get_persisted_routes()
+    if not any(r["ip"] == ip for r in persisted):
+        persisted.append({
+            "ip": ip,
+            "domain": domain,
+            "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "is_active": True
+        })
+        save_persisted_routes(persisted)
+        
+    return {"success": True, "domain": domain, "ip": ip, "entries": get_managed_hosts_entries()}
+
+@app.delete("/api/hosts/{domain}")
+async def delete_hosts_entry(domain: str):
+    domain_clean = domain.strip().lower()
+    ok = remove_managed_hosts_entry(domain_clean)
+    return {"success": ok, "deleted_domain": domain_clean, "entries": get_managed_hosts_entries()}
+
+@app.delete("/api/hosts")
+async def delete_all_hosts_entries():
+    count = clear_all_managed_hosts_entries()
+    return {"success": True, "cleared_count": count}
+
 # ----------------- DEEP CONNECTIVITY DIAGNOSTICS -----------------
 
 async def check_ip_direct_and_vps(ip: str, domain: str, vps_socks5_url: Optional[str], vpn_connected: bool) -> Dict[str, Any]:
@@ -837,7 +960,25 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
     routed_ips = [t["ip"] for t in ip_tests if t.get("is_routed")]
     vpn_working = (vps_code != 0) and (http_vps.get("success", False))
 
-    if not vpn_connected:
+    # Detect /etc/hosts pinning
+    managed_hosts = get_managed_hosts_entries()
+    pinned_entry = next((e for e in managed_hosts if e["domain"].lower() == domain.lower()), None)
+
+    # Pick the best working IP for domain pinning
+    working_vps_ips = [t for t in ip_tests if t.get("vps_http", {}).get("success") and t.get("vps_http", {}).get("status_code", 0) != 0]
+    if working_vps_ips:
+        # Sort by VPS latency
+        working_vps_ips.sort(key=lambda x: x.get("vps_http", {}).get("latency_ms", 9999))
+        best_working_ip = working_vps_ips[0]["ip"]
+    elif dns_data["ipv4"]:
+        best_working_ip = dns_data["ipv4"][0]
+    else:
+        best_working_ip = None
+
+    if pinned_entry:
+        action = "SOLUCIONADO"
+        reason = f"🟢 Dominio Fijado en /etc/hosts: {domain} apunta fijamente a {pinned_entry['ip']} (Enrutada por VPN). Inmune a rotación de servidores CDN."
+    elif not vpn_connected:
         if local_ok:
             action = "NONE"
             reason = f"🟢 Conexión Local Directa Óptima (HTTP {local_code}). El sitio web funciona con normalidad en tu red local (VPN no activa)."
@@ -847,7 +988,7 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
     else:
         if unrouted_blocked:
             action = "ENROUTE_VPN"
-            reason = f"Se detectaron {len(unrouted_blocked)} IP(s) con bloqueo en tu red local ({', '.join(unrouted_blocked)}). Enrútalas para restaurar el acceso."
+            reason = f"Se detectaron {len(unrouted_blocked)} IP(s) con bloqueo en tu red local ({', '.join(unrouted_blocked)}). Puedes fijar una IP óptima en /etc/hosts o enrutarlas todas."
         elif routed_ips and (local_code != 0 or vps_code != 0):
             action = "SOLUCIONADO"
             reason = f"🟢 Bloqueo Solucionado: {len(routed_ips)} IP(s) están actualmente enrutadas por la VPN (tailscale0). El acceso al host responde con éxito (HTTP {local_code})."
@@ -871,13 +1012,16 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
         "http_local": http_local,
         "http_vps": http_vps,
         "vpn_connected": vpn_connected,
+        "best_working_ip": best_working_ip,
+        "pinned_hosts_entry": pinned_entry,
         "analysis": {
             "local_working": (local_code != 0),
             "vpn_working": vpn_working,
             "vpn_connected": vpn_connected,
             "recommended_action": action,
             "message": reason,
-            "routed_ips_count": len(routed_ips)
+            "routed_ips_count": len(routed_ips),
+            "is_hosts_pinned": bool(pinned_entry)
         },
         "ips_to_route": unrouted_blocked or dns_data["ipv4"]
     }

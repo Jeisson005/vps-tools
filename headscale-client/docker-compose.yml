@@ -15,7 +15,9 @@ services:
       - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
       - /etc/default/tailscaled:/etc/default/tailscaled
       - /etc/systemd/system:/etc/systemd/system
+      - /etc/hosts:/etc/hosts:rw
       - ./:/app
     cap_add:
       - NET_ADMIN
     network_mode: host
+
