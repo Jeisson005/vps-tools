@@ -400,24 +400,24 @@
         <div class="vpn-card">
           <div class="vpn-header">
             <span style="font-size: 14px; font-weight: 600;">Modo de Enrutamiento</span>
-            <span style="font-size: 12px; color: var(--text-muted);">Exit Node Selector</span>
+            <span id="routing-badge" class="brand-badge" style="font-size: 11px;">Modo Malla (Mesh)</span>
           </div>
           
-          <div class="select-wrapper">
-            <label class="select-label" for="exit-node-select">Seleccionar Nodo de Salida (Exit Node):</label>
+          <div class="select-wrapper" id="exit-select-container">
+            <label class="select-label" for="exit-node-select">Nodo de Salida para Túnel Completo:</label>
             <select id="exit-node-select">
-              <option value="100.64.0.4">vps-server (100.64.0.4)</option>
+              <option value="100.64.0.4">vps-server (100.64.0.4) 🟢</option>
             </select>
           </div>
 
           <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-            <strong>Modo Directo:</strong> Solo el tráfico privado de VPN pasa por el VPS.<br>
-            <strong>Modo Full:</strong> Todo tu tráfico general de internet sale cifrado por el Exit Node seleccionado.
+            <strong>Modo Malla (Mesh):</strong> Red privada entre tus equipos; internet sale directo por tu ISP.<br>
+            <strong>Túnel Completo (Exit Node):</strong> Todo el tráfico de internet sale cifrado por el servidor seleccionado.
           </p>
 
           <div class="btn-group">
-            <button class="btn" id="btn-mode-direct" onclick="setMode('direct')">Modo Directo</button>
-            <button class="btn" id="btn-mode-full" onclick="setMode('full')">Activar Modo Full</button>
+            <button class="btn" id="btn-mode-direct" onclick="setMode('direct')">Modo Malla (Mesh)</button>
+            <button class="btn" id="btn-mode-full" onclick="setMode('full')">Activar Túnel Completo</button>
           </div>
         </div>
       </div>
@@ -511,16 +511,34 @@
           exitSelect.innerHTML = `<option value="100.64.0.4">vps-server (100.64.0.4)</option>`;
         }
 
+        const routingBadge = document.getElementById("routing-badge");
+        const selectContainer = document.getElementById("exit-select-container");
+
         if (data.connected) {
           pill.className = "vpn-status-badge status-online";
           text.innerText = "Conectado";
           ip.innerText = data.ipv4;
           host.innerText = data.hostname;
-          mode.innerText = data.mode === "full" ? "Modo Full (Exit Node)" : "Modo Directo (Mesh)";
-          exit.innerText = data.exit_node_ip || "Ninguno (Directo)";
+          mode.innerText = data.mode === "full" ? "Túnel Completo (Exit Node)" : "Modo Malla (Mesh)";
+          exit.innerText = data.exit_node_ip || "Ninguno (Malla)";
 
-          document.getElementById("btn-mode-full").className = data.mode === "full" ? "btn btn-active-mode" : "btn";
-          document.getElementById("btn-mode-direct").className = data.mode === "direct" ? "btn btn-active-mode" : "btn";
+          if (data.mode === "full") {
+            routingBadge.innerText = "Túnel Completo Activo";
+            routingBadge.style.color = "var(--success)";
+            routingBadge.style.borderColor = "var(--success)";
+            document.getElementById("btn-mode-full").className = "btn btn-active-mode";
+            document.getElementById("btn-mode-direct").className = "btn";
+            exitSelect.disabled = false;
+            selectContainer.style.opacity = "1";
+          } else {
+            routingBadge.innerText = "Modo Malla Activo";
+            routingBadge.style.color = "var(--text-muted)";
+            routingBadge.style.borderColor = "var(--border)";
+            document.getElementById("btn-mode-full").className = "btn";
+            document.getElementById("btn-mode-direct").className = "btn btn-active-mode";
+            exitSelect.disabled = false;
+            selectContainer.style.opacity = "0.75";
+          }
           
           btnConnect.disabled = true;
           btnConnect.style.opacity = "0.5";
@@ -533,9 +551,13 @@
           host.innerText = data.hostname || "-";
           mode.innerText = "Desconectado";
           exit.innerText = "-";
+          routingBadge.innerText = "Desconectado";
+          routingBadge.style.color = "var(--error)";
+          routingBadge.style.borderColor = "var(--error)";
 
           document.getElementById("btn-mode-full").className = "btn";
           document.getElementById("btn-mode-direct").className = "btn";
+          selectContainer.style.opacity = "0.5";
 
           btnConnect.disabled = false;
           btnConnect.style.opacity = "1";
