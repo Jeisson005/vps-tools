@@ -5,18 +5,21 @@ import json
 import socket
 import ssl
 import time
+import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+import httpx
 
-app = FastAPI(title="Headscale Client Dashboard", version="1.3.1")
+app = FastAPI(title="Headscale Client & Connectivity Diagnostic Suite", version="1.4.0")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENT_DIR = os.path.dirname(BASE_DIR)
 DEFAULT_LIST = os.path.join(CLIENT_DIR, "domains.default.txt")
 CUSTOM_LIST = os.path.join(CLIENT_DIR, "domains.custom.txt")
+ROUTES_FILE = os.path.join(CLIENT_DIR, "routes.json")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 ENV_FILE = os.path.join(CLIENT_DIR, ".env")
 TAILSCALED_DEFAULT_CONFIG = "/etc/default/tailscaled"
@@ -28,6 +31,9 @@ class ModeRequest(BaseModel):
     exit_node: Optional[str] = None
 
 class SingleDiagnoseRequest(BaseModel):
+    domain: str
+
+class DeepDiagnoseRequest(BaseModel):
     domain: str
 
 class ProxyRequest(BaseModel):
@@ -47,6 +53,15 @@ class ConnectRequest(BaseModel):
     server_url: Optional[str] = None
     auth_key: Optional[str] = None
     hostname: Optional[str] = None
+
+class CustomDomainRequest(BaseModel):
+    domain: str
+    name: Optional[str] = None
+    category: Optional[str] = "Personalizado"
+
+class RouteAddRequest(BaseModel):
+    ips: List[str]
+    domain: str
 
 def get_env_var(name: str, default: str = "") -> str:
     if os.path.isfile(ENV_FILE):
@@ -97,6 +112,45 @@ def check_proxy_autostart() -> bool:
     except Exception:
         pass
     return False
+
+# ----------------- SYSTEM ROUTES MANAGEMENT -----------------
+
+def get_persisted_routes() -> List[Dict[str, Any]]:
+    if os.path.isfile(ROUTES_FILE):
+        try:
+            with open(ROUTES_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_persisted_routes(routes: List[Dict[str, Any]]):
+    with open(ROUTES_FILE, "w") as f:
+        json.dump(routes, f, indent=2)
+
+def check_active_system_route(ip: str) -> bool:
+    try:
+        res = subprocess.run(["ip", "route", "show", f"{ip}/32"], capture_output=True, text=True)
+        return "tailscale0" in res.stdout
+    except Exception:
+        return False
+
+def apply_system_route(ip: str) -> bool:
+    try:
+        # Replace/Add route via tailscale0
+        res = subprocess.run(["ip", "route", "replace", f"{ip}/32", "dev", "tailscale0"], capture_output=True, text=True)
+        return res.returncode == 0
+    except Exception:
+        return False
+
+def remove_system_route(ip: str) -> bool:
+    try:
+        res = subprocess.run(["ip", "route", "del", f"{ip}/32", "dev", "tailscale0"], capture_output=True, text=True)
+        return res.returncode == 0
+    except Exception:
+        return False
+
+# ----------------- VPN STATUS -----------------
 
 def is_tailscale_connected() -> Dict[str, Any]:
     try:
@@ -174,6 +228,154 @@ def is_tailscale_connected() -> Dict[str, Any]:
     except Exception as e:
         return {"connected": False, "backend_state": "Error", "error": str(e)}
 
+# ----------------- DIAGNOSTICS HELPERS -----------------
+
+async def resolve_all_ips(domain: str) -> Dict[str, Any]:
+    loop = asyncio.get_event_loop()
+    ipv4_list = []
+    ipv6_list = []
+    cnames = []
+    
+    try:
+        # Standard getaddrinfo for all records
+        infos = await loop.getaddrinfo(domain, 443, proto=socket.IPPROTO_TCP)
+        for item in infos:
+            ip = item[4][0]
+            if ":" in ip:
+                if ip not in ipv6_list:
+                    ipv6_list.append(ip)
+            else:
+                if ip not in ipv4_list:
+                    ipv4_list.append(ip)
+    except Exception:
+        pass
+
+    # Dig CNAME and extra IPs if available
+    try:
+        proc = await asyncio.create_subprocess_exec("dig", "+short", "CNAME", domain, stdout=asyncio.subprocess.PIPE)
+        out, _ = await proc.communicate()
+        for line in out.decode().splitlines():
+            line = line.strip().rstrip(".")
+            if line and line not in cnames:
+                cnames.append(line)
+    except Exception:
+        pass
+
+    return {
+        "domain": domain,
+        "ipv4": ipv4_list,
+        "ipv6": ipv6_list,
+        "cnames": cnames,
+        "total_ips": len(ipv4_list) + len(ipv6_list)
+    }
+
+async def ping_ip(ip: str) -> Dict[str, Any]:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ping", "-c", "2", "-W", "2", ip,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        out, _ = await proc.communicate()
+        out_str = out.decode()
+        if proc.returncode == 0:
+            # Parse average RTT
+            for line in out_str.splitlines():
+                if "avg" in line or "rtt" in line:
+                    parts = line.split("=")[1].split("/")
+                    return {"success": True, "avg_rtt_ms": float(parts[1].strip()), "packet_loss": 0}
+            return {"success": True, "avg_rtt_ms": 10.0, "packet_loss": 0}
+        return {"success": False, "avg_rtt_ms": None, "packet_loss": 100}
+    except Exception:
+        return {"success": False, "avg_rtt_ms": None, "packet_loss": 100}
+
+async def tcp_connect_test(ip: str, port: int = 443) -> Dict[str, Any]:
+    t0 = time.time()
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout=3.0)
+        dur = int((time.time() - t0) * 1000)
+        writer.close()
+        await writer.wait_closed()
+        return {"success": True, "latency_ms": dur, "port": port}
+    except Exception as e:
+        return {"success": False, "latency_ms": None, "port": port, "error": str(e)}
+
+async def tls_sni_handshake_test(domain: str, ip: Optional[str] = None) -> Dict[str, Any]:
+    t0 = time.time()
+    target = ip or domain
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = True
+        ctx.verify_mode = ssl.CERT_REQUIRED
+        loop = asyncio.get_event_loop()
+        
+        def _do_ssl():
+            raw_s = socket.create_connection((target, 443), timeout=3.5)
+            with ctx.wrap_socket(raw_s, server_hostname=domain) as s:
+                cert = s.getpeercert()
+                issuer = dict(x[0] for x in cert.get("issuer", []))
+                return {
+                    "issuer": issuer.get("organizationName", issuer.get("commonName", "Unknown")),
+                    "notAfter": cert.get("notAfter", "")
+                }
+        
+        cert_info = await loop.run_in_executor(None, _do_ssl)
+        dur = int((time.time() - t0) * 1000)
+        return {"status": "OK", "latency_ms": dur, "cert": cert_info}
+    except ssl.SSLError as se:
+        dur = int((time.time() - t0) * 1000)
+        if "handshake" in str(se).lower() or "reset" in str(se).lower():
+            return {"status": "DPI_RESET", "latency_ms": dur, "error": str(se)}
+        return {"status": "CERT_WARN", "latency_ms": dur, "error": str(se)}
+    except Exception as e:
+        dur = int((time.time() - t0) * 1000)
+        return {"status": "FAIL", "latency_ms": dur, "error": str(e)}
+
+async def http_full_lifecycle(domain: str, proxy: Optional[str] = None) -> Dict[str, Any]:
+    url = f"https://{domain}"
+    redirects_chain = []
+    t0 = time.time()
+    
+    client_kwargs = {
+        "timeout": 6.0,
+        "follow_redirects": True,
+        "verify": False
+    }
+    if proxy:
+        client_kwargs["proxy"] = proxy
+
+    try:
+        async with httpx.AsyncClient(**client_kwargs) as client:
+            resp = await client.get(url)
+            total_dur = int((time.time() - t0) * 1000)
+            
+            for h in resp.history:
+                redirects_chain.append({
+                    "url": str(h.url),
+                    "status_code": h.status_code
+                })
+            
+            redirects_chain.append({
+                "url": str(resp.url),
+                "status_code": resp.status_code
+            })
+
+            return {
+                "success": resp.status_code < 500 or resp.status_code in [200, 301, 302, 401, 403, 404, 405],
+                "status_code": resp.status_code,
+                "total_time_ms": total_dur,
+                "redirects": redirects_chain,
+                "final_url": str(resp.url),
+                "protocol": resp.http_version,
+                "server_header": resp.headers.get("server", "N/A")
+            }
+    except httpx.ConnectTimeout:
+        return {"success": False, "status_code": 0, "total_time_ms": int((time.time() - t0) * 1000), "error": "Connection Timeout", "redirects": []}
+    except httpx.ProxyError as pe:
+        return {"success": False, "status_code": 0, "total_time_ms": int((time.time() - t0) * 1000), "error": f"Proxy Error: {str(pe)}", "redirects": []}
+    except Exception as e:
+        return {"success": False, "status_code": 0, "total_time_ms": int((time.time() - t0) * 1000), "error": str(e), "redirects": []}
+
 async def check_domain_deep(domain: str, name: str, category: str) -> Dict[str, Any]:
     domain = domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
     
@@ -183,9 +385,8 @@ async def check_domain_deep(domain: str, name: str, category: str) -> Dict[str, 
     tls_ok = "FAIL"
     http_code = "000"
     latency_ms = 0
-    verdict = "DESCONOCIDO"
 
-    # 1. DNS Resolution
+    # 1. DNS
     t0 = time.time()
     try:
         loop = asyncio.get_event_loop()
@@ -196,7 +397,7 @@ async def check_domain_deep(domain: str, name: str, category: str) -> Dict[str, 
     except Exception:
         dns_ok = False
 
-    # 2. TCP Check
+    # 2. TCP
     if dns_ok:
         try:
             _, writer = await asyncio.wait_for(asyncio.open_connection(domain, 443), timeout=3.0)
@@ -206,7 +407,7 @@ async def check_domain_deep(domain: str, name: str, category: str) -> Dict[str, 
         except Exception:
             tcp_ok = False
 
-    # 3. TLS / SNI Check
+    # 3. TLS
     if tcp_ok:
         try:
             ctx = ssl.create_default_context()
@@ -223,10 +424,9 @@ async def check_domain_deep(domain: str, name: str, category: str) -> Dict[str, 
         except Exception:
             tls_ok = "WARN"
 
-    # 4. HTTP Code & Latency
+    # 4. HTTP
     if tcp_ok:
         try:
-            import httpx
             async with httpx.AsyncClient(timeout=4.0, follow_redirects=True, verify=False) as client:
                 req_t0 = time.time()
                 resp = await client.head(f"https://{domain}")
@@ -235,7 +435,7 @@ async def check_domain_deep(domain: str, name: str, category: str) -> Dict[str, 
         except Exception:
             latency_ms = int((time.time() - t0) * 1000)
 
-    # Determine verdict
+    # Verdict
     if not dns_ok:
         verdict = "BLOQUEO_DNS"
     elif not tcp_ok:
@@ -259,6 +459,8 @@ async def check_domain_deep(domain: str, name: str, category: str) -> Dict[str, 
         "latency_ms": latency_ms,
         "verdict": verdict
     }
+
+# ----------------- API ENDPOINTS -----------------
 
 @app.get("/api/status")
 async def get_status():
@@ -345,97 +547,7 @@ async def toggle_proxy_autostart(req: AutostartRequest):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@app.get("/api/switchyomega-rules")
-async def get_switchyomega_rules(include_adult: bool = Query(False), profile: str = Query("proxy")):
-    domains_set = set()
-    
-    # Non-restricted core domains to exclude from proxy list unless custom
-    ignore_categories = {"Core"}
-    if not include_adult:
-        ignore_categories.add("Adulto")
-
-    # Read default
-    if os.path.isfile(DEFAULT_LIST):
-        with open(DEFAULT_LIST) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    parts = line.split("|")
-                    domain = parts[0].strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
-                    cat = parts[2].strip() if len(parts) > 2 else "General"
-                    if cat not in ignore_categories and not domain.replace(".", "").isdigit():
-                        domains_set.add(domain)
-
-    # Read custom
-    if os.path.isfile(CUSTOM_LIST):
-        with open(CUSTOM_LIST) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    parts = line.split("|")
-                    domain = parts[0].strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
-                    if not domain.replace(".", "").isdigit():
-                        domains_set.add(domain)
-
-    sorted_domains = sorted(list(domains_set))
-    lines = ["[SwitchyOmega Conditions]", "@with result", ""]
-    for d in sorted_domains:
-        lines.append(f"*.{d} +{profile}")
-        if not d.startswith("web."):
-            lines.append(f"{d} +{profile}")
-    lines.append("")
-    lines.append("* +direct")
-    lines.append("")
-
-    return {"content": "\n".join(lines), "total_rules": len(sorted_domains)}
-
-@app.get("/api/diagnose")
-async def run_diagnostics(category: Optional[str] = Query(None)):
-    domain_items = []
-    
-    # Load default
-    if os.path.isfile(DEFAULT_LIST):
-        with open(DEFAULT_LIST) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    parts = line.split("|")
-                    domain = parts[0]
-                    name = parts[1] if len(parts) > 1 else domain
-                    cat = parts[2] if len(parts) > 2 else "General"
-                    if not category or category.lower() == cat.lower():
-                        domain_items.append((domain, name, cat))
-
-    # Load custom
-    if os.path.isfile(CUSTOM_LIST):
-        with open(CUSTOM_LIST) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    parts = line.split("|")
-                    domain = parts[0]
-                    name = parts[1] if len(parts) > 1 else domain
-                    cat = parts[2] if len(parts) > 2 else "Personalizado"
-                    if not category or category.lower() == cat.lower():
-                        domain_items.append((domain, name, cat))
-
-    tasks = [check_domain_deep(d, n, c) for d, n, c in domain_items]
-    results = await asyncio.gather(*tasks)
-    
-    free_count = sum(1 for r in results if r["verdict"] == "LIBRE")
-    blocked_count = len(results) - free_count
-
-    return {
-        "total": len(results),
-        "free": free_count,
-        "blocked": blocked_count,
-        "results": results
-    }
-
-class CustomDomainRequest(BaseModel):
-    domain: str
-    name: Optional[str] = None
-    category: Optional[str] = "Personalizado"
+# ----------------- CUSTOM DOMAINS -----------------
 
 @app.get("/api/custom-domains")
 async def get_custom_domains():
@@ -462,7 +574,6 @@ async def add_custom_domain(req: CustomDomainRequest):
     name = req.name.strip() if req.name else domain
     category = req.category.strip() if req.category else "Personalizado"
     
-    # Read existing
     existing = []
     if os.path.isfile(CUSTOM_LIST):
         with open(CUSTOM_LIST, "r") as f:
@@ -500,6 +611,196 @@ async def delete_custom_domain(domain: str):
         f.write("\n".join(existing) + ("\n" if existing else ""))
         
     return {"success": True, "deleted": found}
+
+# ----------------- SYSTEM ROUTES API -----------------
+
+@app.get("/api/routes")
+async def get_system_routes():
+    persisted = get_persisted_routes()
+    for r in persisted:
+        r["is_active"] = check_active_system_route(r["ip"])
+    return {"routes": persisted}
+
+@app.post("/api/routes")
+async def add_system_routes(req: RouteAddRequest):
+    persisted = get_persisted_routes()
+    existing_ips = {r["ip"] for r in persisted}
+    added_count = 0
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    for ip in req.ips:
+        ip = ip.strip()
+        if not ip or ":" in ip: # skip IPv6 for simple kernel routing
+            continue
+        
+        ok = apply_system_route(ip)
+        if ip not in existing_ips:
+            persisted.append({
+                "ip": ip,
+                "domain": req.domain,
+                "created_at": now_str,
+                "is_active": ok
+            })
+            existing_ips.add(ip)
+            added_count += 1
+            
+    save_persisted_routes(persisted)
+    return {"success": True, "added": added_count, "routes": persisted}
+
+@app.delete("/api/routes/{ip}")
+async def delete_single_route(ip: str):
+    remove_system_route(ip)
+    persisted = get_persisted_routes()
+    persisted = [r for r in persisted if r["ip"] != ip]
+    save_persisted_routes(persisted)
+    return {"success": True, "deleted": ip}
+
+@app.delete("/api/routes")
+async def clear_all_routes():
+    persisted = get_persisted_routes()
+    for r in persisted:
+        remove_system_route(r["ip"])
+    save_persisted_routes([])
+    return {"success": True, "cleared_count": len(persisted)}
+
+# ----------------- DEEP CONNECTIVITY DIAGNOSTICS -----------------
+
+@app.post("/api/deep-diagnose")
+async def run_deep_diagnose(req: DeepDiagnoseRequest):
+    domain = req.domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+    if not domain:
+        raise HTTPException(status_code=400, detail="Dominio inválido")
+
+    # 1. Full DNS Discovery
+    dns_data = await resolve_all_ips(domain)
+    
+    # 2. Local Ping & TCP checks for discovered IPs
+    ip_tests = []
+    for ip in dns_data["ipv4"][:4]: # Test up to 4 IPv4s
+        ping_res = await ping_ip(ip)
+        tcp_80 = await tcp_connect_test(ip, 80)
+        tcp_443 = await tcp_connect_test(ip, 443)
+        ip_tests.append({
+            "ip": ip,
+            "ping": ping_res,
+            "tcp_80": tcp_80,
+            "tcp_443": tcp_443
+        })
+
+    # 3. Local TLS SNI check
+    tls_local = await tls_sni_handshake_test(domain)
+
+    # 4. Local HTTP Full Lifecycle
+    http_local = await http_full_lifecycle(domain, proxy=None)
+
+    # 5. VPS VPN HTTP Lifecycle (via SOCKS5 VPS 100.64.0.4:1080)
+    vps_socks5_url = "socks5://100.64.0.4:1080"
+    http_vps = await http_full_lifecycle(domain, proxy=vps_socks5_url)
+
+    # 6. Analysis & Recommendation
+    local_ok = http_local.get("success", False) and http_local.get("status_code", 0) not in [0, 403, 502, 503]
+    vpn_ok = http_vps.get("success", False) and http_vps.get("status_code", 0) not in [0, 502, 503]
+
+    should_route_vpn = (not local_ok) and vpn_ok
+
+    return {
+        "domain": domain,
+        "dns": dns_data,
+        "ip_tests": ip_tests,
+        "tls_local": tls_local,
+        "http_local": http_local,
+        "http_vps": http_vps,
+        "analysis": {
+            "local_working": local_ok,
+            "vpn_working": vpn_ok,
+            "recommended_action": "ENROUTE_VPN" if should_route_vpn else "NONE",
+            "message": "Falla en conexión local pero funciona correctamente por el VPS VPN. Se recomienda enrutar sus IPs por la VPN." if should_route_vpn else ("Funciona en ambas conexiones" if (local_ok and vpn_ok) else "Sin conectividad en ambas vías")
+        },
+        "ips_to_route": dns_data["ipv4"]
+    }
+
+# ----------------- SWITCHYOMEGA RULES EXPORT -----------------
+
+@app.get("/api/switchyomega-rules")
+async def get_switchyomega_rules(include_adult: bool = Query(False), profile: str = Query("proxy")):
+    domains_set = set()
+    ignore_categories = {"Core"}
+    if not include_adult:
+        ignore_categories.add("Adulto")
+
+    if os.path.isfile(DEFAULT_LIST):
+        with open(DEFAULT_LIST) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("|")
+                    domain = parts[0].strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+                    cat = parts[2].strip() if len(parts) > 2 else "General"
+                    if cat not in ignore_categories and not domain.replace(".", "").isdigit():
+                        domains_set.add(domain)
+
+    if os.path.isfile(CUSTOM_LIST):
+        with open(CUSTOM_LIST) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("|")
+                    domain = parts[0].strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+                    if not domain.replace(".", "").isdigit():
+                        domains_set.add(domain)
+
+    sorted_domains = sorted(list(domains_set))
+    lines = ["[SwitchyOmega Conditions]", "@with result", ""]
+    for d in sorted_domains:
+        lines.append(f"*.{d} +{profile}")
+        if not d.startswith("web."):
+            lines.append(f"{d} +{profile}")
+    lines.append("")
+    lines.append("* +direct")
+    lines.append("")
+
+    return {"content": "\n".join(lines), "total_rules": len(sorted_domains)}
+
+@app.get("/api/diagnose")
+async def run_diagnostics(category: Optional[str] = Query(None)):
+    domain_items = []
+    
+    if os.path.isfile(DEFAULT_LIST):
+        with open(DEFAULT_LIST) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("|")
+                    domain = parts[0]
+                    name = parts[1] if len(parts) > 1 else domain
+                    cat = parts[2] if len(parts) > 2 else "General"
+                    if not category or category.lower() == cat.lower():
+                        domain_items.append((domain, name, cat))
+
+    if os.path.isfile(CUSTOM_LIST):
+        with open(CUSTOM_LIST) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("|")
+                    domain = parts[0]
+                    name = parts[1] if len(parts) > 1 else domain
+                    cat = parts[2] if len(parts) > 2 else "Personalizado"
+                    if not category or category.lower() == cat.lower():
+                        domain_items.append((domain, name, cat))
+
+    tasks = [check_domain_deep(d, n, c) for d, n, c in domain_items]
+    results = await asyncio.gather(*tasks)
+    
+    free_count = sum(1 for r in results if r["verdict"] == "LIBRE")
+    blocked_count = len(results) - free_count
+
+    return {
+        "total": len(results),
+        "free": free_count,
+        "blocked": blocked_count,
+        "results": results
+    }
 
 @app.post("/api/diagnose/single")
 async def diagnose_single(req: SingleDiagnoseRequest):
