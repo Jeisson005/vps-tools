@@ -697,11 +697,35 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
     vps_socks5_url = "socks5://100.64.0.4:1080"
     http_vps = await http_full_lifecycle(domain, proxy=vps_socks5_url)
 
-    # 6. Analysis & Recommendation
-    local_ok = http_local.get("success", False) and http_local.get("status_code", 0) not in [0, 403, 502, 503]
-    vpn_ok = http_vps.get("success", False) and http_vps.get("status_code", 0) not in [0, 502, 503]
+    # 6. Accurate Analysis & Recommendation
+    local_code = http_local.get("status_code", 0)
+    vps_code = http_vps.get("status_code", 0)
+    
+    # Network Layer Check
+    has_dns = len(dns_data["ipv4"]) > 0 or len(dns_data["ipv6"]) > 0
+    has_tcp = any(t.get("tcp_443", {}).get("success") or t.get("tcp_80", {}).get("success") for t in ip_tests)
+    tls_status = tls_local.get("status", "FAIL")
+    
+    # Local is blocked ONLY if network fails, DPI resets connection, or HTTP times out (code 0)
+    local_blocked = (not has_dns) or (not has_tcp) or (tls_status == "DPI_RESET") or (local_code == 0)
+    vpn_working = (vps_code != 0) and (http_vps.get("success", False))
 
-    should_route_vpn = (not local_ok) and vpn_ok
+    should_route_vpn = local_blocked and vpn_working
+    
+    if should_route_vpn:
+        action = "ENROUTE_VPN"
+        reason = "Bloqueo de red local detectado (DNS/TCP/TLS DPI). El sitio responde a través del VPS VPN."
+    elif not local_blocked and vpn_working:
+        action = "NONE"
+        if local_code == 403:
+            reason = f"Conexión directa y VPN funcionando correctamente. El servidor responde HTTP 403 (Acceso restringido por la web/CDN '{http_local.get('server_header', '')}', no por tu red)."
+        elif local_code == 200:
+            reason = "Conexión directa óptima (HTTP 200 OK) en ambas vías."
+        else:
+            reason = f"Conexión directa y VPN funcionando por igual (HTTP {local_code}). Sin bloqueos de proveedor."
+    else:
+        action = "NONE"
+        reason = "El sitio web no responde en ninguna de las dos conexiones (posible caída del servidor remoto)."
 
     return {
         "domain": domain,
@@ -711,10 +735,10 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
         "http_local": http_local,
         "http_vps": http_vps,
         "analysis": {
-            "local_working": local_ok,
-            "vpn_working": vpn_ok,
-            "recommended_action": "ENROUTE_VPN" if should_route_vpn else "NONE",
-            "message": "Falla en conexión local pero funciona correctamente por el VPS VPN. Se recomienda enrutar sus IPs por la VPN." if should_route_vpn else ("Funciona en ambas conexiones" if (local_ok and vpn_ok) else "Sin conectividad en ambas vías")
+            "local_working": not local_blocked,
+            "vpn_working": vpn_working,
+            "recommended_action": action,
+            "message": reason
         },
         "ips_to_route": dns_data["ipv4"]
     }
