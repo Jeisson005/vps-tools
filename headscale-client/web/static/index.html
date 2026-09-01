@@ -565,8 +565,8 @@
         <!-- Extension Setup Guide Card -->
         <div class="card">
           <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Configuración en Extensiones (ZeroOmega / SwitchyOmega)</span>
-            <span class="brand-badge">Split Tunneling VPS</span>
+            <span style="font-size: 14px; font-weight: 600;">Generador de Reglas para ZeroOmega / SwitchyOmega</span>
+            <span class="brand-badge">Auto Switch</span>
           </div>
           <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
             Para que los dominios seleccionados <strong>salgan a internet con la IP pública de tu VPS (169.58.231.155)</strong> mientras tu laptop sigue en Modo Malla rápido:
@@ -575,8 +575,19 @@
             <span>Host: 100.64.0.4 | Puerto: 1080 (SOCKS5 VPS)</span>
             <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="copyText('100.64.0.4:1080')">Copiar</button>
           </div>
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-            En el perfil <strong>Auto Switch</strong> de la extensión, asigna los dominios que quieras desviar por el VPS (ej: <code>*.netflix.com</code>, <code>*.xvideos.com</code>). El resto de sitios navegarán directo por tu conexión habitual sin desviar tu ancho de banda.
+
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; font-size: 13px;">
+            <input type="checkbox" id="chk-include-adult" style="cursor: pointer;" />
+            <label for="chk-include-adult" style="cursor: pointer; color: var(--text);">Incluir sitios para adultos (+18) en las reglas</label>
+          </div>
+
+          <div class="btn-group" style="margin-top: 0.5rem;">
+            <button class="btn btn-primary" onclick="copySwitchyRules()">📋 Copiar Reglas SwitchyOmega</button>
+            <button class="btn" onclick="downloadSwitchyRules()">💾 Descargar Reglas (.txt)</button>
+          </div>
+
+          <p style="font-size: 12px; color: var(--text-dim); line-height: 1.4; margin-top: 0.25rem;">
+            💡 <strong>Cómo importarlo:</strong> En ZeroOmega, abre tu perfil <strong>auto switch</strong>, haz clic en el botón <strong>"Edit source code"</strong> (o "Import online rule lists"), pega las reglas copiadas y pulsa <strong>Apply changes</strong>.
           </p>
         </div>
       </div>
@@ -702,6 +713,43 @@
     function copyText(str) {
       navigator.clipboard.writeText(str);
       showToast("Copiado al portapapeles: " + str);
+    }
+
+    async function getSwitchyOmegaContent() {
+      const includeAdult = document.getElementById("chk-include-adult")?.checked || false;
+      const res = await fetch(`/api/switchyomega-rules?include_adult=${includeAdult}&profile=proxy`);
+      const data = await res.json();
+      return data.content;
+    }
+
+    async function copySwitchyRules() {
+      showToast("Generando reglas para SwitchyOmega...");
+      try {
+        const content = await getSwitchyOmegaContent();
+        await navigator.clipboard.writeText(content);
+        showToast("¡Reglas copiadas al portapapeles! Pégalas en 'Edit source code' de ZeroOmega");
+      } catch (err) {
+        alert("Error al copiar reglas: " + err.message);
+      }
+    }
+
+    async function downloadSwitchyRules() {
+      showToast("Generando archivo de reglas...");
+      try {
+        const content = await getSwitchyOmegaContent();
+        const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "switchyomega-rules.txt";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("Archivo switchyomega-rules.txt descargado");
+      } catch (err) {
+        alert("Error al descargar archivo: " + err.message);
+      }
     }
 
     async function loadConfig() {

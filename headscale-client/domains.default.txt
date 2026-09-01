@@ -1,5 +1,5 @@
 # ==============================================================================
-# Baseline Domains List for Network & DPI Blocking Diagnostics
+# Baseline Domains List for Network & DPI Blocking Diagnostics & Split Tunneling
 # Format: DOMAIN|FRIENDLY_NAME|CATEGORY
 # ==============================================================================
 
@@ -13,40 +13,82 @@ debian.org|Debian Linux|Core
 ubuntu.com|Ubuntu Linux|Core
 
 # Messaging & Communication
+whatsapp.com|WhatsApp|Mensajería
 web.whatsapp.com|WhatsApp Web|Mensajería
+whatsapp.net|WhatsApp Media CDN|Mensajería
+telegram.org|Telegram|Mensajería
 web.telegram.org|Telegram Web|Mensajería
+t.me|Telegram Shortlinks|Mensajería
+telesco.pe|Telegram Video CDN|Mensajería
+telegram.me|Telegram Me|Mensajería
 discord.com|Discord|Mensajería
+discord.gg|Discord CDN|Mensajería
 slack.com|Slack|Mensajería
 zoom.us|Zoom Meetings|Mensajería
 
-# Social Media & Content
+# Social Media & CDNs
 x.com|X (Twitter)|Redes Sociales
+twitter.com|Twitter Legacy|Redes Sociales
+twimg.com|Twitter Image CDN|Redes Sociales
 instagram.com|Instagram|Redes Sociales
+cdninstagram.com|Instagram Media CDN|Redes Sociales
 facebook.com|Facebook|Redes Sociales
+fbcdn.net|Facebook CDN|Redes Sociales
+meta.com|Meta|Redes Sociales
 tiktok.com|TikTok|Redes Sociales
+tiktokcdn.com|TikTok Video CDN|Redes Sociales
+byteoversea.com|ByteDance CDN|Redes Sociales
+ibytedtos.com|TikTok Data CDN|Redes Sociales
 reddit.com|Reddit|Redes Sociales
+redditmedia.com|Reddit Media CDN|Redes Sociales
 linkedin.com|LinkedIn|Redes Sociales
+licdn.com|LinkedIn Static CDN|Redes Sociales
 
 # AI & Developer Tools
 openai.com|OpenAI / ChatGPT|IA & Dev
 anthropic.com|Anthropic / Claude|IA & Dev
+claude.ai|Claude AI|IA & Dev
 huggingface.co|Hugging Face|IA & Dev
 
-# Streaming & Media
+# Streaming & Media CDNs
 youtube.com|YouTube|Streaming
+googlevideo.com|YouTube Video CDN|Streaming
 netflix.com|Netflix|Streaming
+nflxvideo.net|Netflix Video CDN|Streaming
+nflxext.com|Netflix Assets CDN|Streaming
+nflximg.net|Netflix Images CDN|Streaming
 disneyplus.com|Disney+|Streaming
+disney-plus.net|Disney+ Core|Streaming
+dssott.com|Disney Streaming CDN|Streaming
+bamgrid.com|Disney Media Delivery|Streaming
 max.com|Max (HBO)|Streaming
+hbomax.com|HBO Max|Streaming
+warnermediacdn.com|WarnerMedia CDN|Streaming
 primevideo.com|Prime Video|Streaming
+pv-cdn.net|Prime Video CDN|Streaming
+aiv-cdn.net|Amazon Video Delivery|Streaming
 twitch.tv|Twitch|Streaming
+ttvnw.net|Twitch Video CDN|Streaming
+jtvnw.net|Twitch Media Delivery|Streaming
 spotify.com|Spotify|Streaming
+scdn.co|Spotify Audio CDN|Streaming
 
-# Gaming & Entertainment
+# Gaming & Distribution CDNs
 steampowered.com|Steam Store|Gaming
+steamcommunity.com|Steam Community|Gaming
+steamstatic.com|Steam Assets CDN|Gaming
+steamcontent.com|Steam Game CDN|Gaming
 epicgames.com|Epic Games|Gaming
+epicgames.dev|Epic Online Services|Gaming
+unrealengine.com|Unreal Engine|Gaming
 roblox.com|Roblox|Gaming
+rbxcdn.com|Roblox Assets CDN|Gaming
 
 # High-DPI Inspection & Adult Sites
 pornhub.com|Pornhub|Adulto
+phncdn.com|Pornhub Video CDN|Adulto
 xvideos.com|XVideos|Adulto
+xvideos-cdn.com|XVideos Video CDN|Adulto
+xnxx.com|XNXX|Adulto
+xnxx-cdn.com|XNXX Video CDN|Adulto
 onlyfans.com|OnlyFans|Adulto

@@ -345,6 +345,50 @@ async def toggle_proxy_autostart(req: AutostartRequest):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.get("/api/switchyomega-rules")
+async def get_switchyomega_rules(include_adult: bool = Query(False), profile: str = Query("proxy")):
+    domains_set = set()
+    
+    # Non-restricted core domains to exclude from proxy list unless custom
+    ignore_categories = {"Core"}
+    if not include_adult:
+        ignore_categories.add("Adulto")
+
+    # Read default
+    if os.path.isfile(DEFAULT_LIST):
+        with open(DEFAULT_LIST) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("|")
+                    domain = parts[0].strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+                    cat = parts[2].strip() if len(parts) > 2 else "General"
+                    if cat not in ignore_categories and not domain.replace(".", "").isdigit():
+                        domains_set.add(domain)
+
+    # Read custom
+    if os.path.isfile(CUSTOM_LIST):
+        with open(CUSTOM_LIST) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("|")
+                    domain = parts[0].strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
+                    if not domain.replace(".", "").isdigit():
+                        domains_set.add(domain)
+
+    sorted_domains = sorted(list(domains_set))
+    lines = ["[SwitchyOmega Conditions]", "@with result", ""]
+    for d in sorted_domains:
+        lines.append(f"*.{d} +{profile}")
+        if not d.startswith("web."):
+            lines.append(f"{d} +{profile}")
+    lines.append("")
+    lines.append("* +direct")
+    lines.append("")
+
+    return {"content": "\n".join(lines), "total_rules": len(sorted_domains)}
+
 @app.get("/api/diagnose")
 async def run_diagnostics(category: Optional[str] = Query(None)):
     domain_items = []
