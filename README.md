@@ -29,7 +29,7 @@ Unified intelligence layer empowering autonomous AI agents (Hermes & OpenCode) w
 
 Agent Capabilities:
 - **Host Administration & Shell Execution** ([bash-mcp/](bash-mcp/)) — Execute bash commands, inspect logs, monitor system health, and manage Docker containers with strict JSON schema compliance.
-- **Browser Automation & Live Visualizer** ([steel/](steel/), [skills/browser-automation/](skills/browser-automation/)) — Headless Chromium sessions with DOM manipulation, form filling, captcha handling, and real-time live session inspection.
+- **Browser Automation & Live Visualizer** ([steel/](steel/), [skills/browser-automation/](skills/browser-automation/)) — Headless Chromium sessions with DOM manipulation, form filling, captcha solving, Human-in-the-Loop live takeover, and real-time session inspection.
 - **Remote Desktop & GUI Interaction** ([desktop/](desktop/), [skills/desktop-gui-control/](skills/desktop-gui-control/)) — Visual screen capture, mouse, and keyboard control over XFCE4 desktop via KasmVNC.
 - **Self-Healing Task Supervision** ([sentinel/](sentinel/), [skills/scheduled-tasks/](skills/scheduled-tasks/)) — Proactive monitor for scheduled tasks with failure escalation, interactive Telegram diagnosis buttons, and automated healing.
 - **Multi-Platform Messaging** ([hermes/](hermes/)) — Autonomous communication across Telegram Bot and WhatsApp (Baileys) with turn interruption handling and startup alerts.
