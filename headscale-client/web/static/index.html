@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Headscale Client & Network Diagnostic Suite</title>
+  <title>Headscale Client & Connectivity Suite</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -291,7 +291,7 @@
     .single-input-group {
       display: flex;
       gap: 0.5rem;
-      max-width: 360px;
+      max-width: 380px;
       width: 100%;
     }
 
@@ -394,7 +394,7 @@
       border-radius: var(--radius);
       font-size: 13px;
       display: none;
-      z-index: 200;
+      z-index: 600;
       box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
     }
   </style>
@@ -417,6 +417,9 @@
     </button>
     <button class="tab-btn" onclick="switchTab('tab-proxy')">
       <span>⚡</span> Proxy SOCKS5
+    </button>
+    <button class="tab-btn" onclick="switchTab('tab-deep')">
+      <span>🔬</span> Diagnóstico de conectividad
     </button>
     <button class="tab-btn" onclick="switchTab('tab-diag')">
       <span>🔍</span> Web bloqueadas
@@ -481,7 +484,7 @@
         </div>
       </div>
 
-      <!-- VPN Autostart Card (Directly in VPN Tab) -->
+      <!-- VPN Autostart Card -->
       <div class="card">
         <div class="card-header">
           <span style="font-size: 14px; font-weight: 600;">Inicio Automático de la VPN al Arrancar Linux</span>
@@ -511,7 +514,7 @@
       </div>
     </div>
 
-    <!-- TAB 2: PROXY SOCKS5 (SPLIT TUNNELING) -->
+    <!-- TAB 2: PROXY SOCKS5 -->
     <div id="tab-proxy" class="tab-content">
       <div>
         <h2 class="section-title">Proxy Nativo SOCKS5 (:1080)</h2>
@@ -540,7 +543,7 @@
           </div>
         </div>
 
-        <!-- Autostart Persistence Card -->
+        <!-- Autostart Card -->
         <div class="card">
           <div class="card-header">
             <span style="font-size: 14px; font-weight: 600;">Inicio Automático del Proxy</span>
@@ -562,105 +565,161 @@
         </div>
       </div>
 
-        <!-- Extension Setup Guide Card -->
-        <div class="card">
-          <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Generador de Reglas para ZeroOmega / SwitchyOmega</span>
-            <span class="brand-badge">Auto Switch</span>
-          </div>
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-            Para que los dominios seleccionados <strong>salgan a internet con la IP pública de tu VPS (169.58.231.155)</strong> mientras tu laptop sigue en Modo Malla rápido:
-          </p>
-          <div class="code-box">
-            <span>Host: 100.64.0.4 | Puerto: 1080 (SOCKS5 VPS)</span>
-            <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="copyText('100.64.0.4:1080')">Copiar</button>
-          </div>
-
-          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; font-size: 13px;">
-            <input type="checkbox" id="chk-include-adult" style="cursor: pointer;" />
-            <label for="chk-include-adult" style="cursor: pointer; color: var(--text);">Incluir sitios para adultos (+18) en las reglas</label>
-          </div>
-
-          <div class="btn-group" style="margin-top: 0.5rem;">
-            <button class="btn btn-primary" onclick="copyBlockedRules()">📋 Copiar Reglas de Webs Bloqueadas</button>
-            <button class="btn" onclick="downloadBlockedRules()">💾 Descargar Reglas (.txt)</button>
-          </div>
-
-          <p style="font-size: 12px; color: var(--text-dim); line-height: 1.4; margin-top: 0.25rem;">
-            💡 <strong>Cómo importarlo:</strong> En ZeroOmega, abre tu perfil <strong>auto switch</strong>, haz clic en el botón <strong>"Edit source code"</strong> (o "Import online rule lists"), pega las reglas copiadas y pulsa <strong>Apply changes</strong>.
-          </p>
+      <!-- Extension Guide Card -->
+      <div class="card">
+        <div class="card-header">
+          <span style="font-size: 14px; font-weight: 600;">Configuración en Extensiones (ZeroOmega / SwitchyOmega)</span>
+          <span class="brand-badge">Split Tunneling VPS</span>
         </div>
+        <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+          Para que los dominios seleccionados <strong>salgan a internet con la IP pública de tu VPS (169.58.231.155)</strong> mientras tu laptop sigue en Modo Malla rápido:
+        </p>
+        <div class="code-box">
+          <span>Host: 100.64.0.4 | Puerto: 1080 (SOCKS5 VPS)</span>
+          <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="copyText('100.64.0.4:1080')">Copiar</button>
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+          En el perfil <strong>Auto Switch</strong> de la extensión, asigna los dominios que quieras desviar por el VPS (ej: <code>*.netflix.com</code>, <code>*.xvideos.com</code>). El resto de sitios navegarán directo por tu conexión habitual sin desviar tu ancho de banda.
+        </p>
       </div>
     </div>
 
-    <!-- TAB 3: CREDENTIALS & CONNECTION SETUP -->
-    <div id="tab-config" class="tab-content">
+    <!-- TAB 3: DEEP CONNECTIVITY DIAGNOSTICS (NEW!) -->
+    <div id="tab-deep" class="tab-content">
       <div>
-        <h2 class="section-title">Configuración del Cliente & Dominios Personalizados</h2>
-        <p class="section-desc">Administra los parámetros de conexión de Headscale y gestiona la lista de dominios personalizados.</p>
+        <h2 class="section-title">Diagnóstico Profundo de Conectividad</h2>
+        <p class="section-desc">Analiza exhaustivamente un dominio comparando el acceso directo (Local ISP) vs el túnel VPN, y enruta selectivamente sus IPs si está bloqueado.</p>
       </div>
 
-      <div class="grid-2">
-        <!-- Client Settings Card -->
-        <div class="card">
-          <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Parámetros del Cliente (.env)</span>
-            <span class="brand-badge">Persistente</span>
-          </div>
+      <!-- Search & Execution Toolbar -->
+      <div class="diag-toolbar">
+        <div style="display: flex; gap: 0.75rem; width: 100%; max-width: 600px;">
+          <input type="text" id="deep-domain-input" placeholder="Ingresa un dominio (ej: passbolt.articc.top, netflix.com)" style="flex: 1;" onkeypress="if(event.key==='Enter') runDeepDiagnostic()" />
+          <button class="btn btn-primary" style="flex: 0 0 auto;" onclick="runDeepDiagnostic()">🔬 Iniciar Diagnóstico Profundo</button>
+        </div>
+      </div>
 
-          <div class="form-group">
-            <label class="form-label">Servidor Headscale (Control Server URL):</label>
-            <input type="text" id="cfg-server" placeholder="https://headscale.jeisson.top" />
-          </div>
+      <div id="deep-prog-bar" class="progress-bar"><div class="progress-fill"></div></div>
 
-          <div class="form-group">
-            <label class="form-label">Pre-Auth Key / Llave de Registro:</label>
-            <input type="password" id="cfg-key" placeholder="ccf3d9a6b227d5f4ae3a9dfdc0eab8ad..." />
-          </div>
-
-          <div class="grid-2" style="gap: 0.75rem;">
-            <div class="form-group">
-              <label class="form-label">Hostname del Dispositivo:</label>
-              <input type="text" id="cfg-host" placeholder="jeisson-laptop" />
+      <!-- Diagnostic Results Section (Hidden until tested) -->
+      <div id="deep-results-section" style="display: none; flex-direction: column; gap: 1.5rem;">
+        
+        <!-- Recommendation & Action Banner -->
+        <div id="deep-recommendation-card" class="card" style="border-left: 4px solid var(--warning); background: var(--bg-card);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <span id="deep-rec-title" style="font-size: 15px; font-weight: 600;">Resultado del Diagnóstico</span>
+              <p id="deep-rec-desc" style="font-size: 13px; color: var(--text-muted); margin-top: 0.25rem;">-</p>
             </div>
-            <div class="form-group">
-              <label class="form-label">Exit Node Predeterminado (VPS):</label>
-              <input type="text" id="cfg-exit" placeholder="100.64.0.4" />
-            </div>
-          </div>
-
-          <div class="btn-group" style="margin-top: 0.5rem;">
-            <button class="btn" onclick="saveConfigOnly()">Guardar Parámetros</button>
-            <button class="btn btn-primary" onclick="saveAndConnect()">Guardar y Conectar Ahora</button>
+            <button id="btn-enroute-vpn" class="btn btn-primary" style="display: none; flex: 0 0 auto;" onclick="applyVpnRoutingForCurrentDomain()">⚡ Enrutar estas IPs por la VPN (tailscale0)</button>
           </div>
         </div>
 
-        <!-- Custom Domains Manager Card -->
+        <!-- Discovered DNS Records Card -->
         <div class="card">
           <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Dominios Personalizados</span>
-            <span id="custom-domains-badge" class="brand-badge">0 dominios</span>
+            <span style="font-size: 14px; font-weight: 600;">1. Descubrimiento DNS & Registros Asociados</span>
+            <span id="dns-total-badge" class="brand-badge">0 IPs</span>
           </div>
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-            Agrega tus dominios privados o empresariales para que sean incluidos en los diagnósticos y reglas.
-          </p>
+          <div class="meta-list" id="dns-records-list">
+            <div class="meta-row"><span>IPs IPv4 Asociadas:</span><span id="dns-ipv4-val" class="meta-val">-</span></div>
+            <div class="meta-row"><span>IPs IPv6 Asociadas:</span><span id="dns-ipv6-val" class="meta-val">-</span></div>
+            <div class="meta-row"><span>Registros CNAME / CDN:</span><span id="dns-cname-val" class="meta-val">-</span></div>
+          </div>
+        </div>
 
-          <div class="form-group">
-            <label class="form-label">Nuevo Dominio:</label>
-            <div style="display: flex; gap: 0.5rem;">
-              <input type="text" id="new-custom-domain" placeholder="ej: passbolt.midominio.top" style="flex: 1;" onkeypress="if(event.key==='Enter') addCustomDomain()" />
-              <button class="btn btn-primary" style="flex: 0 0 auto;" onclick="addCustomDomain()">+ Agregar</button>
+        <!-- Side-by-Side Comparison (Local vs VPS VPN) -->
+        <div class="grid-2">
+          <!-- Local ISP Direct Card -->
+          <div class="card" style="border-top: 3px solid #64748b;">
+            <div class="card-header">
+              <span style="font-size: 14px; font-weight: 600;">🏠 Conexión Directa Local (ISP)</span>
+              <span id="local-status-pill" class="status-badge status-offline">Cargando...</span>
+            </div>
+            <div class="meta-list">
+              <div class="meta-row"><span>Código HTTP Final:</span><span id="local-http-code" class="meta-val">-</span></div>
+              <div class="meta-row"><span>Tiempo Total HTTP:</span><span id="local-http-time" class="meta-val">-</span></div>
+              <div class="meta-row"><span>Negociación TLS / SNI:</span><span id="local-tls-status" class="meta-val">-</span></div>
+              <div class="meta-row"><span>Certificado SSL:</span><span id="local-cert-val" class="meta-val">-</span></div>
+              <div class="meta-row"><span>URL Final:</span><span id="local-final-url" class="meta-val" style="font-size: 11px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</span></div>
+            </div>
+            <div id="local-redirects-box" style="font-size: 12px; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 0.5rem;">
+              <span>Saltos / Redirecciones: Ninguno</span>
             </div>
           </div>
 
-          <div class="meta-list" id="custom-domains-list" style="max-height: 220px; overflow-y: auto; margin-top: 0.25rem;">
-            <div class="meta-row"><span>Cargando dominios personalizados...</span></div>
+          <!-- VPS VPN Card -->
+          <div class="card" style="border-top: 3px solid var(--success);">
+            <div class="card-header">
+              <span style="font-size: 14px; font-weight: 600;">🏰 Conexión Vía VPS VPN (100.64.0.4)</span>
+              <span id="vps-status-pill" class="status-badge status-online">Cargando...</span>
+            </div>
+            <div class="meta-list">
+              <div class="meta-row"><span>Código HTTP Final:</span><span id="vps-http-code" class="meta-val">-</span></div>
+              <div class="meta-row"><span>Tiempo Total HTTP:</span><span id="vps-http-time" class="meta-val">-</span></div>
+              <div class="meta-row"><span>Salida IP Pública:</span><span class="meta-val">169.58.231.155 (VPS)</span></div>
+              <div class="meta-row"><span>Servidor / Header:</span><span id="vps-server-header" class="meta-val">-</span></div>
+              <div class="meta-row"><span>URL Final:</span><span id="vps-final-url" class="meta-val" style="font-size: 11px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</span></div>
+            </div>
+            <div id="vps-redirects-box" style="font-size: 12px; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 0.5rem;">
+              <span>Saltos / Redirecciones: Ninguno</span>
+            </div>
           </div>
+        </div>
+
+        <!-- IP-Level Ping & TCP Breakdown Table -->
+        <div class="card-table">
+          <table>
+            <thead>
+              <tr>
+                <th>IP de Destino</th>
+                <th>Ping ICMP (RTT)</th>
+                <th>TCP Puerto 80 (HTTP)</th>
+                <th>TCP Puerto 443 (HTTPS)</th>
+                <th>Estado de Red</th>
+              </tr>
+            </thead>
+            <tbody id="ip-breakdown-tbody">
+              <tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">Sin datos de IPs.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <!-- System VPN Routing Rules Manager Card -->
+      <div class="card" style="margin-top: 1rem;">
+        <div class="card-header">
+          <div>
+            <span style="font-size: 14px; font-weight: 600;">Gestor de Rutas de Sistema por VPN (`ip route`)</span>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Rutas específicas inyectadas en tu tarjeta `tailscale0` para saltar bloqueos sin alterar el resto de tu internet.</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn" style="padding: 4px 10px; font-size: 11px; flex: 0 0 auto;" onclick="loadSystemRoutes()">Actualizar Rutas</button>
+            <button class="btn btn-danger" style="padding: 4px 10px; font-size: 11px; flex: 0 0 auto;" onclick="clearAllSystemRoutes()">🧹 Limpiar Todas las Rutas</button>
+          </div>
+        </div>
+
+        <div class="card-table" style="margin-top: 0.5rem;">
+          <table>
+            <thead>
+              <tr>
+                <th>IP Enrutada (/32)</th>
+                <th>Dominio de Origen</th>
+                <th>Fecha de Inyección</th>
+                <th>Estado Kernel</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="system-routes-tbody">
+              <tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No hay rutas VPN de sistema activas.</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
-    <!-- TAB 4: NETWORK & DPI DIAGNOSTICS -->
+    <!-- TAB 4: WEBS BLOQUEADAS (DIAGNÓSTICO EN MASA) -->
     <div id="tab-diag" class="tab-content">
       <div>
         <h2 class="section-title">Diagnóstico de Webs Bloqueadas & DPI</h2>
@@ -705,14 +764,6 @@
           <button class="btn btn-primary" id="btn-copy-blocked-rules" onclick="copyBlockedRules()">📋 Copiar Reglas de Webs Bloqueadas</button>
           <button class="btn" id="btn-dl-blocked-rules" onclick="downloadBlockedRules()">💾 Descargar Reglas (.txt)</button>
         </div>
-
-        <div id="rules-preview-container" style="display: none; flex-direction: column; gap: 0.35rem; margin-top: 0.25rem;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 11px; color: var(--text-dim);">Vista previa de reglas generadas:</span>
-            <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="selectAndCopyPreview()">Seleccionar y Copiar Todo</button>
-          </div>
-          <textarea id="blocked-rules-preview" readonly style="width: 100%; height: 130px; font-family: var(--font-mono); font-size: 12px; background: var(--bg-primary); color: #22c55e; border: 1px solid var(--border); padding: 0.6rem; border-radius: var(--radius); resize: vertical; outline: none;"></textarea>
-        </div>
       </div>
 
       <div id="prog-bar" class="progress-bar"><div class="progress-fill"></div></div>
@@ -736,6 +787,76 @@
             <tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">Presiona "Ejecutar Diagnóstico Completo" para analizar los bloqueos de tu conexión.</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- TAB 5: CREDENTIALS & CONNECTION SETUP -->
+    <div id="tab-config" class="tab-content">
+      <div>
+        <h2 class="section-title">Configuración del Cliente & Dominios Personalizados</h2>
+        <p class="section-desc">Administra los parámetros de conexión de Headscale y gestiona la lista de dominios personalizados.</p>
+      </div>
+
+      <div class="grid-2">
+        <!-- Client Settings Card -->
+        <div class="card">
+          <div class="card-header">
+            <span style="font-size: 14px; font-weight: 600;">Parámetros del Cliente (.env)</span>
+            <span class="brand-badge">Persistente</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Servidor Headscale (Control Server URL):</label>
+            <input type="text" id="cfg-server" placeholder="https://headscale.jeisson.top" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Pre-Auth Key / Llave de Registro:</label>
+            <div style="position: relative; display: flex; align-items: center;">
+              <input type="password" id="cfg-key" placeholder="ccf3d9a6b227d5f4ae3a9dfdc0eab8ad..." style="width: 100%; padding-right: 40px;" />
+              <button type="button" class="btn" style="position: absolute; right: 4px; padding: 4px 8px; font-size: 13px; background: transparent; border: none; flex: 0 0 auto;" onclick="togglePasswordVisibility('cfg-key', this)">👁️</button>
+            </div>
+          </div>
+
+          <div class="grid-2" style="gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label">Hostname del Dispositivo:</label>
+              <input type="text" id="cfg-host" placeholder="jeisson-laptop" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Exit Node Predeterminado (VPS):</label>
+              <input type="text" id="cfg-exit" placeholder="100.64.0.4" />
+            </div>
+          </div>
+
+          <div class="btn-group" style="margin-top: 0.5rem;">
+            <button class="btn" onclick="saveConfigOnly()">Guardar Parámetros</button>
+            <button class="btn btn-primary" onclick="saveAndConnect()">Guardar y Conectar Ahora</button>
+          </div>
+        </div>
+
+        <!-- Custom Domains Manager Card -->
+        <div class="card">
+          <div class="card-header">
+            <span style="font-size: 14px; font-weight: 600;">Dominios Personalizados</span>
+            <span id="custom-domains-badge" class="brand-badge">0 dominios</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+            Agrega tus dominios privados o empresariales para que sean incluidos en los diagnósticos y reglas.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label">Nuevo Dominio:</label>
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="text" id="new-custom-domain" placeholder="ej: passbolt.midominio.top" style="flex: 1;" onkeypress="if(event.key==='Enter') addCustomDomain()" />
+              <button class="btn btn-primary" style="flex: 0 0 auto;" onclick="addCustomDomain()">+ Agregar</button>
+            </div>
+          </div>
+
+          <div class="meta-list" id="custom-domains-list" style="max-height: 220px; overflow-y: auto; margin-top: 0.25rem;">
+            <div class="meta-row"><span>Cargando dominios personalizados...</span></div>
+          </div>
+        </div>
       </div>
     </div>
   </main>
@@ -772,9 +893,10 @@
 
   <script>
     let activeCategory = '';
+    let lastDeepDiagnosticData = null;
 
     function switchTab(tabId) {
-      const tabIds = ['tab-vpn', 'tab-proxy', 'tab-diag', 'tab-config'];
+      const tabIds = ['tab-vpn', 'tab-proxy', 'tab-deep', 'tab-diag', 'tab-config'];
       document.querySelectorAll(".tab-btn").forEach((b, idx) => {
         b.className = tabIds[idx] === tabId ? "tab-btn active" : "tab-btn";
       });
@@ -782,6 +904,7 @@
         c.className = c.id === tabId ? "tab-content active" : "tab-content";
       });
       if (tabId === 'tab-config') loadConfig();
+      if (tabId === 'tab-deep') loadSystemRoutes();
     }
 
     function showToast(msg) {
@@ -789,6 +912,18 @@
       t.innerText = msg;
       t.style.display = "block";
       setTimeout(() => { t.style.display = "none"; }, 3000);
+    }
+
+    function togglePasswordVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      if (input.type === "password") {
+        input.type = "text";
+        btn.innerText = "🙈";
+      } else {
+        input.type = "password";
+        btn.innerText = "👁️";
+      }
     }
 
     async function copyToClipboard(text) {
@@ -825,6 +960,8 @@
       });
     }
 
+    // ----------------- SWITCHYOMEGA RULES & MODAL -----------------
+
     let lastDiagnosticResults = [];
 
     function getDiagnosedBlockedRulesText() {
@@ -833,7 +970,6 @@
 
       if (lastDiagnosticResults && lastDiagnosticResults.length > 0) {
         lastDiagnosticResults.forEach(r => {
-          // STRICT: Only include domains that are genuinely blocked / restricted (NOT LIBRE)
           if (r.verdict && r.verdict !== "LIBRE" && r.verdict !== "OK") {
             if (!includeAdult && r.category && r.category.toLowerCase() === "adulto") {
               return;
@@ -875,7 +1011,6 @@
         }
       }, 50);
 
-      // Attempt immediate copy
       copyToClipboard(text);
     }
 
@@ -934,6 +1069,8 @@
         alert("Error al descargar archivo: " + err.message);
       }
     }
+
+    // ----------------- CUSTOM DOMAINS MANAGEMENT -----------------
 
     async function loadCustomDomains() {
       const listEl = document.getElementById("custom-domains-list");
@@ -1006,6 +1143,226 @@
         alert("Error al eliminar: " + err.message);
       }
     }
+
+    // ----------------- DEEP CONNECTIVITY DIAGNOSTIC -----------------
+
+    async function runDeepDiagnostic() {
+      const domainInput = document.getElementById("deep-domain-input");
+      const domain = domainInput.value.trim();
+      if (!domain) {
+        alert("Por favor ingresa un dominio para diagnosticar");
+        return;
+      }
+
+      const prog = document.getElementById("deep-prog-bar");
+      const resultsSection = document.getElementById("deep-results-section");
+      prog.style.display = "block";
+      showToast(`Iniciando diagnóstico profundo para ${domain}...`);
+
+      try {
+        const res = await fetch("/api/deep-diagnose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain })
+        });
+        const data = await res.json();
+        lastDeepDiagnosticData = data;
+        renderDeepDiagnosticResults(data);
+        resultsSection.style.display = "flex";
+      } catch (err) {
+        alert("Error en diagnóstico profundo: " + err.message);
+      } finally {
+        prog.style.display = "none";
+      }
+    }
+
+    function renderDeepDiagnosticResults(data) {
+      // 1. Recommendation Banner
+      const card = document.getElementById("deep-recommendation-card");
+      const title = document.getElementById("deep-rec-title");
+      const desc = document.getElementById("deep-rec-desc");
+      const btnEnroute = document.getElementById("btn-enroute-vpn");
+
+      if (data.analysis.recommended_action === "ENROUTE_VPN") {
+        card.style.borderLeftColor = "var(--warning)";
+        title.innerHTML = `⚠️ Bloqueo Local Detectado en <strong>${data.domain}</strong>`;
+        desc.innerText = "El sitio no responde en tu conexión local, pero responde perfectamente por el VPS VPN. Puedes enrutar sus IPs para solucionar el bloqueo.";
+        btnEnroute.style.display = "inline-flex";
+      } else if (data.analysis.local_working && data.analysis.vpn_working) {
+        card.style.borderLeftColor = "var(--success)";
+        title.innerHTML = `🟢 Conexión Óptima en <strong>${data.domain}</strong>`;
+        desc.innerText = "El sitio web responde correctamente tanto por tu conexión local directa como por la VPN.";
+        btnEnroute.style.display = "none";
+      } else {
+        card.style.borderLeftColor = "var(--error)";
+        title.innerHTML = `🔴 Falla de Conectividad General en <strong>${data.domain}</strong>`;
+        desc.innerText = "El sitio web no responde en ninguna de las dos vías (posible caída del servidor remoto o dominio inexistente).";
+        btnEnroute.style.display = "none";
+      }
+
+      // 2. DNS Discovery
+      const dnsBadge = document.getElementById("dns-total-badge");
+      dnsBadge.innerText = `${data.dns.total_ips} IPs encontradas`;
+      document.getElementById("dns-ipv4-val").innerText = data.dns.ipv4.length > 0 ? data.dns.ipv4.join(", ") : "Ninguna";
+      document.getElementById("dns-ipv6-val").innerText = data.dns.ipv6.length > 0 ? data.dns.ipv6.join(", ") : "Ninguna";
+      document.getElementById("dns-cname-val").innerText = data.dns.cnames.length > 0 ? data.dns.cnames.join(" -> ") : "Directo (A Record)";
+
+      // 3. Local ISP Side
+      const localPill = document.getElementById("local-status-pill");
+      if (data.http_local.success) {
+        localPill.className = "status-badge status-online";
+        localPill.innerText = `HTTP ${data.http_local.status_code}`;
+      } else {
+        localPill.className = "status-badge status-offline";
+        localPill.innerText = data.http_local.error || "Falla de Acceso";
+      }
+      document.getElementById("local-http-code").innerText = data.http_local.status_code || "000 (Sin respuesta)";
+      document.getElementById("local-http-time").innerText = `${data.http_local.total_time_ms} ms`;
+      document.getElementById("local-tls-status").innerText = data.tls_local.status === "OK" ? "🟢 Válido (SNI OK)" : `⚠️ ${data.tls_local.status}`;
+      document.getElementById("local-cert-val").innerText = data.tls_local.cert ? `${data.tls_local.cert.issuer}` : "No disponible";
+      document.getElementById("local-final-url").innerText = data.http_local.final_url || "-";
+
+      const localRedir = document.getElementById("local-redirects-box");
+      if (data.http_local.redirects && data.http_local.redirects.length > 1) {
+        localRedir.innerHTML = "Saltos: " + data.http_local.redirects.map(r => `<code>[${r.status_code}] ${r.url}</code>`).join(" ➔ ");
+      } else {
+        localRedir.innerHTML = "<span>Saltos / Redirecciones: Ninguno (Respuesta directa)</span>";
+      }
+
+      // 4. VPS VPN Side
+      const vpsPill = document.getElementById("vps-status-pill");
+      if (data.http_vps.success) {
+        vpsPill.className = "status-badge status-online";
+        vpsPill.innerText = `HTTP ${data.http_vps.status_code}`;
+      } else {
+        vpsPill.className = "status-badge status-offline";
+        vpsPill.innerText = data.http_vps.error || "Falla";
+      }
+      document.getElementById("vps-http-code").innerText = data.http_vps.status_code || "000";
+      document.getElementById("vps-http-time").innerText = `${data.http_vps.total_time_ms} ms`;
+      document.getElementById("vps-server-header").innerText = data.http_vps.server_header || "N/A";
+      document.getElementById("vps-final-url").innerText = data.http_vps.final_url || "-";
+
+      const vpsRedir = document.getElementById("vps-redirects-box");
+      if (data.http_vps.redirects && data.http_vps.redirects.length > 1) {
+        vpsRedir.innerHTML = "Saltos: " + data.http_vps.redirects.map(r => `<code>[${r.status_code}] ${r.url}</code>`).join(" ➔ ");
+      } else {
+        vpsRedir.innerHTML = "<span>Saltos / Redirecciones: Ninguno</span>";
+      }
+
+      // 5. IP Breakdown Table
+      const ipTbody = document.getElementById("ip-breakdown-tbody");
+      if (!data.ip_tests || data.ip_tests.length === 0) {
+        ipTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No se pudieron resolver IPs IPv4 para pruebas ICMP/TCP.</td></tr>`;
+      } else {
+        ipTbody.innerHTML = data.ip_tests.map(t => {
+          const pingTag = t.ping.success ? `<span class="tag tag-ok">${t.ping.avg_rtt_ms} ms</span>` : `<span class="tag tag-fail">100% loss</span>`;
+          const tcp80Tag = t.tcp_80.success ? `<span class="tag tag-ok">${t.tcp_80.latency_ms} ms</span>` : `<span class="tag tag-fail">Cerrado</span>`;
+          const tcp443Tag = t.tcp_443.success ? `<span class="tag tag-ok">${t.tcp_443.latency_ms} ms</span>` : `<span class="tag tag-fail">Bloqueado / Timeout</span>`;
+          const stateTag = (t.tcp_443.success || t.tcp_80.success) ? `<span class="tag tag-ok">Accesible</span>` : `<span class="tag tag-fail">Inaccesible</span>`;
+
+          return `
+            <tr>
+              <td><strong style="font-family: var(--font-mono);">${t.ip}</strong></td>
+              <td>${pingTag}</td>
+              <td>${tcp80Tag}</td>
+              <td>${tcp443Tag}</td>
+              <td>${stateTag}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    // ----------------- SYSTEM ROUTING MANAGER -----------------
+
+    async function applyVpnRoutingForCurrentDomain() {
+      if (!lastDeepDiagnosticData || !lastDeepDiagnosticData.ips_to_route || lastDeepDiagnosticData.ips_to_route.length === 0) {
+        alert("No hay IPs válidas para enrutar");
+        return;
+      }
+
+      const domain = lastDeepDiagnosticData.domain;
+      const ips = lastDeepDiagnosticData.ips_to_route;
+
+      showToast(`Enrutando ${ips.length} IPs de ${domain} por la VPN...`);
+      try {
+        const res = await fetch("/api/routes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain, ips })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`¡${data.added} IPs enrutadas con éxito por tailscale0!`);
+          loadSystemRoutes();
+        } else {
+          alert("Error al aplicar rutas: " + data.error);
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    async function loadSystemRoutes() {
+      const tbody = document.getElementById("system-routes-tbody");
+      try {
+        const res = await fetch("/api/routes");
+        const data = await res.json();
+        const routes = data.routes || [];
+
+        if (routes.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No hay rutas VPN de sistema activas.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = routes.map(r => `
+          <tr>
+            <td><strong style="font-family: var(--font-mono); color: var(--text);">${r.ip}/32</strong></td>
+            <td><span>${r.domain}</span></td>
+            <td><span style="color: var(--text-dim); font-size: 12px;">${r.created_at}</span></td>
+            <td><span class="tag tag-ok">Activo (tailscale0)</span></td>
+            <td>
+              <button class="btn btn-danger" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="deleteSystemRoute('${r.ip}')">🗑️ Quitar</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function deleteSystemRoute(ip) {
+      if (!confirm(`¿Eliminar la ruta ${ip}/32 de la tabla de enrutamiento?`)) return;
+      showToast(`Eliminando ruta ${ip}...`);
+      try {
+        const res = await fetch(`/api/routes/${encodeURIComponent(ip)}`, { method: "DELETE" });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Ruta ${ip} eliminada`);
+          loadSystemRoutes();
+        }
+      } catch (err) {
+        alert("Error al eliminar ruta: " + err.message);
+      }
+    }
+
+    async function clearAllSystemRoutes() {
+      if (!confirm("¿Deseas eliminar TODAS las rutas inyectadas por la herramienta y restaurar la tabla limpia?")) return;
+      showToast("Limpiando rutas de sistema...");
+      try {
+        const res = await fetch("/api/routes", { method: "DELETE" });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Todas las rutas han sido eliminadas limpiamente");
+          loadSystemRoutes();
+        }
+      } catch (err) {
+        alert("Error al limpiar rutas: " + err.message);
+      }
+    }
+
+    // ----------------- CLIENT VPN STATUS -----------------
 
     async function loadConfig() {
       loadCustomDomains();
@@ -1083,7 +1440,6 @@
         const routingBadge = document.getElementById("routing-badge");
         const selectContainer = document.getElementById("exit-select-container");
 
-        // Populate Exit Node Selector
         if (data.exit_nodes && data.exit_nodes.length > 0) {
           exitSelect.innerHTML = data.exit_nodes.map(n => {
             const statusIcon = n.online ? "🟢" : "⚪";
@@ -1093,7 +1449,6 @@
           exitSelect.innerHTML = `<option value="100.64.0.4">vps-server (100.64.0.4) 🟢</option>`;
         }
 
-        // Render Peers
         const peersList = document.getElementById("peers-list");
         const peersCount = document.getElementById("peers-count");
         if (data.peers && data.peers.length > 0) {
@@ -1109,7 +1464,6 @@
           peersList.innerHTML = `<div class="meta-row"><span>No se detectaron otros peers.</span></div>`;
         }
 
-        // SOCKS5 Proxy Status in Proxy Tab
         const proxyPill = document.getElementById("proxy-status-pill");
         const proxyText = document.getElementById("proxy-status-text");
         const proxyLiveVal = document.getElementById("proxy-live-val");
@@ -1147,7 +1501,6 @@
           proxyAutoVal.innerText = "⚪ Deshabilitado";
         }
 
-        // VPN Autostart Status in VPN Tab
         const vpnAutoPill = document.getElementById("vpn-autostart-pill");
         const vpnAutoText = document.getElementById("vpn-autostart-text");
         const vpnAutoVal = document.getElementById("vpn-autostart-val");
@@ -1161,7 +1514,6 @@
           vpnAutoVal.innerText = "⚪ Inicio manual";
         }
 
-        // VPN Connection State
         if (data.connected) {
           pill.className = "status-badge status-online";
           text.innerText = "Conectado";
@@ -1422,6 +1774,7 @@
 
     function refreshAll() {
       fetchStatus();
+      loadSystemRoutes();
     }
 
     fetchStatus();
