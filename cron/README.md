@@ -4,7 +4,7 @@ This folder contains `cron` configuration examples to automate maintenance tasks
 
 ## Contents
 
-- `crontab.example`: Example crontab configurations for Postgres backups, Zitadel PAT rotation, and Nginx certbot renewals.
+- `crontab.example`: Example crontab configurations for database backups (Postgres, Redis, MongoDB), Nginx certbot renewals, and log cleanup.
 - `cron_test.sh`: Script to verify that cron is working correctly.
 - `cleanup_logs.sh`: Script to delete old log files (default: older than 30 days).
 - `logrotate.example`: Configuration template for the system's `logrotate` service (recommended for production).
