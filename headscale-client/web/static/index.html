@@ -46,7 +46,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.9rem 2rem;
+      padding: 0.75rem 2rem;
       background-color: var(--bg-secondary);
       border-bottom: 1px solid var(--border);
     }
@@ -70,6 +70,38 @@
       letter-spacing: -0.2px;
     }
 
+    /* Tabs Header */
+    .tabs-bar {
+      display: flex;
+      gap: 0.5rem;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+    }
+    .tab-btn {
+      padding: 0.85rem 1.25rem;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+    .tab-btn:hover {
+      color: var(--text);
+    }
+    .tab-btn.active {
+      color: var(--text);
+      font-weight: 600;
+      border-bottom-color: var(--text);
+    }
+
     main {
       flex: 1;
       max-width: 1200px;
@@ -81,11 +113,20 @@
       gap: 2rem;
     }
 
+    .tab-content {
+      display: none;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .tab-content.active {
+      display: flex;
+    }
+
     .section-title {
       font-size: 16px;
       font-weight: 600;
       letter-spacing: -0.2px;
-      margin-bottom: 0.4rem;
+      margin-bottom: 0.3rem;
     }
     .section-desc {
       font-size: 13px;
@@ -93,13 +134,13 @@
       margin-bottom: 1rem;
     }
 
-    /* VPN Control Grid */
-    .vpn-grid {
+    /* Grid Layouts */
+    .grid-2 {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
       gap: 1.25rem;
     }
-    .vpn-card {
+    .card {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -108,12 +149,13 @@
       flex-direction: column;
       gap: 1rem;
     }
-    .vpn-header {
+    .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .vpn-status-badge {
+
+    .status-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -212,7 +254,7 @@
       font-weight: 600;
     }
 
-    /* Diagnostics Section */
+    /* Diagnostics UI */
     .diag-toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -343,6 +385,19 @@
       100% { transform: translateX(100%); width: 30%; }
     }
 
+    .code-box {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.75rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     .toast {
       position: fixed;
       bottom: 24px;
@@ -361,26 +416,42 @@
 </head>
 <body>
 
+  <!-- Top Brand Navigation -->
   <nav class="top-nav">
     <div class="nav-brand">
-      <span class="brand-title">Headscale Client & Diagnostics</span>
-      <span class="brand-badge">Local Dashboard :29485</span>
+      <span class="brand-title">Headscale Client Manager</span>
+      <span class="brand-badge">Dashboard Local :29485</span>
     </div>
     <button class="btn" style="flex: 0 0 auto;" onclick="refreshAll()">Actualizar Estado</button>
   </nav>
 
+  <!-- Navigation Tabs -->
+  <div class="tabs-bar">
+    <button class="tab-btn active" onclick="switchTab('tab-vpn')">
+      <span>🌐</span> Control & Malla VPN
+    </button>
+    <button class="tab-btn" onclick="switchTab('tab-proxy')">
+      <span>⚡</span> Proxy Integrado (SOCKS5/HTTP)
+    </button>
+    <button class="tab-btn" onclick="switchTab('tab-diag')">
+      <span>🔍</span> Diagnóstico de Red & Bloqueos
+    </button>
+  </div>
+
   <main>
-    <!-- VPN SECTION -->
-    <section>
-      <h2 class="section-title">Control de Tailscale VPN</h2>
-      <p class="section-desc">Gestiona la conexión y selecciona tu nodo de salida para alternar entre modo directo y modo full.</p>
-      
-      <div class="vpn-grid">
+    <!-- TAB 1: VPN & MESH CONTROL -->
+    <div id="tab-vpn" class="tab-content active">
+      <div>
+        <h2 class="section-title">Control de Tailscale VPN</h2>
+        <p class="section-desc">Gestiona la conexión y alterna entre Modo Malla (Red privada) y Túnel Completo (Exit Node).</p>
+      </div>
+
+      <div class="grid-2">
         <!-- Client Status Card -->
-        <div class="vpn-card">
-          <div class="vpn-header">
+        <div class="card">
+          <div class="card-header">
             <span style="font-size: 14px; font-weight: 600;">Estado del Cliente</span>
-            <span id="vpn-status-pill" class="vpn-status-badge status-offline">
+            <span id="vpn-status-pill" class="status-badge status-offline">
               <span class="status-dot"></span><span id="vpn-status-text">Cargando...</span>
             </span>
           </div>
@@ -396,9 +467,9 @@
           </div>
         </div>
 
-        <!-- Routing & Exit Node Selector Card -->
-        <div class="vpn-card">
-          <div class="vpn-header">
+        <!-- Routing Mode Card -->
+        <div class="card">
+          <div class="card-header">
             <span style="font-size: 14px; font-weight: 600;">Modo de Enrutamiento</span>
             <span id="routing-badge" class="brand-badge" style="font-size: 11px;">Modo Malla (Mesh)</span>
           </div>
@@ -421,12 +492,72 @@
           </div>
         </div>
       </div>
-    </section>
 
-    <!-- DIAGNOSTIC SECTION -->
-    <section>
-      <h2 class="section-title">Diagnóstico Avanzado de Bloqueos & DPI</h2>
-      <p class="section-desc">Evalúa resolución DNS, conexión TCP 443, bloqueo de SNI (DPI) y estado HTTP en tiempo real.</p>
+      <!-- Mesh Peers Card -->
+      <div class="card">
+        <div class="card-header">
+          <span style="font-size: 14px; font-weight: 600;">Dispositivos Conectados en la Malla (Peers)</span>
+          <span id="peers-count" class="brand-badge">0 dispositivos</span>
+        </div>
+        <div id="peers-list" class="meta-list" style="margin-top: 0.5rem;">
+          <div class="meta-row"><span>Cargando dispositivos...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: PROXY & SPLIT TUNNELING -->
+    <div id="tab-proxy" class="tab-content">
+      <div>
+        <h2 class="section-title">Proxy Nativo de Tailscale & Split Tunneling</h2>
+        <p class="section-desc">Permite enrutar únicamente dominios específicos en tu navegador a través del túnel sin desviar todo tu internet.</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <span style="font-size: 14px; font-weight: 600;">Estado del Proxy Local</span>
+            <span id="proxy-status-pill" class="status-badge status-offline">
+              <span class="status-dot"></span><span id="proxy-status-text">Cargando...</span>
+            </span>
+          </div>
+
+          <div class="meta-list">
+            <div class="meta-row"><span>Servidor SOCKS5:</span><span class="meta-val">127.0.0.1:1080</span></div>
+            <div class="meta-row"><span>Servidor HTTP Proxy:</span><span class="meta-val">127.0.0.1:8080</span></div>
+            <div class="meta-row"><span>Controlador:</span><span class="meta-val">tailscaled daemon</span></div>
+          </div>
+
+          <div class="btn-group">
+            <button class="btn btn-primary" id="btn-proxy-on" onclick="toggleProxy(true)">Activar Proxy</button>
+            <button class="btn" id="btn-proxy-off" onclick="toggleProxy(false)">Desactivar Proxy</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span style="font-size: 14px; font-weight: 600;">Configuración en Extensiones de Navegador</span>
+            <span class="brand-badge">ZeroOmega / SwitchyOmega</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+            1. En la extensión, crea un perfil de Proxy <strong>SOCKS5</strong> con:
+          </p>
+          <div class="code-box">
+            <span>Host: 127.0.0.1 | Puerto: 1080</span>
+            <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="copyText('127.0.0.1:1080')">Copiar</button>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+            2. En el perfil <strong>Auto Switch</strong>, añade los dominios a desbloquear (ej: <code>*.netflix.com</code>, <code>*.xvideos.com</code>) apuntando a este Proxy.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: NETWORK & DPI DIAGNOSTICS -->
+    <div id="tab-diag" class="tab-content">
+      <div>
+        <h2 class="section-title">Diagnóstico Avanzado de Bloqueos & DPI</h2>
+        <p class="section-desc">Evalúa resolución DNS, conexión TCP 443, bloqueo de SNI (DPI) y estado HTTP en tiempo real.</p>
+      </div>
       
       <div class="diag-toolbar">
         <div class="cat-pills">
@@ -451,7 +582,7 @@
 
       <div id="prog-bar" class="progress-bar"><div class="progress-fill"></div></div>
 
-      <div class="card-table" style="margin-top: 1rem;">
+      <div class="card-table">
         <table>
           <thead>
             <tr>
@@ -471,7 +602,7 @@
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
   </main>
 
   <div id="toast" class="toast">Notificación</div>
@@ -479,11 +610,26 @@
   <script>
     let activeCategory = '';
 
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab-btn").forEach((b, idx) => {
+        const target = ['tab-vpn', 'tab-proxy', 'tab-diag'][idx];
+        b.className = target === tabId ? "tab-btn active" : "tab-btn";
+      });
+      document.querySelectorAll(".tab-content").forEach(c => {
+        c.className = c.id === tabId ? "tab-content active" : "tab-content";
+      });
+    }
+
     function showToast(msg) {
       const t = document.getElementById("toast");
       t.innerText = msg;
       t.style.display = "block";
       setTimeout(() => { t.style.display = "none"; }, 3000);
+    }
+
+    function copyText(str) {
+      navigator.clipboard.writeText(str);
+      showToast("Copiado al portapapeles: " + str);
     }
 
     async function fetchStatus() {
@@ -500,6 +646,8 @@
         const btnConnect = document.getElementById("btn-connect");
         const btnDisconnect = document.getElementById("btn-disconnect");
         const exitSelect = document.getElementById("exit-node-select");
+        const routingBadge = document.getElementById("routing-badge");
+        const selectContainer = document.getElementById("exit-select-container");
 
         // Populate Exit Node Selector
         if (data.exit_nodes && data.exit_nodes.length > 0) {
@@ -508,14 +656,38 @@
             return `<option value="${n.ip}">${n.name} (${n.ip}) ${statusIcon}</option>`;
           }).join('');
         } else {
-          exitSelect.innerHTML = `<option value="100.64.0.4">vps-server (100.64.0.4)</option>`;
+          exitSelect.innerHTML = `<option value="100.64.0.4">vps-server (100.64.0.4) 🟢</option>`;
         }
 
-        const routingBadge = document.getElementById("routing-badge");
-        const selectContainer = document.getElementById("exit-select-container");
+        // Render Peers
+        const peersList = document.getElementById("peers-list");
+        const peersCount = document.getElementById("peers-count");
+        if (data.peers && data.peers.length > 0) {
+          peersCount.innerText = `${data.peers.length} dispositivos`;
+          peersList.innerHTML = data.peers.map(p => `
+            <div class="meta-row" style="padding: 4px 0; border-bottom: 1px solid var(--border);">
+              <span><strong>${p.name}</strong> <span style="font-size: 11px; color: var(--text-dim);">(${p.os})</span></span>
+              <span class="meta-val">${p.online ? '🟢 Online' : '⚪ Offline'} | ${p.ip} ${p.offers_exit ? '⭐ Exit Node' : ''}</span>
+            </div>
+          `).join('');
+        } else {
+          peersCount.innerText = "0 dispositivos";
+          peersList.innerHTML = `<div class="meta-row"><span>No se detectaron otros peers.</span></div>`;
+        }
+
+        // Proxy State
+        const proxyPill = document.getElementById("proxy-status-pill");
+        const proxyText = document.getElementById("proxy-status-text");
+        if (data.proxy && data.proxy.enabled) {
+          proxyPill.className = "status-badge status-online";
+          proxyText.innerText = "Activo (:1080 / :8080)";
+        } else {
+          proxyPill.className = "status-badge status-offline";
+          proxyText.innerText = "Inactivo";
+        }
 
         if (data.connected) {
-          pill.className = "vpn-status-badge status-online";
+          pill.className = "status-badge status-online";
           text.innerText = "Conectado";
           ip.innerText = data.ipv4;
           host.innerText = data.hostname;
@@ -545,7 +717,7 @@
           btnDisconnect.disabled = false;
           btnDisconnect.style.opacity = "1";
         } else {
-          pill.className = "vpn-status-badge status-offline";
+          pill.className = "status-badge status-offline";
           text.innerText = data.backend_state === "Stopped" ? "Desconectado" : `Estado: ${data.backend_state || 'Desconectado'}`;
           ip.innerText = "-";
           host.innerText = data.hostname || "-";
@@ -571,7 +743,7 @@
 
     async function setMode(mode) {
       const selectedExit = document.getElementById("exit-node-select").value;
-      showToast(`Cambiando a Modo ${mode.toUpperCase()}...`);
+      showToast(`Cambiando modo a ${mode === 'full' ? 'Túnel Completo' : 'Modo Malla'}...`);
       try {
         const res = await fetch("/api/mode", {
           method: "POST",
@@ -583,13 +755,33 @@
         });
         const data = await res.json();
         if (data.success) {
-          showToast(`Modo ${mode.toUpperCase()} activado`);
+          showToast(`Modo cambiado exitosamente`);
           await fetchStatus();
         } else {
           alert("Error: " + data.output);
         }
       } catch (err) {
         alert("Error de conexión: " + err.message);
+      }
+    }
+
+    async function toggleProxy(enabled) {
+      showToast(`${enabled ? 'Activando' : 'Desactivando'} Proxy nativo...`);
+      try {
+        const res = await fetch("/api/proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Proxy ${enabled ? 'Activado' : 'Desactivado'}`);
+          fetchStatus();
+        } else {
+          alert("Error al configurar proxy: " + data.error);
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
       }
     }
 
@@ -693,7 +885,6 @@
 
     function refreshAll() {
       fetchStatus();
-      runDiagnostics();
     }
 
     fetchStatus();

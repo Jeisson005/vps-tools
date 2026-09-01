@@ -12,6 +12,7 @@ services:
       - EXIT_NODE=${EXIT_NODE:-100.64.0.4}
       - WEB_PORT=${WEB_PORT:-29485}
     volumes:
-      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+      - /etc/default/tailscaled:/etc/default/tailscaled
       - ./:/app:ro
     network_mode: host
