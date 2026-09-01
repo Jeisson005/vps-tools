@@ -665,6 +665,103 @@ async def clear_all_routes():
 
 # ----------------- DEEP CONNECTIVITY DIAGNOSTICS -----------------
 
+async def check_ip_direct_and_vps(ip: str, domain: str, vps_socks5_url: str) -> Dict[str, Any]:
+    # 1. Local Ping
+    ping_res = await ping_ip(ip)
+    
+    # 2. Local TCP
+    tcp_80 = await tcp_connect_test(ip, 80)
+    tcp_443 = await tcp_connect_test(ip, 443)
+    
+    # 3. Local TLS SNI to this specific IP
+    tls_res = await tls_sni_handshake_test(domain, ip)
+    
+    # 4. Local HTTP direct to this IP with Host header
+    local_http = {"status_code": 0, "latency_ms": 0, "success": False, "error": "No probado"}
+    if tcp_443.get("success"):
+        t0 = time.time()
+        try:
+            async with httpx.AsyncClient(timeout=3.5, verify=False) as client:
+                resp = await client.get(f"https://{ip}/", headers={"Host": domain, "User-Agent": "Mozilla/5.0"})
+                local_http = {
+                    "status_code": resp.status_code,
+                    "latency_ms": int((time.time() - t0) * 1000),
+                    "success": True,
+                    "server": resp.headers.get("server", "N/A")
+                }
+        except Exception as e:
+            local_http = {
+                "status_code": 0,
+                "latency_ms": int((time.time() - t0) * 1000),
+                "success": False,
+                "error": str(e)
+            }
+    elif tcp_80.get("success"):
+        t0 = time.time()
+        try:
+            async with httpx.AsyncClient(timeout=3.5, verify=False) as client:
+                resp = await client.get(f"http://{ip}/", headers={"Host": domain, "User-Agent": "Mozilla/5.0"})
+                local_http = {
+                    "status_code": resp.status_code,
+                    "latency_ms": int((time.time() - t0) * 1000),
+                    "success": True,
+                    "server": resp.headers.get("server", "N/A")
+                }
+        except Exception as e:
+            local_http = {
+                "status_code": 0,
+                "latency_ms": int((time.time() - t0) * 1000),
+                "success": False,
+                "error": str(e)
+            }
+
+    # 5. VPS HTTP check through SOCKS5 proxy
+    vps_http = {"status_code": 0, "latency_ms": 0, "success": False, "error": "No probado"}
+    t0_vps = time.time()
+    try:
+        async with httpx.AsyncClient(proxy=vps_socks5_url, timeout=5.0, verify=False) as client:
+            resp_vps = await client.get(f"https://{domain}/", headers={"User-Agent": "Mozilla/5.0"})
+            vps_http = {
+                "status_code": resp_vps.status_code,
+                "latency_ms": int((time.time() - t0_vps) * 1000),
+                "success": True,
+                "server": resp_vps.headers.get("server", "N/A")
+            }
+    except Exception as e:
+        vps_http = {
+            "status_code": 0,
+            "latency_ms": int((time.time() - t0_vps) * 1000),
+            "success": False,
+            "error": str(e)
+        }
+
+    # Per-IP Verdict
+    loc_ok = local_http.get("success", False) and (local_http.get("status_code", 0) != 0)
+    vps_ok = vps_http.get("success", False) and (vps_http.get("status_code", 0) != 0)
+    
+    if not loc_ok and vps_ok:
+        verdict = "BLOQUEADA_LOCAL"
+    elif loc_ok and vps_ok:
+        verdict = "LIBRE_AMBOS"
+    elif loc_ok and not vps_ok:
+        verdict = "LIBRE_LOCAL_FALLA_VPS"
+    else:
+        verdict = "INACCESIBLE_AMBOS"
+
+    return {
+        "ip": ip,
+        "ping": ping_res,
+        "tcp_80": tcp_80,
+        "tcp_443": tcp_443,
+        "tls_local": tls_res,
+        "local_http": local_http,
+        "vps_http": vps_http,
+        "verdict": verdict,
+        "is_routed": check_active_system_route(ip)
+    }
+
+# ----------------- DEEP CONNECTIVITY DIAGNOSTICS -----------------
+
 @app.post("/api/deep-diagnose")
 async def run_deep_diagnose(req: DeepDiagnoseRequest):
     domain = req.domain.strip().lower().replace("https://", "").replace("http://", "").split("/")[0]
@@ -673,59 +770,49 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
 
     # 1. Full DNS Discovery
     dns_data = await resolve_all_ips(domain)
+    vps_socks5_url = "socks5://100.64.0.4:1080"
     
-    # 2. Local Ping & TCP checks for discovered IPs
-    ip_tests = []
-    for ip in dns_data["ipv4"][:4]: # Test up to 4 IPv4s
-        ping_res = await ping_ip(ip)
-        tcp_80 = await tcp_connect_test(ip, 80)
-        tcp_443 = await tcp_connect_test(ip, 443)
-        ip_tests.append({
-            "ip": ip,
-            "ping": ping_res,
-            "tcp_80": tcp_80,
-            "tcp_443": tcp_443
-        })
+    # 2. Detailed Per-IP Diagnostics in parallel (Local vs VPS)
+    ip_tasks = [check_ip_direct_and_vps(ip, domain, vps_socks5_url) for ip in dns_data["ipv4"][:6]]
+    ip_tests = await asyncio.gather(*ip_tasks) if ip_tasks else []
 
-    # 3. Local TLS SNI check
+    # 3. Global Domain TLS SNI check (Local)
     tls_local = await tls_sni_handshake_test(domain)
 
-    # 4. Local HTTP Full Lifecycle
+    # 4. Global HTTP Full Lifecycle (Local)
     http_local = await http_full_lifecycle(domain, proxy=None)
 
-    # 5. VPS VPN HTTP Lifecycle (via SOCKS5 VPS 100.64.0.4:1080)
-    vps_socks5_url = "socks5://100.64.0.4:1080"
+    # 5. Global HTTP Full Lifecycle (VPS VPN)
     http_vps = await http_full_lifecycle(domain, proxy=vps_socks5_url)
 
     # 6. Accurate Analysis & Recommendation
     local_code = http_local.get("status_code", 0)
     vps_code = http_vps.get("status_code", 0)
     
-    # Network Layer Check
     has_dns = len(dns_data["ipv4"]) > 0 or len(dns_data["ipv6"]) > 0
     has_tcp = any(t.get("tcp_443", {}).get("success") or t.get("tcp_80", {}).get("success") for t in ip_tests)
     tls_status = tls_local.get("status", "FAIL")
     
-    # Local is blocked ONLY if network fails, DPI resets connection, or HTTP times out (code 0)
-    local_blocked = (not has_dns) or (not has_tcp) or (tls_status == "DPI_RESET") or (local_code == 0)
+    any_ip_blocked_locally = any(t.get("verdict") == "BLOQUEADA_LOCAL" for t in ip_tests)
+    local_blocked = (not has_dns) or (not has_tcp) or (tls_status == "DPI_RESET") or (local_code == 0) or any_ip_blocked_locally
     vpn_working = (vps_code != 0) and (http_vps.get("success", False))
 
     should_route_vpn = local_blocked and vpn_working
     
     if should_route_vpn:
         action = "ENROUTE_VPN"
-        reason = "Bloqueo de red local detectado (DNS/TCP/TLS DPI). El sitio responde a través del VPS VPN."
+        reason = f"Bloqueo detectado en tu red local ({'TLS/DPI o Timeout' if tls_status != 'OK' else 'Falla HTTP'}). El sitio responde correctamente a través del VPS VPN."
     elif not local_blocked and vpn_working:
         action = "NONE"
         if local_code == 403:
-            reason = f"Conexión directa y VPN funcionando correctamente. El servidor responde HTTP 403 (Acceso restringido por la web/CDN '{http_local.get('server_header', '')}', no por tu red)."
+            reason = f"Conexión directa y VPN funcionando correctamente. El servidor responde HTTP 403 (Restricción propia de la web/CDN '{http_local.get('server_header', '')}', no es bloqueo de tu red)."
         elif local_code == 200:
-            reason = "Conexión directa óptima (HTTP 200 OK) en ambas vías."
+            reason = "Conexión directa óptima (HTTP 200 OK) tanto en tu red local como por la VPN."
         else:
             reason = f"Conexión directa y VPN funcionando por igual (HTTP {local_code}). Sin bloqueos de proveedor."
     else:
         action = "NONE"
-        reason = "El sitio web no responde en ninguna de las dos conexiones (posible caída del servidor remoto)."
+        reason = "El sitio web no responde en ninguna de las dos conexiones (posible caída del servidor remoto o VPN desconectada)."
 
     return {
         "domain": domain,
@@ -740,7 +827,7 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
             "recommended_action": action,
             "message": reason
         },
-        "ips_to_route": dns_data["ipv4"]
+        "ips_to_route": [t["ip"] for t in ip_tests if t["verdict"] == "BLOQUEADA_LOCAL"] or dns_data["ipv4"]
     }
 
 # ----------------- SWITCHYOMEGA RULES EXPORT -----------------
