@@ -25,8 +25,13 @@ echo "--> Allowing SSH on port $SSH_PORT..."
 ufw allow "$SSH_PORT/tcp" comment 'SSH'
 
 for port in $UFW_EXTRA_PORTS; do
-  echo "--> Allowing port $port/tcp..."
-  ufw allow "$port/tcp" comment "Custom port $port"
+  if [[ "$port" =~ / ]]; then
+    echo "--> Allowing $port..."
+    ufw allow "$port" comment "Custom rule $port"
+  else
+    echo "--> Allowing port $port/tcp..."
+    ufw allow "$port/tcp" comment "Custom port $port"
+  fi
 done
 
 echo "--> Enabling UFW..."
