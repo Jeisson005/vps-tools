@@ -299,28 +299,32 @@
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      overflow: hidden;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
     table {
       width: 100%;
+      min-width: 100%;
       border-collapse: collapse;
       text-align: left;
       font-size: 13px;
     }
     th {
       background: var(--bg-secondary);
-      padding: 0.75rem 1rem;
+      padding: 0.75rem 0.85rem;
       color: var(--text-dim);
-      font-weight: 500;
+      font-weight: 600;
       font-size: 11px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       border-bottom: 1px solid var(--border);
+      white-space: nowrap;
     }
     td {
-      padding: 0.85rem 1rem;
+      padding: 0.75rem 0.85rem;
       border-bottom: 1px solid var(--border);
       color: var(--text);
+      vertical-align: middle;
     }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: var(--accent-soft); }
@@ -1351,62 +1355,72 @@
         ipTbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 1.5rem;">No se pudieron resolver IPs IPv4 para pruebas individuales.</td></tr>`;
       } else {
         ipTbody.innerHTML = data.ip_tests.map(t => {
-          const pingTag = t.ping.success ? `<span class="tag tag-ok">${t.ping.avg_rtt_ms} ms</span>` : `<span class="tag tag-fail">100% loss</span>`;
-          const tcpTag = `<span class="tag ${t.tcp_80.success ? 'tag-ok' : 'tag-fail'}">80: ${t.tcp_80.success ? t.tcp_80.latency_ms + 'ms' : 'X'}</span> <span class="tag ${t.tcp_443.success ? 'tag-ok' : 'tag-fail'}">443: ${t.tcp_443.success ? t.tcp_443.latency_ms + 'ms' : 'X'}</span>`;
+          const pingTag = t.ping.success ? `<span class="tag tag-ok" style="white-space: nowrap;">${t.ping.avg_rtt_ms} ms</span>` : `<span class="tag tag-fail" style="white-space: nowrap;">100% loss</span>`;
+          const tcpTag = `<span class="tag ${t.tcp_80.success ? 'tag-ok' : 'tag-fail'}" style="white-space: nowrap;">80: ${t.tcp_80.success ? t.tcp_80.latency_ms + 'ms' : 'X'}</span> <span class="tag ${t.tcp_443.success ? 'tag-ok' : 'tag-fail'}" style="white-space: nowrap;">443: ${t.tcp_443.success ? t.tcp_443.latency_ms + 'ms' : 'X'}</span>`;
           
-          let tlsTag = `<span class="tag tag-fail">FAIL</span>`;
-          if (t.tls_local && t.tls_local.status === "OK") tlsTag = `<span class="tag tag-ok">OK (${t.tls_local.latency_ms}ms)</span>`;
-          else if (t.tls_local && t.tls_local.status === "DPI_RESET") tlsTag = `<span class="tag tag-warn">DPI RESET</span>`;
+          let tlsTag = `<span class="tag tag-fail" style="white-space: nowrap;">FAIL</span>`;
+          if (t.tls_local && t.tls_local.status === "OK") tlsTag = `<span class="tag tag-ok" style="white-space: nowrap;">OK (${t.tls_local.latency_ms}ms)</span>`;
+          else if (t.tls_local && t.tls_local.status === "DPI_RESET") tlsTag = `<span class="tag tag-warn" style="white-space: nowrap;">DPI RESET</span>`;
 
-          const localHttpTag = t.local_http && t.local_http.success && t.local_http.status_code !== 0
-            ? `<span class="tag tag-ok">HTTP ${t.local_http.status_code} (${t.local_http.latency_ms}ms)</span>`
-            : `<span class="tag tag-fail">${t.local_http.error || '000 Timeout'}</span>`;
-
-          let vpsHttpTag = `<span class="tag" style="color: var(--text-dim);">⚪ Desconectada</span>`;
-          if (data.vpn_connected) {
-            vpsHttpTag = t.vps_http && t.vps_http.success && t.vps_http.status_code !== 0
-              ? `<span class="tag tag-ok">HTTP ${t.vps_http.status_code} (${t.vps_http.latency_ms}ms)</span>`
-              : `<span class="tag tag-fail">${t.vps_http.error || '000 Falla'}</span>`;
+          let localHttpTag = `<span class="tag tag-fail" style="white-space: nowrap;">000 Timeout</span>`;
+          if (t.local_http && t.local_http.success && t.local_http.status_code !== 0) {
+            localHttpTag = `<span class="tag tag-ok" style="white-space: nowrap;">HTTP ${t.local_http.status_code} (${t.local_http.latency_ms}ms)</span>`;
+          } else if (t.local_http && t.local_http.error) {
+            const errStr = t.local_http.error;
+            let displayErr = "000 Timeout";
+            if (errStr.includes("TLS") || errStr.includes("SSL") || errStr.includes("alert internal error")) {
+              displayErr = "Error TLS/SSL";
+            } else if (errStr.includes("Connection reset") || errStr.includes("104")) {
+              displayErr = "DPI Reset";
+            }
+            localHttpTag = `<span class="tag tag-fail" style="white-space: nowrap; cursor: help;" title="${errStr}">${displayErr}</span>`;
           }
 
-          let verdictTag = `<span class="tag tag-ok">🟢 Libre en ambos</span>`;
+          let vpsHttpTag = `<span class="tag" style="color: var(--text-dim); white-space: nowrap;">⚪ Desconectada</span>`;
+          if (data.vpn_connected) {
+            vpsHttpTag = t.vps_http && t.vps_http.success && t.vps_http.status_code !== 0
+              ? `<span class="tag tag-ok" style="white-space: nowrap;">HTTP ${t.vps_http.status_code} (${t.vps_http.latency_ms}ms)</span>`
+              : `<span class="tag tag-fail" style="white-space: nowrap;">${t.vps_http.error || '000 Falla'}</span>`;
+          }
+
+          let verdictTag = `<span class="tag tag-ok" style="white-space: nowrap;">🟢 Libre en ambos</span>`;
           if (t.is_routed || t.verdict === "SOLUCIONADO_ENRUTADA") {
-            verdictTag = `<span class="tag tag-ok" style="background: rgba(34, 197, 94, 0.15); color: #22c55e;">🟢 Enrutada por VPN (Solucionado)</span>`;
+            verdictTag = `<span class="tag tag-ok" style="background: rgba(34, 197, 94, 0.15); color: #22c55e; white-space: nowrap;">🟢 Enrutada por VPN</span>`;
           } else if (t.verdict === "ACCESIBLE_LOCAL") {
-            verdictTag = `<span class="tag tag-ok">🟢 Accesible en Local</span>`;
+            verdictTag = `<span class="tag tag-ok" style="white-space: nowrap;">🟢 Accesible Local</span>`;
           } else if (t.verdict === "FALLA_LOCAL") {
-            verdictTag = `<span class="tag tag-fail">⚠️ Falla en Local</span>`;
+            verdictTag = `<span class="tag tag-fail" style="white-space: nowrap;">⚠️ Falla Local</span>`;
           } else if (t.verdict === "BLOQUEADA_LOCAL") {
-            verdictTag = `<span class="tag tag-fail">⚠️ Bloqueada en Local</span>`;
+            verdictTag = `<span class="tag tag-fail" style="white-space: nowrap;">⚠️ Bloqueada Local</span>`;
           } else if (t.verdict === "INACCESIBLE_AMBOS") {
-            verdictTag = `<span class="tag tag-warn">🔴 Inaccesible en ambos</span>`;
+            verdictTag = `<span class="tag tag-warn" style="white-space: nowrap;">🔴 Inaccesible</span>`;
           }
 
           const isBest = (data.best_working_ip === t.ip);
-          const bestBadge = isBest ? `<span class="brand-badge" style="font-size: 10px; margin-left: 4px; background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4);">⭐ Óptima</span>` : '';
+          const bestBadge = isBest ? `<span class="brand-badge" style="font-size: 10px; margin-left: 6px; background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); white-space: nowrap;">⭐ Óptima</span>` : '';
 
           let actionHtml = '';
           if (t.is_routed || t.verdict === "SOLUCIONADO_ENRUTADA") {
-            actionHtml = `<span class="tag tag-ok" style="font-size: 11px;">Enrutada por VPN</span>`;
+            actionHtml = `<span class="tag tag-ok" style="font-size: 11px; white-space: nowrap;">Enrutada por VPN</span>`;
           } else {
             actionHtml = `
-              <div style="display: flex; gap: 0.25rem;">
-                <button class="btn btn-primary" style="padding: 2px 6px; font-size: 11px; flex: 0 0 auto;" onclick="pinDomainInHosts('${data.domain}', '${t.ip}')" title="Fijar dominio a esta IP en /etc/hosts y enrutarla por VPN">📌 Fijar</button>
-                <button class="btn" style="padding: 2px 6px; font-size: 11px; background: rgba(255,255,255,0.06); flex: 0 0 auto;" onclick="routeSingleIp('${t.ip}', '${data.domain}')" title="Solo agregar ruta de kernel para esta IP">⚡ Ruta</button>
+              <div style="display: flex; gap: 0.35rem; align-items: center; white-space: nowrap;">
+                <button class="btn btn-primary" style="padding: 3px 8px; font-size: 11px; flex: 0 0 auto; white-space: nowrap;" onclick="pinDomainInHosts('${data.domain}', '${t.ip}')" title="Fijar dominio a esta IP en /etc/hosts y enrutarla por VPN">📌 Fijar</button>
+                <button class="btn" style="padding: 3px 8px; font-size: 11px; background: rgba(255,255,255,0.08); flex: 0 0 auto; white-space: nowrap;" onclick="routeSingleIp('${t.ip}', '${data.domain}')" title="Solo agregar ruta de kernel para esta IP">⚡ Ruta</button>
               </div>
             `;
           }
 
           return `
             <tr>
-              <td><strong style="font-family: var(--font-mono); font-size: 13px;">${t.ip}</strong>${bestBadge}</td>
-              <td>${pingTag}</td>
-              <td>${tcpTag}</td>
-              <td>${tlsTag}</td>
-              <td>${localHttpTag}</td>
-              <td>${vpsHttpTag}</td>
-              <td>${verdictTag}</td>
-              <td>${actionHtml}</td>
+              <td style="white-space: nowrap;"><div style="display: flex; align-items: center;"><strong style="font-family: var(--font-mono); font-size: 13px;">${t.ip}</strong>${bestBadge}</div></td>
+              <td style="white-space: nowrap;">${pingTag}</td>
+              <td style="white-space: nowrap;">${tcpTag}</td>
+              <td style="white-space: nowrap;">${tlsTag}</td>
+              <td style="white-space: nowrap;">${localHttpTag}</td>
+              <td style="white-space: nowrap;">${vpsHttpTag}</td>
+              <td style="white-space: nowrap;">${verdictTag}</td>
+              <td style="white-space: nowrap;">${actionHtml}</td>
             </tr>
           `;
         }).join('');
