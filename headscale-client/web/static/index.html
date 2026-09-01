@@ -77,6 +77,7 @@
       background: var(--bg-secondary);
       border-bottom: 1px solid var(--border);
       padding: 0 2rem;
+      overflow-x: auto;
     }
     .tab-btn {
       padding: 0.85rem 1.25rem;
@@ -92,10 +93,9 @@
       gap: 0.5rem;
       transition: all 0.15s ease;
       font-family: inherit;
+      white-space: nowrap;
     }
-    .tab-btn:hover {
-      color: var(--text);
-    }
+    .tab-btn:hover { color: var(--text); }
     .tab-btn.active {
       color: var(--text);
       font-weight: 600;
@@ -186,17 +186,17 @@
       font-weight: 500;
     }
 
-    .select-wrapper {
+    .form-group {
       display: flex;
       flex-direction: column;
       gap: 0.35rem;
     }
-    .select-label {
+    .form-label {
       font-size: 12px;
       color: var(--text-muted);
       font-weight: 500;
     }
-    select {
+    input, select {
       background: var(--bg-input);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -205,9 +205,8 @@
       font-size: 13px;
       outline: none;
       font-family: inherit;
-      cursor: pointer;
     }
-    select:focus { border-color: var(--border-focus); }
+    input:focus, select:focus { border-color: var(--border-focus); }
 
     .btn-group {
       display: flex;
@@ -296,18 +295,6 @@
       max-width: 360px;
       width: 100%;
     }
-    input {
-      background: var(--bg-input);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 0.5rem 0.75rem;
-      color: var(--text);
-      font-size: 13px;
-      outline: none;
-      font-family: inherit;
-      flex: 1;
-    }
-    input:focus { border-color: var(--border-focus); }
 
     /* Results Table */
     .card-table {
@@ -430,11 +417,14 @@
     <button class="tab-btn active" onclick="switchTab('tab-vpn')">
       <span>🌐</span> Control & Malla VPN
     </button>
-    <button class="tab-btn" onclick="switchTab('tab-proxy')">
-      <span>⚡</span> Proxy Integrado (SOCKS5/HTTP)
+    <button class="tab-btn" onclick="switchTab('tab-config')">
+      <span>⚙️</span> Credenciales & Conexión
+    </button>
+    <button class="tab-btn" onclick="switchTab('tab-system')">
+      <span>⚡</span> Proxy SOCKS5 & Inicio Automático
     </button>
     <button class="tab-btn" onclick="switchTab('tab-diag')">
-      <span>🔍</span> Diagnóstico de Red & Bloqueos
+      <span>🔍</span> Diagnóstico de Bloqueos
     </button>
   </div>
 
@@ -474,8 +464,8 @@
             <span id="routing-badge" class="brand-badge" style="font-size: 11px;">Modo Malla (Mesh)</span>
           </div>
           
-          <div class="select-wrapper" id="exit-select-container">
-            <label class="select-label" for="exit-node-select">Nodo de Salida para Túnel Completo:</label>
+          <div class="form-group" id="exit-select-container">
+            <label class="form-label" for="exit-node-select">Nodo de Salida para Túnel Completo:</label>
             <select id="exit-node-select">
               <option value="100.64.0.4">vps-server (100.64.0.4) 🟢</option>
             </select>
@@ -505,54 +495,117 @@
       </div>
     </div>
 
-    <!-- TAB 2: PROXY & SPLIT TUNNELING -->
-    <div id="tab-proxy" class="tab-content">
+    <!-- TAB 2: CREDENTIALS & INITIAL SETUP -->
+    <div id="tab-config" class="tab-content">
       <div>
-        <h2 class="section-title">Proxy Nativo de Tailscale & Split Tunneling</h2>
-        <p class="section-desc">Permite enrutar únicamente dominios específicos en tu navegador a través del túnel sin desviar todo tu internet.</p>
+        <h2 class="section-title">Credenciales y Configuración de Conexión</h2>
+        <p class="section-desc">Configura el servidor Headscale y tu clave de autenticación para registrar o reconectar este equipo.</p>
+      </div>
+
+      <div class="card" style="max-width: 700px;">
+        <div class="card-header">
+          <span style="font-size: 14px; font-weight: 600;">Parámetros del Cliente (.env)</span>
+          <span class="brand-badge">Persistente</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Servidor Headscale (Control Server URL):</label>
+          <input type="text" id="cfg-server" placeholder="https://headscale.jeisson.top" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Pre-Auth Key / Llave de Registro:</label>
+          <input type="password" id="cfg-key" placeholder="ccf3d9a6b227d5f4ae3a9dfdc0eab8ad..." />
+        </div>
+
+        <div class="grid-2" style="gap: 0.75rem;">
+          <div class="form-group">
+            <label class="form-label">Hostname del Dispositivo:</label>
+            <input type="text" id="cfg-host" placeholder="jeisson-laptop" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Exit Node Predeterminado (VPS):</label>
+            <input type="text" id="cfg-exit" placeholder="100.64.0.4" />
+          </div>
+        </div>
+
+        <div class="btn-group" style="margin-top: 0.5rem;">
+          <button class="btn" onclick="saveConfigOnly()">Guardar Parámetros</button>
+          <button class="btn btn-primary" onclick="saveAndConnect()">Guardar y Conectar Ahora</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: SOCKS5 PROXY & AUTOSTART -->
+    <div id="tab-system" class="tab-content">
+      <div>
+        <h2 class="section-title">Proxy SOCKS5 & Inicio Automático con Linux</h2>
+        <p class="section-desc">Administra el Proxy SOCKS5 nativo de Tailscale en el puerto 1080 y la persistencia de servicios al arrancar el sistema.</p>
       </div>
 
       <div class="grid-2">
+        <!-- SOCKS5 Proxy Card -->
         <div class="card">
           <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Estado del Proxy Local</span>
+            <span style="font-size: 14px; font-weight: 600;">Proxy SOCKS5 Nativo (:1080)</span>
             <span id="proxy-status-pill" class="status-badge status-offline">
               <span class="status-dot"></span><span id="proxy-status-text">Cargando...</span>
             </span>
           </div>
 
           <div class="meta-list">
-            <div class="meta-row"><span>Servidor SOCKS5:</span><span class="meta-val">127.0.0.1:1080</span></div>
-            <div class="meta-row"><span>Servidor HTTP Proxy:</span><span class="meta-val">127.0.0.1:8080</span></div>
-            <div class="meta-row"><span>Controlador:</span><span class="meta-val">tailscaled daemon</span></div>
+            <div class="meta-row"><span>Dirección SOCKS5:</span><span class="meta-val">127.0.0.1:1080</span></div>
+            <div class="meta-row"><span>Inicio al arrancar Linux:</span><span id="proxy-autostart-val" class="meta-val">-</span></div>
+            <div class="meta-row"><span>Daemon:</span><span class="meta-val">tailscaled native</span></div>
           </div>
 
           <div class="btn-group">
-            <button class="btn btn-primary" id="btn-proxy-on" onclick="toggleProxy(true)">Activar Proxy</button>
-            <button class="btn" id="btn-proxy-off" onclick="toggleProxy(false)">Desactivar Proxy</button>
+            <button class="btn btn-primary" id="btn-proxy-enable" onclick="toggleProxyAutostart(true)">Habilitar al Iniciar</button>
+            <button class="btn btn-danger" id="btn-proxy-disable" onclick="toggleProxyAutostart(false)">Deshabilitar</button>
           </div>
         </div>
 
+        <!-- VPN Systemd Autostart Card -->
         <div class="card">
           <div class="card-header">
-            <span style="font-size: 14px; font-weight: 600;">Configuración en Extensiones de Navegador</span>
-            <span class="brand-badge">ZeroOmega / SwitchyOmega</span>
+            <span style="font-size: 14px; font-weight: 600;">Inicio Automático de Tailscale VPN</span>
+            <span id="vpn-autostart-pill" class="status-badge status-offline">
+              <span class="status-dot"></span><span id="vpn-autostart-text">Cargando...</span>
+            </span>
           </div>
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-            1. En la extensión, crea un perfil de Proxy <strong>SOCKS5</strong> con:
-          </p>
-          <div class="code-box">
-            <span>Host: 127.0.0.1 | Puerto: 1080</span>
-            <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="copyText('127.0.0.1:1080')">Copiar</button>
+
+          <div class="meta-list">
+            <div class="meta-row"><span>Servicio del Sistema:</span><span class="meta-val">tailscaled.service</span></div>
+            <div class="meta-row"><span>Arranque con el SO:</span><span id="vpn-autostart-val" class="meta-val">-</span></div>
           </div>
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-            2. En el perfil <strong>Auto Switch</strong>, añade los dominios a desbloquear (ej: <code>*.netflix.com</code>, <code>*.xvideos.com</code>) apuntando a este Proxy.
-          </p>
+
+          <div class="btn-group">
+            <button class="btn btn-primary" id="btn-vpn-auto-enable" onclick="toggleVpnAutostart(true)">Habilitar al Iniciar</button>
+            <button class="btn btn-danger" id="btn-vpn-auto-disable" onclick="toggleVpnAutostart(false)">Deshabilitar</button>
+          </div>
         </div>
+      </div>
+
+      <!-- Extension Guide Card -->
+      <div class="card">
+        <div class="card-header">
+          <span style="font-size: 14px; font-weight: 600;">Configuración en Extensiones (ZeroOmega / Proxy SwitchyOmega)</span>
+          <span class="brand-badge">Split Tunneling</span>
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+          1. En tu navegador, crea un perfil de Proxy <strong>SOCKS5</strong> con:
+        </p>
+        <div class="code-box">
+          <span>Host: 127.0.0.1 | Puerto: 1080 (Solo SOCKS5)</span>
+          <button class="btn" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="copyText('127.0.0.1:1080')">Copiar</button>
+        </div>
+        <p style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+          2. En el perfil <strong>Auto Switch</strong>, asigna los dominios que quieras desbloquear (ej: <code>*.netflix.com</code>, <code>*.xvideos.com</code>) hacia este perfil. El resto de tu tráfico seguirá saliendo por tu conexión directa local sin desviar todo tu ancho de banda.
+        </p>
       </div>
     </div>
 
-    <!-- TAB 3: NETWORK & DPI DIAGNOSTICS -->
+    <!-- TAB 4: NETWORK & DPI DIAGNOSTICS -->
     <div id="tab-diag" class="tab-content">
       <div>
         <h2 class="section-title">Diagnóstico Avanzado de Bloqueos & DPI</h2>
@@ -611,13 +664,14 @@
     let activeCategory = '';
 
     function switchTab(tabId) {
+      const tabIds = ['tab-vpn', 'tab-config', 'tab-system', 'tab-diag'];
       document.querySelectorAll(".tab-btn").forEach((b, idx) => {
-        const target = ['tab-vpn', 'tab-proxy', 'tab-diag'][idx];
-        b.className = target === tabId ? "tab-btn active" : "tab-btn";
+        b.className = tabIds[idx] === tabId ? "tab-btn active" : "tab-btn";
       });
       document.querySelectorAll(".tab-content").forEach(c => {
         c.className = c.id === tabId ? "tab-content active" : "tab-content";
       });
+      if (tabId === 'tab-config') loadConfig();
     }
 
     function showToast(msg) {
@@ -630,6 +684,64 @@
     function copyText(str) {
       navigator.clipboard.writeText(str);
       showToast("Copiado al portapapeles: " + str);
+    }
+
+    async function loadConfig() {
+      try {
+        const res = await fetch("/api/config");
+        const data = await res.json();
+        document.getElementById("cfg-server").value = data.server_url || "";
+        document.getElementById("cfg-key").value = data.auth_key || "";
+        document.getElementById("cfg-host").value = data.hostname || "";
+        document.getElementById("cfg-exit").value = data.exit_node || "100.64.0.4";
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function saveConfigOnly() {
+      const server_url = document.getElementById("cfg-server").value.trim();
+      const auth_key = document.getElementById("cfg-key").value.trim();
+      const hostname = document.getElementById("cfg-host").value.trim();
+      const exit_node = document.getElementById("cfg-exit").value.trim();
+
+      showToast("Guardando parámetros en .env...");
+      try {
+        const res = await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ server_url, auth_key, hostname, exit_node })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Configuración guardada exitosamente");
+          fetchStatus();
+        } else {
+          alert("Error al guardar: " + data.message);
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    async function saveAndConnect() {
+      await saveConfigOnly();
+      const server_url = document.getElementById("cfg-server").value.trim();
+      const auth_key = document.getElementById("cfg-key").value.trim();
+      const hostname = document.getElementById("cfg-host").value.trim();
+
+      showToast("Conectando con credenciales...");
+      try {
+        const res = await fetch("/api/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ server_url, auth_key, hostname })
+        });
+        setTimeout(fetchStatus, 2000);
+        switchTab('tab-vpn');
+      } catch (err) {
+        alert("Error al conectar: " + err.message);
+      }
     }
 
     async function fetchStatus() {
@@ -675,17 +787,34 @@
           peersList.innerHTML = `<div class="meta-row"><span>No se detectaron otros peers.</span></div>`;
         }
 
-        // Proxy State
+        // SOCKS5 Proxy Status
         const proxyPill = document.getElementById("proxy-status-pill");
         const proxyText = document.getElementById("proxy-status-text");
-        if (data.proxy && data.proxy.enabled) {
+        const proxyAutoVal = document.getElementById("proxy-autostart-val");
+        if (data.proxy_listening) {
           proxyPill.className = "status-badge status-online";
-          proxyText.innerText = "Activo (:1080 / :8080)";
+          proxyText.innerText = "Escuchando en :1080";
         } else {
           proxyPill.className = "status-badge status-offline";
           proxyText.innerText = "Inactivo";
         }
+        proxyAutoVal.innerText = data.proxy_autostart ? "🟢 Habilitado (:1080)" : "⚪ Deshabilitado";
 
+        // VPN Systemd Autostart Status
+        const vpnAutoPill = document.getElementById("vpn-autostart-pill");
+        const vpnAutoText = document.getElementById("vpn-autostart-text");
+        const vpnAutoVal = document.getElementById("vpn-autostart-val");
+        if (data.vpn_autostart) {
+          vpnAutoPill.className = "status-badge status-online";
+          vpnAutoText.innerText = "Habilitado";
+          vpnAutoVal.innerText = "🟢 Inicia con Linux (systemd)";
+        } else {
+          vpnAutoPill.className = "status-badge status-offline";
+          vpnAutoText.innerText = "Deshabilitado";
+          vpnAutoVal.innerText = "⚪ Manual";
+        }
+
+        // VPN Connection State
         if (data.connected) {
           pill.className = "status-badge status-online";
           text.innerText = "Conectado";
@@ -765,20 +894,40 @@
       }
     }
 
-    async function toggleProxy(enabled) {
-      showToast(`${enabled ? 'Activando' : 'Desactivando'} Proxy nativo...`);
+    async function toggleProxyAutostart(enabled) {
+      showToast(`${enabled ? 'Habilitando' : 'Deshabilitando'} Proxy SOCKS5 :1080 al arrancar...`);
       try {
-        const res = await fetch("/api/proxy", {
+        const res = await fetch("/api/autostart/proxy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ enabled })
         });
         const data = await res.json();
         if (data.success) {
-          showToast(`Proxy ${enabled ? 'Activado' : 'Desactivado'}`);
+          showToast(`Proxy SOCKS5 ${enabled ? 'Habilitado' : 'Deshabilitado'}`);
           fetchStatus();
         } else {
-          alert("Error al configurar proxy: " + data.error);
+          alert("Error: " + data.error);
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    async function toggleVpnAutostart(enabled) {
+      showToast(`${enabled ? 'Habilitando' : 'Deshabilitando'} arranque de VPN con el sistema...`);
+      try {
+        const res = await fetch("/api/autostart/vpn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Arranque de VPN ${enabled ? 'Habilitado' : 'Deshabilitado'}`);
+          fetchStatus();
+        } else {
+          alert("Error: " + data.output);
         }
       } catch (err) {
         alert("Error: " + err.message);
