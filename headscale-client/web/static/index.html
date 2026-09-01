@@ -1203,9 +1203,15 @@
 
       if (data.analysis.recommended_action === "ENROUTE_VPN") {
         card.style.borderLeftColor = "var(--warning)";
-        title.innerHTML = `⚠️ Bloqueo Local Detectado en <strong>${data.domain}</strong>`;
-        desc.innerText = data.analysis.message || "El sitio no responde en tu conexión local, pero responde perfectamente por el VPS VPN. Puedes enrutar sus IPs para solucionar el bloqueo.";
+        title.innerHTML = `⚠️ Bloqueo Detectado en <strong>${data.domain}</strong>`;
+        desc.innerText = data.analysis.message || "El sitio no responde en tu conexión local, pero responde perfectamente por el VPS VPN.";
+        btnEnroute.innerText = "⚡ Enrutar IPs restantes por la VPN (tailscale0)";
         btnEnroute.style.display = "inline-flex";
+      } else if (data.analysis.recommended_action === "SOLUCIONADO") {
+        card.style.borderLeftColor = "var(--success)";
+        title.innerHTML = `🟢 Bloqueo Solucionado en <strong>${data.domain}</strong>`;
+        desc.innerText = data.analysis.message || "Las IPs de este dominio están enrutadas por la VPN.";
+        btnEnroute.style.display = "none";
       } else if (data.analysis.local_working && data.analysis.vpn_working) {
         card.style.borderLeftColor = "var(--success)";
         title.innerHTML = `🟢 Sin Bloqueo de Red en <strong>${data.domain}</strong>`;
@@ -1214,7 +1220,7 @@
       } else {
         card.style.borderLeftColor = "var(--error)";
         title.innerHTML = `🔴 Falla de Conectividad General en <strong>${data.domain}</strong>`;
-        desc.innerText = data.analysis.message || "El sitio web no responde en ninguna de las dos vías (posible caída del servidor remoto o dominio inexistente).";
+        desc.innerText = data.analysis.message || "El sitio web no responde en ninguna de las dos vías.";
         btnEnroute.style.display = "none";
       }
 
@@ -1293,13 +1299,15 @@
             : `<span class="tag tag-fail">${t.vps_http.error || '000 Falla'}</span>`;
 
           let verdictTag = `<span class="tag tag-ok">🟢 Libre en ambos</span>`;
-          if (t.verdict === "BLOQUEADA_LOCAL") {
+          if (t.is_routed || t.verdict === "SOLUCIONADO_ENRUTADA") {
+            verdictTag = `<span class="tag tag-ok" style="background: rgba(34, 197, 94, 0.15); color: #22c55e;">🟢 Enrutada por VPN (Solucionado)</span>`;
+          } else if (t.verdict === "BLOQUEADA_LOCAL") {
             verdictTag = `<span class="tag tag-fail">⚠️ Bloqueada en Local</span>`;
           } else if (t.verdict === "INACCESIBLE_AMBOS") {
             verdictTag = `<span class="tag tag-warn">🔴 Inaccesible en ambos</span>`;
           }
 
-          const actionBtn = t.is_routed
+          const actionBtn = (t.is_routed || t.verdict === "SOLUCIONADO_ENRUTADA")
             ? `<span class="tag tag-ok" style="font-size: 11px;">Enrutada por VPN</span>`
             : `<button class="btn btn-primary" style="padding: 2px 8px; font-size: 11px; flex: 0 0 auto;" onclick="routeSingleIp('${t.ip}', '${data.domain}')">⚡ Enrutar</button>`;
 

@@ -738,8 +738,11 @@ async def check_ip_direct_and_vps(ip: str, domain: str, vps_socks5_url: str) -> 
     # Per-IP Verdict
     loc_ok = local_http.get("success", False) and (local_http.get("status_code", 0) != 0)
     vps_ok = vps_http.get("success", False) and (vps_http.get("status_code", 0) != 0)
+    is_routed = check_active_system_route(ip)
     
-    if not loc_ok and vps_ok:
+    if is_routed:
+        verdict = "SOLUCIONADO_ENRUTADA"
+    elif not loc_ok and vps_ok:
         verdict = "BLOQUEADA_LOCAL"
     elif loc_ok and vps_ok:
         verdict = "LIBRE_AMBOS"
@@ -757,7 +760,7 @@ async def check_ip_direct_and_vps(ip: str, domain: str, vps_socks5_url: str) -> 
         "local_http": local_http,
         "vps_http": vps_http,
         "verdict": verdict,
-        "is_routed": check_active_system_route(ip)
+        "is_routed": is_routed
     }
 
 # ----------------- DEEP CONNECTIVITY DIAGNOSTICS -----------------
@@ -793,16 +796,17 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
     has_tcp = any(t.get("tcp_443", {}).get("success") or t.get("tcp_80", {}).get("success") for t in ip_tests)
     tls_status = tls_local.get("status", "FAIL")
     
-    any_ip_blocked_locally = any(t.get("verdict") == "BLOQUEADA_LOCAL" for t in ip_tests)
-    local_blocked = (not has_dns) or (not has_tcp) or (tls_status == "DPI_RESET") or (local_code == 0) or any_ip_blocked_locally
+    unrouted_blocked = [t["ip"] for t in ip_tests if t["verdict"] == "BLOQUEADA_LOCAL"]
+    routed_ips = [t["ip"] for t in ip_tests if t.get("is_routed")]
     vpn_working = (vps_code != 0) and (http_vps.get("success", False))
 
-    should_route_vpn = local_blocked and vpn_working
-    
-    if should_route_vpn:
+    if unrouted_blocked:
         action = "ENROUTE_VPN"
-        reason = f"Bloqueo detectado en tu red local ({'TLS/DPI o Timeout' if tls_status != 'OK' else 'Falla HTTP'}). El sitio responde correctamente a través del VPS VPN."
-    elif not local_blocked and vpn_working:
+        reason = f"Se detectaron {len(unrouted_blocked)} IP(s) con bloqueo en tu red local ({', '.join(unrouted_blocked)}). Enrútalas para restaurar el acceso."
+    elif routed_ips and (local_code != 0 or vps_code != 0):
+        action = "SOLUCIONADO"
+        reason = f"🟢 Bloqueo Solucionado: {len(routed_ips)} IP(s) están actualmente enrutadas por la VPN (tailscale0). El acceso al host responde con éxito (HTTP {local_code})."
+    elif has_dns and has_tcp and tls_status == "OK" and local_code != 0:
         action = "NONE"
         if local_code == 403:
             reason = f"Conexión directa y VPN funcionando correctamente. El servidor responde HTTP 403 (Restricción propia de la web/CDN '{http_local.get('server_header', '')}', no es bloqueo de tu red)."
@@ -822,12 +826,13 @@ async def run_deep_diagnose(req: DeepDiagnoseRequest):
         "http_local": http_local,
         "http_vps": http_vps,
         "analysis": {
-            "local_working": not local_blocked,
+            "local_working": (local_code != 0),
             "vpn_working": vpn_working,
             "recommended_action": action,
-            "message": reason
+            "message": reason,
+            "routed_ips_count": len(routed_ips)
         },
-        "ips_to_route": [t["ip"] for t in ip_tests if t["verdict"] == "BLOQUEADA_LOCAL"] or dns_data["ipv4"]
+        "ips_to_route": unrouted_blocked or dns_data["ipv4"]
     }
 
 # ----------------- SWITCHYOMEGA RULES EXPORT -----------------
