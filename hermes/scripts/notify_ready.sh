@@ -66,10 +66,8 @@ if [[ "${STARTUP_NOTIFICATION}" == "false" || "${STARTUP_NOTIFICATION}" == "0" ]
   exit 0
 fi
 
-HOST="$(hostname)"
-DATE="$(date '+%Y-%m-%d %H:%M:%S')"
-MSG_TELEGRAM="🟢 *Hermes Gateway Online* 🟢%0A%0A🖥️ *Host:* \`${HOST}\`%0A🤖 *Estado:* Gateway iniciado y listo para recibir mensajes.%0A📅 *Fecha:* \`${DATE}\`"
-MSG_WHATSAPP="🟢 *Hermes Gateway Online* 🟢\n\n🖥️ *Host:* ${HOST}\n🤖 *Estado:* Gateway iniciado y listo para recibir mensajes.\n📅 *Fecha:* ${DATE}"
+MSG_TELEGRAM="🟢 *Hermes Gateway online.*"
+MSG_WHATSAPP="🟢 Hermes Gateway online."
 
 # A) Send via Hermes Telegram Bot
 if [[ -n "$TOKEN" && -n "$CHAT_ID" ]]; then
