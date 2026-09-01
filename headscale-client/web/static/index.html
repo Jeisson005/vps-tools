@@ -637,8 +637,8 @@
     <!-- TAB 4: NETWORK & DPI DIAGNOSTICS -->
     <div id="tab-diag" class="tab-content">
       <div>
-        <h2 class="section-title">Diagnóstico Avanzado de Bloqueos & DPI</h2>
-        <p class="section-desc">Evalúa resolución DNS, conexión TCP 443, bloqueo de SNI (DPI) y estado HTTP en tiempo real.</p>
+        <h2 class="section-title">Diagnóstico de Webs Bloqueadas & DPI</h2>
+        <p class="section-desc">Evalúa qué sitios bloquea tu proveedor (DNS, TCP, TLS/SNI) y genera reglas de SwitchyOmega únicamente para los bloqueados.</p>
       </div>
       
       <div class="diag-toolbar">
@@ -662,6 +662,25 @@
         <button class="btn btn-primary" onclick="runDiagnostics()">Ejecutar Diagnóstico Completo</button>
       </div>
 
+      <!-- Export Blocked Sites Toolbar -->
+      <div class="card" id="export-blocked-card" style="padding: 1rem; background: var(--bg-card); display: flex; flex-direction: column; gap: 0.75rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <strong style="font-size: 13px;">Reglas SwitchyOmega para Sitios Bloqueados</strong>
+            <span id="blocked-count-badge" class="brand-badge" style="margin-left: 0.5rem;">0 bloqueados detectados</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 12px;">
+            <input type="checkbox" id="chk-include-adult" style="cursor: pointer;" />
+            <label for="chk-include-adult" style="cursor: pointer; color: var(--text-muted);">Incluir sitios para adultos (+18)</label>
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btn-copy-blocked-rules" onclick="copyBlockedRules()">📋 Copiar Reglas de Webs Bloqueadas</button>
+          <button class="btn" id="btn-dl-blocked-rules" onclick="downloadBlockedRules()">💾 Descargar Reglas (.txt)</button>
+        </div>
+      </div>
+
       <div id="prog-bar" class="progress-bar"><div class="progress-fill"></div></div>
 
       <div class="card-table">
@@ -680,7 +699,7 @@
             </tr>
           </thead>
           <tbody id="diag-tbody">
-            <tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">Presiona "Ejecutar Diagnóstico Completo" o ingresa un dominio para comenzar.</td></tr>
+            <tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">Presiona "Ejecutar Diagnóstico Completo" para analizar los bloqueos de tu conexión.</td></tr>
           </tbody>
         </table>
       </div>
@@ -715,38 +734,69 @@
       showToast("Copiado al portapapeles: " + str);
     }
 
-    async function getSwitchyOmegaContent() {
+    let lastDiagnosticResults = [];
+
+    function generateBlockedRulesText() {
       const includeAdult = document.getElementById("chk-include-adult")?.checked || false;
-      const res = await fetch(`/api/switchyomega-rules?include_adult=${includeAdult}&profile=proxy`);
-      const data = await res.json();
-      return data.content;
+      const blockedDomains = new Set();
+
+      lastDiagnosticResults.forEach(r => {
+        if (r.verdict && r.verdict !== "LIBRE") {
+          if (!includeAdult && r.category && r.category.toLowerCase() === "adulto") {
+            return;
+          }
+          if (r.domain && !r.domain.replace(".", "").isdigit()) {
+            blockedDomains.add(r.domain);
+          }
+        }
+      });
+
+      const sorted = Array.from(blockedDomains).sort();
+      const lines = ["[SwitchyOmega Conditions]", "@with result", ""];
+      sorted.forEach(d => {
+        lines.append ? null : null;
+        lines.push(`*.${d} +proxy`);
+        if (!d.startsWith("web.")) {
+          lines.push(`${d} +proxy`);
+        }
+      });
+      lines.push("");
+      lines.push("* +direct");
+      lines.push("");
+      return { text: lines.join("\n"), count: sorted.length };
     }
 
-    async function copySwitchyRules() {
-      showToast("Generando reglas para SwitchyOmega...");
+    async function copyBlockedRules() {
+      const { text, count } = generateBlockedRulesText();
+      if (count === 0) {
+        showToast("⚠️ No hay sitios bloqueados detectados. Ejecuta el diagnóstico primero.");
+        return;
+      }
       try {
-        const content = await getSwitchyOmegaContent();
-        await navigator.clipboard.writeText(content);
-        showToast("¡Reglas copiadas al portapapeles! Pégalas en 'Edit source code' de ZeroOmega");
+        await navigator.clipboard.writeText(text);
+        showToast(`¡${count} reglas de webs bloqueadas copiadas al portapapeles!`);
       } catch (err) {
         alert("Error al copiar reglas: " + err.message);
       }
     }
 
-    async function downloadSwitchyRules() {
-      showToast("Generando archivo de reglas...");
+    async function downloadBlockedRules() {
+      const { text, count } = generateBlockedRulesText();
+      if (count === 0) {
+        showToast("⚠️ No hay sitios bloqueados detectados. Ejecuta el diagnóstico primero.");
+        return;
+      }
       try {
-        const content = await getSwitchyOmegaContent();
-        const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "switchyomega-rules.txt";
+        a.download = "switchyomega-bloqueados.txt";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast("Archivo switchyomega-rules.txt descargado");
+        showToast(`Archivo con ${count} webs bloqueadas descargado`);
       } catch (err) {
         alert("Error al descargar archivo: " + err.message);
       }
@@ -1109,7 +1159,16 @@
     }
 
     function renderResults(results) {
+      lastDiagnosticResults = results || [];
       const tbody = document.getElementById("diag-tbody");
+      const badge = document.getElementById("blocked-count-badge");
+      
+      const blockedCount = lastDiagnosticResults.filter(r => r.verdict && r.verdict !== "LIBRE").length;
+      if (badge) {
+        badge.innerText = `${blockedCount} bloqueados detectados`;
+        badge.style.color = blockedCount > 0 ? "var(--error)" : "var(--success)";
+      }
+
       if (!results || results.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">No se encontraron dominios para evaluar.</td></tr>`;
         return;
