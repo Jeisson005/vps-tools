@@ -1186,17 +1186,17 @@
       if (data.analysis.recommended_action === "ENROUTE_VPN") {
         card.style.borderLeftColor = "var(--warning)";
         title.innerHTML = `⚠️ Bloqueo Local Detectado en <strong>${data.domain}</strong>`;
-        desc.innerText = "El sitio no responde en tu conexión local, pero responde perfectamente por el VPS VPN. Puedes enrutar sus IPs para solucionar el bloqueo.";
+        desc.innerText = data.analysis.message || "El sitio no responde en tu conexión local, pero responde perfectamente por el VPS VPN. Puedes enrutar sus IPs para solucionar el bloqueo.";
         btnEnroute.style.display = "inline-flex";
       } else if (data.analysis.local_working && data.analysis.vpn_working) {
         card.style.borderLeftColor = "var(--success)";
-        title.innerHTML = `🟢 Conexión Óptima en <strong>${data.domain}</strong>`;
-        desc.innerText = "El sitio web responde correctamente tanto por tu conexión local directa como por la VPN.";
+        title.innerHTML = `🟢 Sin Bloqueo de Red en <strong>${data.domain}</strong>`;
+        desc.innerText = data.analysis.message || "El sitio responde correctamente tanto por tu conexión local directa como por la VPN.";
         btnEnroute.style.display = "none";
       } else {
         card.style.borderLeftColor = "var(--error)";
         title.innerHTML = `🔴 Falla de Conectividad General en <strong>${data.domain}</strong>`;
-        desc.innerText = "El sitio web no responde en ninguna de las dos vías (posible caída del servidor remoto o dominio inexistente).";
+        desc.innerText = data.analysis.message || "El sitio web no responde en ninguna de las dos vías (posible caída del servidor remoto o dominio inexistente).";
         btnEnroute.style.display = "none";
       }
 
