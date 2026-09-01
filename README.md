@@ -31,11 +31,10 @@ Agent Capabilities:
 - **Host Administration & Shell Execution** ([bash-mcp/](bash-mcp/)) — Execute bash commands, inspect logs, monitor system health, and manage Docker containers with strict JSON schema compliance.
 - **Browser Automation & Live Visualizer** ([steel/](steel/), [skills/browser-automation/](skills/browser-automation/)) — Headless Chromium sessions with DOM manipulation, form filling, captcha handling, and real-time live session inspection.
 - **Remote Desktop & GUI Interaction** ([desktop/](desktop/), [skills/desktop-gui-control/](skills/desktop-gui-control/)) — Visual screen capture, mouse, and keyboard control over XFCE4 desktop via KasmVNC.
-- **Secure Secret Management** ([mcp/](mcp/), [skills/passbolt/](skills/passbolt/)) — Access encrypted API keys, credentials, and tokens via Passbolt MCP Gateway without exposing plain secrets.
 - **Self-Healing Task Supervision** ([sentinel/](sentinel/), [skills/scheduled-tasks/](skills/scheduled-tasks/)) — Proactive monitor for scheduled tasks with failure escalation, interactive Telegram diagnosis buttons, and automated healing.
 - **Multi-Platform Messaging** ([hermes/](hermes/)) — Autonomous communication across Telegram Bot and WhatsApp (Baileys) with turn interruption handling and startup alerts.
-- **Disaster Recovery Management** ([backup/](backup/)) — Perform on-demand or scheduled encrypted full-VPS backups with offsite sync to Google Drive.
-- **VPN Mesh & Network Routing** ([headscale/](headscale/), [headscale-node/](headscale-node/)) — Secure internal routing across private WireGuard networks and exit node operations.
+- **Model Context Protocol (MCP) Gateway** ([mcp/](mcp/)) — Modular gateway exposing unified tools, schema sanitization, and external services to LLM agents:
+  - **Passbolt Secret Management** ([skills/passbolt/](skills/passbolt/)) — Access encrypted API keys, credentials, and passwords securely without exposing plain secrets.
 
 ---
 
