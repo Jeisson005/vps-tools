@@ -15,6 +15,7 @@ class PassboltService(BaseMcpService):
     service_id: str = "passbolt"
     name: str = "Passbolt Password Manager"
     description: str = "Team password manager with OpenPGP client-side encryption, TOTP 2FA, and full CRUD support."
+    supports_instances: bool = True
 
     def __init__(
         self,
@@ -65,6 +66,7 @@ class PassboltService(BaseMcpService):
         for iid, cli in self.accounts.items():
             summary.append({
                 "instance_id": iid,
+                "name": "",
                 "enabled": True,
                 "is_default": iid == self.default_account_id,
                 "configured": cli.is_configured(),
@@ -75,6 +77,23 @@ class PassboltService(BaseMcpService):
                 "has_passphrase": bool(cli.passphrase),
             })
         return summary
+
+    def get_account_schema(self) -> Dict[str, Any]:
+        return {
+            "service_id": "passbolt",
+            "label": "Passbolt",
+            "config": [
+                {"key": "base_url", "label": "URL del servidor Passbolt", "type": "url", "required": True,
+                 "placeholder": "https://passbolt.yourdomain.com"},
+                {"key": "user_email", "label": "Correo de usuario Passbolt", "type": "email", "required": True,
+                 "placeholder": "user@domain.com"},
+            ],
+            "secrets": [
+                {"key": "private_key", "label": "Clave privada GPG (pégala aquí)", "type": "textarea", "required": True,
+                 "placeholder": "-----BEGIN PGP PRIVATE KEY BLOCK----- ..."},
+                {"key": "passphrase", "label": "Frase de paso (passphrase)", "type": "password", "required": False},
+            ],
+        }
 
     def _resolve_client(self, account: Optional[str]) -> PassboltClient:
         if not account:

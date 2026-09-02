@@ -59,6 +59,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 service_id TEXT NOT NULL,
                 instance_id TEXT NOT NULL,
+                name TEXT DEFAULT '',
                 enabled INTEGER NOT NULL DEFAULT 1,
                 is_default INTEGER NOT NULL DEFAULT 0,
                 config_json TEXT NOT NULL DEFAULT '{}',
@@ -67,6 +68,12 @@ def init_db():
                 UNIQUE (service_id, instance_id)
             );
         """)
+        
+        # Graceful migration for DBs created before the `name` column existed.
+        cursor.execute("PRAGMA table_info(service_instances)")
+        existing_cols = {row[1] for row in cursor.fetchall()}
+        if "name" not in existing_cols:
+            cursor.execute("ALTER TABLE service_instances ADD COLUMN name TEXT DEFAULT ''")
         
         conn.commit()
 
@@ -127,7 +134,7 @@ def get_service_instances(service_id: str) -> List[Dict[str, Any]]:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT instance_id, enabled, is_default, config_json, encrypted_secrets_json "
+            "SELECT instance_id, name, enabled, is_default, config_json, encrypted_secrets_json "
             "FROM service_instances WHERE service_id = ? ORDER BY is_default DESC, id ASC",
             (service_id,)
         )
@@ -139,6 +146,7 @@ def get_service_instances(service_id: str) -> List[Dict[str, Any]]:
             secrets = {k: decrypt_value(v) for k, v in encrypt_secrets.items()}
             instances.append({
                 "instance_id": r["instance_id"],
+                "name": r["name"] or "",
                 "enabled": bool(r["enabled"]),
                 "is_default": bool(r["is_default"]),
                 "config": config,
@@ -162,6 +170,7 @@ def save_service_instance(
     config: Dict[str, Any],
     secrets: Dict[str, str],
     is_default: bool = False,
+    name: str = "",
 ):
     """Create or update a service instance, encrypting secrets. Optionally mark it default."""
     init_db()
@@ -175,9 +184,10 @@ def save_service_instance(
             )
         cursor.execute("""
             INSERT INTO service_instances
-                (service_id, instance_id, enabled, is_default, config_json, encrypted_secrets_json, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                (service_id, instance_id, name, enabled, is_default, config_json, encrypted_secrets_json, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(service_id, instance_id) DO UPDATE SET
+                name = excluded.name,
                 enabled = excluded.enabled,
                 is_default = excluded.is_default,
                 config_json = excluded.config_json,
@@ -186,6 +196,7 @@ def save_service_instance(
         """, (
             service_id,
             instance_id,
+            name or "",
             1 if enabled else 0,
             1 if is_default else 0,
             json.dumps(config),
