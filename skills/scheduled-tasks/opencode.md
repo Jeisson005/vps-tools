@@ -1,7 +1,7 @@
 ---
 name: scheduled-tasks
 description: "Schedule, create, and manage self-healing background tasks and cron jobs on the VPS using Sentinel MCP/CLI. Supports Python, Bash, and Node.js with git versioning, .env secrets, Docker isolation, and Steel Browser Human-in-the-Loop."
-version: 2.2.0
+version: 2.3.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -62,6 +62,13 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
    - Si la tarea necesita **avisar, consultar o enviar** por **WhatsApp, Telegram, correo (Gmail/Outlook) o Google Workspace**, usa los **servicios MCP del gateway** de esa plataforma (`whatsapp_*`, `telegram_*`, `google_*`, `outlook_*`) en lugar de scrapear o inventar llamadas.
    - Para **notificaciones al usuario**, prioriza **Telegram** (vía MCP o el bot nativo del agente).
    - Consulta la skill **`messaging-platforms`** para el uso correcto (confirmar antes de enviar, tono del historial, etc.).
+6. **Tareas por eventos (watchers de comunicación):** Cuando el usuario pida *"cuando llegue X por Y canal con Z característica"* (p. ej. "cuando me llegue un correo de X", "cuando me mencionen en el grupo A"):
+   - Crea una tarea **programada** que corra cada **N** minutos (el que indique; por defecto **5**).
+   - Usa el **MCP del canal** para leer lo nuevo: `whatsapp_get_history`/`whatsapp_get_messages`, `telegram_get_messages`, `google_gmail_list`, `outlook_mail_list`.
+   - Lleva un **cursor** (último `id`/timestamp) para procesar solo lo nuevo y no repetir avisos.
+   - Valida el criterio (remitente, mención, palabra clave) y **notifica** (pref. **Telegram**) solo si matchea. Es una tarea **frecuente** (cron), no un servicio en primer plano.
+7. **Reutiliza watchers existentes:** Antes de crear una nueva tarea que vigile un canal, revisa `sentinel_list_tasks`. Si **ya existe una** que consulta ese servicio, **amplíala** (`sentinel_update_task`) para cubrir el nuevo criterio en vez de duplicar el polling.
+8. **IA puntual en tareas:** Si una tarea necesita una llamada de IA muy concreta (resumir, clasificar, redactar), usa **`litellm`** en el script, con `api_key` (y `model`/`base_url` si aplica) en el `.env`/`env_vars` de la tarea. Mantén la llamada mínima; no uses IA para cosas deterministas.
 
 ---
 
