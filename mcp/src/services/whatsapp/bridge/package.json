@@ -1,0 +1,14 @@
+{
+  "name": "mcp-whatsapp-bridge",
+  "version": "1.0.0",
+  "description": "Baileys multi-session bridge for the VPS MCP gateway (WhatsApp personal chat).",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "install-baileys": "npm install @whiskeysockets/baileys@^6 pino",
+    "start": "node whatsapp-bridge.js --port 3010 --session-dir ./sessions/default"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
