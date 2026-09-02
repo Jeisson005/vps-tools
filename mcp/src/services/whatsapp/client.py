@@ -84,6 +84,13 @@ class WhatsAppClient:
     async def get_media(self, message_id: str) -> dict:
         return await self._get(f"/media?id={message_id}")
 
+    async def get_media_bytes(self, message_id: str) -> bytes:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            r = await client.get(f"{self.bridge_url}/download?id={message_id}")
+            if r.status_code != 200:
+                raise RuntimeError(f"Descarga de media falló ({r.status_code})")
+            return r.content
+
     async def send_media(self, chat_id: str, media_type: str, base64: str, caption: str = "", filename: str = "") -> dict:
         return await self._post("/send-media", {
             "chatId": chat_id, "mediaType": media_type, "base64": base64,
@@ -91,16 +98,22 @@ class WhatsAppClient:
         })
 
     async def transcribe_media(self, message_id: str, language: str = "") -> dict:
-        import base64
+        import os
         data = await self.get_media(message_id)
-        if not data.get("base64"):
-            return {"ok": False, "message": "No se pudo descargar la media.", "media": data}
-        from ..core.asr import transcribe
+        if not data.get("size", 0) and not data.get("base64"):
+            return {"ok": False, "message": "No se encontró la media.", "media": data}
         try:
-            text = transcribe(base64.b64decode(data["base64"]), filename="msg." + (data.get("type") or "oga"), language=language)
+            raw = await self.get_media_bytes(message_id)
+        except Exception as e:
+            return {"ok": False, "message": f"Error descargando media: {e}", "media": data}
+        from ..core.asr import transcribe
+        mimetype = data.get("mimetype", "")
+        ext = (mimetype.rsplit("/", 1)[-1] if "/" in mimetype else "oga") or "oga"
+        try:
+            text = transcribe(raw, filename="msg." + ext, language=language)
         except Exception as e:
             return {"ok": False, "message": f"Error transcribiendo: {e}", "media": data}
-        return {"ok": True, "text": text, "type": data.get("type"), "mimetype": data.get("mimetype")}
+        return {"ok": True, "text": text, "type": data.get("type"), "mimetype": mimetype}
 
     async def test_connection(self) -> Dict[str, Any]:
         try:

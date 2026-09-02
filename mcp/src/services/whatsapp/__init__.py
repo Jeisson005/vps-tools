@@ -10,6 +10,9 @@ from .tools import WHATSAPP_TOOLS
 # gateway resolves them by their container name (wa-<slug>) unless WHATSAPP_BRIDGE_HOST
 # is set to an explicit host/IP (e.g. if bridges run outside the shared network).
 BRIDGE_HOST = (os.environ.get("WHATSAPP_BRIDGE_HOST") or "").strip()
+# Host used by agents (running on the same host) to download persisted media from
+# the bridge's published port. Default localhost.
+PULL_HOST = (os.environ.get("WHATSAPP_PULL_HOST") or "127.0.0.1").strip()
 
 
 def slug_for(instance_id: str) -> str:
@@ -148,7 +151,14 @@ class WhatsAppService(BaseMcpService):
                 args.get("caption", ""), args.get("filename", ""),
             )
         if tool_name == "whatsapp_get_media":
-            return await client.get_media(args.get("message_id", ""))
+            account_id = account or self.default_account_id
+            data = await client.get_media(args.get("message_id", ""))
+            # Give agents a host-reachable download link (they run on the same host),
+            # using the bridge's published port; inline base64 only for small media.
+            if data.get("url") and account_id:
+                port = bridge_url_for(account_id).rsplit(":", 1)[-1]
+                data["url"] = f"http://{PULL_HOST}:{port}{data['url']}"
+            return data
         if tool_name == "whatsapp_transcribe_media":
             return await client.transcribe_media(args.get("message_id", ""), args.get("language", ""))
         raise ValueError(f"Unknown WhatsApp tool: '{tool_name}'")
