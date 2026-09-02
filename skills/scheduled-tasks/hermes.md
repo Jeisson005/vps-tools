@@ -1,7 +1,7 @@
 ---
 name: scheduled-tasks
 description: "Schedule, create, and manage self-healing background tasks and cron jobs on the VPS using Sentinel MCP/CLI. Supports Python, Bash, and Node.js with git versioning, .env secrets, Docker isolation, and Steel Browser Human-in-the-Loop."
-version: 2.2.0
+version: 2.3.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -45,3 +45,14 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
    - Si la tarea necesita **avisar, consultar o enviar** por **WhatsApp, Telegram, correo (Gmail/Outlook) o Google Workspace**, usa los **servicios MCP del gateway** de esa plataforma (`whatsapp_*`, `telegram_*`, `google_*`, `outlook_*`) en lugar de scrapear o inventar llamadas.
    - Para **notificaciones al usuario**, prioriza **Telegram** (vía MCP o el bot nativo de Hermes).
    - Consulta la skill **`messaging-platforms`** para el uso correcto (confirmar antes de enviar, tono del historial, etc.).
+
+6. **Tareas por eventos (watchers de comunicación):** Cuando el usuario pida algo como *"cuando llegue X por Y canal con Z característica"* (p. ej. "cuando me llegue un correo de X", "cuando me mencionen en el grupo A", "cuando llegue un WhatsApp de B"):
+   - Crea una tarea **programada** que corra cada **N** minutos (el que indique el usuario; por defecto **5**).
+   - Dentro, usa el **MCP del canal** para leer lo nuevo: `whatsapp_get_history`/`whatsapp_get_messages`, `telegram_get_messages`, `google_gmail_list`, `outlook_mail_list`.
+   - Mantén un **cursor** (último `id`/timestamp visto) para procesar **solo lo nuevo** y no repetir avisos.
+   - Valida el criterio (remitente, mención, palabra clave) y **notifica** (preferiblemente por **Telegram**) solo si matchea.
+   - Es una tarea **frecuente** (cron), no un servicio en primer plano que corra indefinidamente.
+
+7. **Reutiliza watchers existentes:** Antes de crear una tarea nueva que vigile un canal, revisa `sentinel-ctl list`. Si **ya existe una** que consulta ese mismo servicio, **amplíala/actualízala** (`sentinel-ctl update` / `sentinel_update_task`) para cubrir el nuevo criterio en vez de duplicar el polling (evita varias tareas llamando al mismo canal y carpetas de datos duplicadas).
+
+8. **IA puntual en tareas:** Si una tarea necesita una llamada de IA muy concreta (resumir, clasificar, redactar una respuesta), usa **`litellm`** en el script. Pon la `api_key` (y, si aplica, `model` y `base_url`) en el `.env` de la tarea (regla de secretos). Mantén la llamada mínima y manejable (no uses IA para cosas triviales que el script pueda hacer determinista).
