@@ -1,7 +1,7 @@
 ---
 name: passbolt-credentials
 description: "Secure password, TOTP 2FA, and credential management via Passbolt MCP Gateway. Autonomous read-only access for queries, passwords, TOTPs, and folders. Mandatory human confirmation before creating, updating, or deleting any credential."
-version: 1.4.1
+version: 1.4.2
 author: VPS Tools
 license: MIT
 metadata:
@@ -29,6 +29,12 @@ Ejecuta estas herramientas de forma inmediata y sin pedir confirmación:
   Inspecciona la jerarquía y lista de carpetas de la bóveda.
 * **`passbolt_list_accounts()`**:
   Lista las **cuentas/bóvedas Passbolt** configuradas en el gateway (id, si es la principal, correo y servidor, sin exponer secretos). Úsala para descubrir los valores válidos de `account` antes de operar sobre una bóveda concreta.
+
+> ⚠️ **Regla de descubrimiento:** cuando te pregunten *"cuántas cuentas gestionas"*, *"qué cuentas tienes"* o
+> *"¿puedes gestionar más de una?"*, **SIEMPRE llama primero a `passbolt_list_accounts()`** y responde con su
+> resultado. **No infieras el número de cuentas** a partir de las carpetas, credenciales o recursos de una bóveda:
+> una bóveda puede contener muchas credenciales y aun así ser solo **una cuenta**. El `enum` del parámetro
+> `account` de cada tool también te muestra las cuentas válidas.
 
 ---
 
