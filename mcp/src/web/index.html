@@ -223,6 +223,34 @@
     </div>
   </div>
 
+  <!-- WhatsApp QR pairing Modal -->
+  <div id="qr-modal" class="modal">
+    <div class="modal-card config-modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h3 id="qr-title">Vincular WhatsApp</h3>
+          <span class="subtitle">Escanea este código con la app de WhatsApp</span>
+        </div>
+        <button id="btn-close-qr-modal" class="btn-icon" title="Cerrar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body qr-body">
+        <div class="qr-center">
+          <img id="qr-img" alt="Código QR de WhatsApp" class="qr-image" />
+          <p class="muted qr-hint">Abre WhatsApp → Ajustes → Dispositivos vinculados → <b>Vincular un dispositivo</b> y escanea el código.</p>
+          <p id="qr-url" class="qr-url-mono"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-refresh-qr" class="btn btn-secondary">Actualizar QR</button>
+          <div class="modal-actions-right">
+            <button type="button" id="btn-close-qr-modal-2" class="btn btn-ghost">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Passbolt Account Editor Modal -->
   <div id="passbolt-modal" class="modal">
     <div class="modal-card config-modal-card">

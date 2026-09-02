@@ -48,6 +48,23 @@ class WhatsAppClient:
         data = await self._get("/status")
         return data.get("qr", "") or ""
 
+    async def get_qr_data_uri(self):
+        """Return (raw_qr, image_data_uri) rendering the bridge QR as a PNG."""
+        qr = await self.get_qr()
+        if not qr:
+            return "", ""
+        try:
+            import base64
+            import io
+            import qrcode
+            img = qrcode.make(qr)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return qr, "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+        except Exception as e:
+            logger.debug(f"qr render: {e}")
+            return qr, ""
+
     async def list_chats(self) -> list:
         data = await self._get("/chats")
         return data.get("chats", [])

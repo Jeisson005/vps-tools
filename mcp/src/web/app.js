@@ -260,6 +260,7 @@ async function renderServiceAccounts() {
         ${acc.base_url ? `<div class="account-sub muted">${escapeHtml(acc.base_url)}</div>` : ""}
       </div>
       <div class="account-actions">
+        ${currentAccountService === "whatsapp" ? `<button class="btn btn-secondary btn-sm acc-qr" data-id="${escapeHtml(acc.instance_id)}">Ver QR</button>` : ""}
         <button class="btn btn-secondary btn-sm acc-test" data-id="${escapeHtml(acc.instance_id)}">Probar</button>
         <button class="btn btn-primary btn-sm acc-edit" data-id="${escapeHtml(acc.instance_id)}">Editar</button>
         <button class="btn btn-ghost btn-sm btn-danger acc-delete" data-id="${escapeHtml(acc.instance_id)}">Eliminar</button>
@@ -267,10 +268,46 @@ async function renderServiceAccounts() {
     `;
     list.appendChild(row);
   });
+  list.querySelectorAll(".acc-qr").forEach(b => b.addEventListener("click", () => showQr(b.getAttribute("data-id"))));
   list.querySelectorAll(".acc-test").forEach(b => b.addEventListener("click", () => testServiceAccount(b.getAttribute("data-id"), b)));
   list.querySelectorAll(".acc-edit").forEach(b => b.addEventListener("click", () => openAccountEditor(b.getAttribute("data-id"))));
   list.querySelectorAll(".acc-delete").forEach(b => b.addEventListener("click", () => deleteServiceAccount(b.getAttribute("data-id"))));
 }
+
+// WhatsApp QR modal -----------------------------------------------------------
+let currentQrAccount = "";
+
+async function showQr(instanceId) {
+  currentQrAccount = instanceId;
+  const modal = document.getElementById("qr-modal");
+  const img = document.getElementById("qr-img");
+  const urlEl = document.getElementById("qr-url");
+  img.style.display = "none";
+  img.src = "";
+  urlEl.innerText = "";
+  modal.classList.add("active");
+  await loadQrImage(instanceId);
+}
+
+async function loadQrImage(instanceId) {
+  const img = document.getElementById("qr-img");
+  const urlEl = document.getElementById("qr-url");
+  try {
+    const res = await apiFetch(`/api/admin/services/${encodeURIComponent(currentAccountService)}/accounts/${encodeURIComponent(instanceId)}/qr`);
+    const data = await res.json();
+    if (data.image) { img.src = data.image; img.style.display = "block"; }
+    if (data.qr) urlEl.innerText = data.qr;
+    if (!data.image && !data.qr) showToast("El bridge aún no genera QR (sin vincular o reiniciando). Prueba en unos segundos.", "error");
+  } catch (e) {
+    showToast("Error obteniendo QR: " + e.message, "error");
+  }
+}
+
+document.getElementById("btn-close-qr-modal").addEventListener("click", () => document.getElementById("qr-modal").classList.remove("active"));
+document.getElementById("btn-close-qr-modal-2").addEventListener("click", () => document.getElementById("qr-modal").classList.remove("active"));
+document.getElementById("btn-refresh-qr").addEventListener("click", () => {
+  if (currentQrAccount) loadQrImage(currentQrAccount);
+});
 
 async function testServiceAccount(instanceId, btn) {
   const oldText = btn ? btn.innerText : "";
