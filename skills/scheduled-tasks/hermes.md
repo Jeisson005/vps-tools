@@ -1,13 +1,13 @@
 ---
 name: scheduled-tasks
 description: "Schedule, create, and manage self-healing background tasks and cron jobs on the VPS using Sentinel MCP/CLI. Supports Python, Bash, and Node.js with git versioning, .env secrets, Docker isolation, and Steel Browser Human-in-the-Loop."
-version: 2.1.0
+version: 2.2.0
 author: VPS Tools
 license: MIT
 metadata:
   tags: [scheduled-tasks, cron, tasks, recurring, automation, sentinel, autoheal, hermes, self-healing, git, steel, hitl, docker]
   category: automation
-  related_skills: [browser-automation, passbolt-credentials]
+  related_skills: [browser-automation, passbolt-credentials, messaging-platforms]
 ---
 
 # Scheduled Tasks & Background Automation Skill (Hermes)
@@ -40,3 +40,8 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
 4. **Browser Automation Tasks:**
    - If the task interacts with web pages or portals, use Steel Browser persistent endpoint (`ws://127.0.0.1:3000/?apiKey=...`).
    - If a 2FA checkpoint or Captcha is expected, import `sentinel-hitl` to pause and send the interactive session to **🟢 Bot 4 (HITL)**.
+
+5. **Integraciones con servicios de comunicación del usuario:**
+   - Si la tarea necesita **avisar, consultar o enviar** por **WhatsApp, Telegram, correo (Gmail/Outlook) o Google Workspace**, usa los **servicios MCP del gateway** de esa plataforma (`whatsapp_*`, `telegram_*`, `google_*`, `outlook_*`) en lugar de scrapear o inventar llamadas.
+   - Para **notificaciones al usuario**, prioriza **Telegram** (vía MCP o el bot nativo de Hermes).
+   - Consulta la skill **`messaging-platforms`** para el uso correcto (confirmar antes de enviar, tono del historial, etc.).
