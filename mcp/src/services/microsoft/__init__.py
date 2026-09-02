@@ -123,9 +123,19 @@ class MicrosoftService(BaseMcpService):
         if tool_name == "outlook_mail_list":
             return await client.mail_list(filter=args.get("filter", ""), search=args.get("search", ""), top=int(args.get("top") or 10))
         if tool_name == "outlook_mail_get":
-            return await client.mail_get(args.get("message_id"))
+            return await client.mail_get(args.get("message_id"), include_attachments=bool(args.get("include_attachments")))
         if tool_name == "outlook_mail_send":
-            return await client.mail_send(to=args.get("to", ""), subject=args.get("subject", ""), body=args.get("body", ""), cc=args.get("cc", ""))
+            return await client.mail_send(to=args.get("to", ""), subject=args.get("subject", ""), body=args.get("body", ""), cc=args.get("cc", ""), attachments=args.get("attachments"))
+        if tool_name == "outlook_mail_set_read":
+            return await client.mail_set_read(args.get("message_id", ""), bool(args.get("read", True)))
+        if tool_name == "outlook_drafts":
+            return await client.drafts()
+        if tool_name == "outlook_draft_send":
+            return await client.draft_send(args.get("message_id", ""))
+        if tool_name == "outlook_folders":
+            return await client.folders()
+        if tool_name == "outlook_mail_transcribe_attachment":
+            return await client.mail_transcribe_attachment(args.get("message_id", ""), int(args.get("attachment_index") or 0), args.get("language", ""))
         if tool_name == "outlook_calendar_events":
             return await client.calendar_events(top=int(args.get("top") or 20), calendar_id=args.get("calendar_id") or "me")
         if tool_name == "outlook_calendar_create":

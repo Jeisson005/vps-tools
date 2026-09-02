@@ -136,6 +136,15 @@ class TelegramService(BaseMcpService):
             return await client.send_message(args.get("entity", ""), args.get("message", ""))
         if tool_name == "telegram_get_messages":
             return await client.get_messages(args.get("entity", ""), limit=int(args.get("limit") or 10))
+        if tool_name == "telegram_get_media":
+            return await client.get_media(args.get("entity", ""), int(args.get("message_id") or 0))
+        if tool_name == "telegram_send_media":
+            return await client.send_media(
+                args.get("entity", ""), args.get("data", ""), args.get("filename", ""),
+                args.get("caption", ""), args.get("media_type", "document"),
+            )
+        if tool_name == "telegram_transcribe_media":
+            return await client.transcribe_message(args.get("entity", ""), int(args.get("message_id") or 0), args.get("language", ""))
         raise ValueError(f"Unknown Telegram tool: '{tool_name}'")
 
     async def _persist_session(self, client: TelegramMTClient):

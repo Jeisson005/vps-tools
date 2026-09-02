@@ -110,8 +110,80 @@ class TelegramMTClient:
                 "from": getattr(m.sender, "username", "") or getattr(m.sender, "first_name", ""),
                 "text": (m.message or "")[:2000],
                 "date": str(m.date) if m.date else "",
+                "media": self._media_type(m),
             })
         return out
+
+    @staticmethod
+    def _media_type(m) -> str:
+        if not getattr(m, "media", None):
+            return ""
+        if getattr(m, "photo", None):
+            return "photo"
+        if getattr(m, "video", None):
+            return "video"
+        if getattr(m, "voice", None) or getattr(m, "audio", None):
+            return "audio"
+        if getattr(m, "document", None):
+            return "document"
+        return "media"
+
+    async def get_media(self, entity: str, message_id: int) -> dict:
+        import base64
+        client = await self._ensure()
+        msg = await client.get_messages(entity, ids=int(message_id))
+        if not msg:
+            raise RuntimeError(f"Mensaje {message_id} no encontrado.")
+        if not getattr(msg, "media", None):
+            return {"ok": False, "message": "El mensaje no tiene media."}
+        data = await msg.download_media(file=bytes)
+        if not data:
+            return {"ok": False, "message": "No se pudo descargar la media."}
+        fname = getattr(getattr(msg, "file", None), "name", "") or f"msg-{message_id}"
+        return {
+            "ok": True,
+            "base64": base64.b64encode(data).decode(),
+            "type": self._media_type(msg),
+            "filename": fname,
+        }
+
+    async def send_media(self, entity: str, data: bytes, filename: str = "", caption: str = "", media_type: str = "document") -> dict:
+        import base64
+        if isinstance(data, str) and data.startswith("data:"):
+            data = base64.b64decode(data.split(",", 1)[1])
+        elif isinstance(data, str):
+            data = base64.b64decode(data)
+        client = await self._ensure()
+        kwargs = {"caption": caption or None}
+        if media_type == "photo":
+            kwargs["force_document"] = False
+        elif media_type == "voice":
+            kwargs["voice_note"] = True
+        elif media_type == "video_note":
+            kwargs["video_note"] = True
+        elif media_type == "audio":
+            kwargs["voice_note"] = False
+        else:
+            kwargs["force_document"] = True
+            if filename:
+                import telethon
+                kwargs["attributes"] = [telethon.types.DocumentAttributeFilename(filename)]
+        sent = await client.send_file(entity, data, **kwargs)
+        return {"ok": True, "id": sent.id, "status": "sent"}
+
+    async def transcribe_message(self, entity: str, message_id: int, language: str = "") -> dict:
+        import base64
+        data = await self.get_media(entity, message_id)
+        if not data.get("ok") or not data.get("base64"):
+            return {"ok": False, "message": "No se pudo obtener la media."}
+        if data.get("type") not in ("audio", "voice", "video"):
+            return {"ok": False, "message": "El mensaje no es de audio para transcribir.", "type": data.get("type")}
+        from ..core.asr import transcribe
+        try:
+            text = transcribe(base64.b64decode(data["base64"]), filename=data.get("filename") or "audio.oga", language=language)
+        except Exception as e:
+            return {"ok": False, "message": f"Error transcribiendo: {e}"}
+        return {"ok": True, "text": text, "type": data.get("type")}
 
     async def test_connection(self) -> Dict[str, Any]:
         try:

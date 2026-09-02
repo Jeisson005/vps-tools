@@ -7,7 +7,7 @@
 //   GET  /messages?chatId=<jid> -> [{ id, fromMe, text, ts }]
 //   POST /send      -> { chatId, text } (JSON body)
 const http = require('http');
-const { useMultiFileAuthState, fetchLatestBaileysVersion, makeWASocket, DisconnectReason } = require('@whiskeysockets/baileys');
+const { useMultiFileAuthState, fetchLatestBaileysVersion, makeWASocket, DisconnectReason, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 
 const args = process.argv.slice(2);
@@ -24,7 +24,7 @@ let qr = '';
 let loggedIn = false;
 let makeSocket = null;
 let saveCreds = null;
-const socketStore = { chats: [], messages: {} };
+const socketStore = { chats: [], messages: {}, byId: {} };
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
@@ -61,9 +61,11 @@ function attach(s) {
   s.ev.on('messages.upsert', ({ messages }) => {
     for (const m of messages || []) {
       const jid = m.key?.remoteJid || 'unknown';
+      if (m.key?.id) socketStore.byId[m.key.id] = m;
       if (!socketStore.messages[jid]) socketStore.messages[jid] = [];
       socketStore.messages[jid].unshift({
         id: m.key?.id, fromMe: !!m.key?.fromMe,
+        media: mediaTypeOf(m.message),
         text: m.message?.conversation || m.message?.extendedTextMessage?.text || '',
         ts: m.messageTimestamp,
       });
@@ -71,6 +73,51 @@ function attach(s) {
       if (!socketStore.chats.find(c => c.id === jid)) socketStore.chats.push({ id: jid, name: jid });
     }
   });
+}
+
+function mediaTypeOf(msg) {
+  if (!msg) return null;
+  if (msg.imageMessage) return 'image';
+  if (msg.videoMessage) return 'video';
+  if (msg.audioMessage) return 'audio';
+  if (msg.stickerMessage) return 'sticker';
+  if (msg.documentMessage) return 'document';
+  return null;
+}
+
+async function getMediaBuffer(m) {
+  const content = m?.message;
+  const type = mediaTypeOf(content);
+  if (!type) throw new Error('mensaje sin media');
+  const opts = {};
+  if (content.documentMessage) opts.mimeType = content.documentMessage.mimetype;
+  const buf = await downloadMediaMessage(m, 'buffer', opts, logger).catch(() => null) ||
+               await downloadMediaMessage(m, 'buffer', {}, logger);
+  let mimetype = content.documentMessage?.mimetype || content.imageMessage?.mimetype ||
+                 content.videoMessage?.mimetype || content.audioMessage?.mimetype || 'application/octet-stream';
+  return { buf, type, mimetype };
+}
+
+const MIME_BY_TYPE = {
+  image: 'image/jpeg',
+  video: 'video/mp4',
+  audio: 'audio/ogg',
+  sticker: 'image/webp',
+  document: 'application/octet-stream',
+};
+
+async function sendMedia(chatId, mediaType, base64, caption, filename) {
+  if (!sock) throw new Error('not connected');
+  const buf = Buffer.from(base64, 'base64');
+  const content = { caption: caption || '' };
+  if (mediaType === 'image') content.image = buf;
+  else if (mediaType === 'video') content.video = buf;
+  else if (mediaType === 'audio') { content.audio = buf; content.ptt = false; }
+  else if (mediaType === 'voice') { content.audio = buf; content.ptt = true; }
+  else if (mediaType === 'sticker') content.sticker = buf;
+  else { content.document = buf; content.mimetype = MIME_BY_TYPE.document; if (filename) content.fileName = filename; }
+  const sent = await sock.sendMessage(chatId, content);
+  return { status: 'sent', chatId, mediaType, id: sent?.key?.id };
 }
 
 async function start() {
@@ -114,6 +161,19 @@ const server = http.createServer(async (req, res) => {
       for await (const chunk of req) body += chunk;
       const { chatId, text } = JSON.parse(body || '{}');
       return json(await send(chatId, text));
+    }
+    if (url.pathname === '/send-media' && req.method === 'POST') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const { chatId, mediaType, base64, caption, filename } = JSON.parse(body || '{}');
+      return json(await sendMedia(chatId, mediaType, base64, caption, filename));
+    }
+    if (url.pathname === '/media') {
+      const id = url.searchParams.get('id');
+      const m = socketStore.byId[id];
+      if (!m) throw new Error('mensaje no encontrado en buffer');
+      const { buf, type, mimetype } = await getMediaBuffer(m);
+      return json({ id, type, mimetype, base64: buf.toString('base64') });
     }
     res.writeHead(404); res.end('not found');
   } catch (e) {
