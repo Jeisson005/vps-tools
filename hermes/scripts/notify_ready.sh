@@ -79,17 +79,24 @@ fi
 
 # B) Send via WhatsApp Baileys Bridge
 if [[ -n "$WA_CHAT_ID" ]]; then
-  # Wait for bridge port 3005 to respond
-  for i in {1..10}; do
-    if curl -s "http://127.0.0.1:${WA_PORT}/status" 2>/dev/null | grep -q "connected"; then
+  # The Hermes WhatsApp bridge (port 3005) exposes /health ({"status":"connected"})
+  # rather than /status. Wait up to 45s for the bridge to be linked before sending.
+  for i in {1..45}; do
+    if curl -s "http://127.0.0.1:${WA_PORT}/health" 2>/dev/null | grep -qi '"status"[[:space:]]*:[[:space:]]*"connected"'; then
       break
     fi
     sleep 1
   done
 
-  curl -s -X POST "http://127.0.0.1:${WA_PORT}/send" \
-    -H "Content-Type: application/json" \
-    -d "{\"chatId\":\"${WA_CHAT_ID}\",\"message\":\"${MSG_WHATSAPP}\"}" >/dev/null 2>&1 || true
+  # Retry the send until the bridge acknowledges it (it can still be mid-connect).
+  for attempt in {1..3}; do
+    if curl -s -X POST "http://127.0.0.1:${WA_PORT}/send" \
+      -H "Content-Type: application/json" \
+      -d "{\"chatId\":\"${WA_CHAT_ID}\",\"message\":\"${MSG_WHATSAPP}\"}" 2>/dev/null | grep -qi '"success"[[:space:]]*:[[:space:]]*true'; then
+      break
+    fi
+    sleep 2
+  done
 fi
 
 exit 0
