@@ -25,9 +25,22 @@ const MESSAGE_LIMIT = parseInt(process.env.WHATSAPP_MESSAGE_LIMIT || '10000', 10
 // Max persisted history lines per chat on disk (real, restart-proof history).
 const HISTORY_LIMIT = parseInt(process.env.WHATSAPP_HISTORY_LIMIT || '100000', 10);
 const HISTORY_DIR = path.join(SESSION_DIR, 'history');
+const MEDIA_DIR = path.join(SESSION_DIR, 'media');
 
 let appendCounter = 0;
 function ensureDir(d) { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); }
+ensureDir(HISTORY_DIR);
+ensureDir(MEDIA_DIR);
+
+const EXT_BY_MIME = {
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+  'video/mp4': 'mp4', 'video/3gp': '3gp', 'audio/ogg': 'oga', 'audio/opus': 'opus',
+  'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'application/pdf': 'pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+};
+function extForMime(mime) { return EXT_BY_MIME[(mime || '').toLowerCase()] || 'bin'; }
+function mediaFileFor(id, mime) { return `${id}.${extForMime(mime)}`; }
 
 function historyFile(jid) {
   return path.join(HISTORY_DIR, (jid || 'unknown').replace(/[^a-zA-Z0-9@.\-_]/g, '_') + '.jsonl');
@@ -48,6 +61,9 @@ function pruneHistory(jid) {
     if (!fs.existsSync(f)) return;
     const lines = fs.readFileSync(f, 'utf8').split('\n').filter(Boolean);
     if (lines.length > HISTORY_LIMIT) {
+      // Delete media of messages being dropped before rewriting the file.
+      const dropped = lines.slice(0, lines.length - HISTORY_LIMIT);
+      for (const l of dropped) { try { const o = JSON.parse(l); if (o.id) deleteMedia(o.id); } catch (e) {} }
       fs.writeFileSync(f, lines.slice(lines.length - HISTORY_LIMIT).join('\n') + '\n', 'utf8');
     }
   } catch (e) { /* ignore */ }
@@ -129,18 +145,18 @@ function attach(s) {
     }
   });
   // Preload a window of history at connect (bounded by what WhatsApp syncs).
-  s.ev.on('messaging-history.set', ({ messages, contacts, chats }) => {
+  s.ev.on('messaging-history.set', async ({ messages, contacts, chats }) => {
     for (const c of contacts || []) { if (c?.jid) storeContactName(c.jid, c.notify || c.verifiedName || c.name || ''); }
     for (const ch of chats || []) { if (ch?.id && !socketStore.chats.find(x => x.id === ch.id)) socketStore.chats.push({ id: ch.id, name: ch.name || ch.id }); }
-    for (const m of messages || []) ingestMessage(m);
+    for (const m of messages || []) await ingestMessage(m);
   });
 
-  s.ev.on('messages.upsert', ({ messages }) => {
-    for (const m of messages || []) ingestMessage(m);
+  s.ev.on('messages.upsert', async ({ messages }) => {
+    for (const m of messages || []) await ingestMessage(m);
   });
 }
 
-function ingestMessage(m) {
+async function ingestMessage(m) {
   const jid = m.key?.remoteJid || 'unknown';
   const id = m.key?.id;
   if (id && socketStore.byId[id]) return; // already ingested
@@ -149,9 +165,13 @@ function ingestMessage(m) {
   const senderKey = realJidFor(jid);
   const senderName = contactName(senderKey) || m.pushName || (jid === senderKey ? jid : senderKey);
   if (!socketStore.messages[jid]) socketStore.messages[jid] = [];
+  const mediaType = mediaTypeOf(m.message);
+  let mediaFile = '';
+  if (mediaType) mediaFile = await persistMedia(m).catch(() => '');
   const entry = {
     id, fromMe: !!m.key?.fromMe,
-    media: mediaTypeOf(m.message),
+    media: mediaType,
+    mediaFile,
     sender: senderName,
     text: m.message?.conversation || m.message?.extendedTextMessage?.text || '',
     ts: m.messageTimestamp,
@@ -188,6 +208,47 @@ async function getMediaBuffer(m) {
   let mimetype = content.documentMessage?.mimetype || content.imageMessage?.mimetype ||
                  content.videoMessage?.mimetype || content.audioMessage?.mimetype || 'application/octet-stream';
   return { buf, type, mimetype };
+}
+
+async function persistMedia(m) {
+  if (!m?.message || !mediaTypeOf(m.message) || !m.key?.id) return '';
+  try {
+    const { buf, type, mimetype } = await getMediaBuffer(m);
+    if (!buf || !buf.length) return '';
+    const file = mediaFileFor(m.key.id, mimetype || '');
+    fs.writeFileSync(path.join(MEDIA_DIR, file), buf);
+    return file;
+  } catch (e) { return ''; }
+}
+
+function readMediaFile(filename) {
+  try {
+    const p = path.join(MEDIA_DIR, filename);
+    if (!fs.existsSync(p)) return null;
+    return fs.readFileSync(p);
+  } catch (e) { return null; }
+}
+
+function findMediaFile(id) {
+  try {
+    const files = fs.readdirSync(MEDIA_DIR).filter(f => f.indexOf(id + '.') === 0);
+    return files[0] || null;
+  } catch (e) { return null; }
+}
+
+function deleteMedia(id) {
+  try {
+    const f = findMediaFile(id);
+    if (f) fs.unlinkSync(path.join(MEDIA_DIR, f));
+  } catch (e) { /* ignore */ }
+}
+
+function mimetypeForExt(ext) {
+  const map = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4',
+    oga: 'audio/ogg', opus: 'audio/opus', m4a: 'audio/mp4', mp3: 'audio/mpeg', pdf: 'application/pdf',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', bin: 'application/octet-stream' };
+  return map[ext] || 'application/octet-stream';
 }
 
 const MIME_BY_TYPE = {
@@ -273,8 +334,15 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/media') {
       const id = url.searchParams.get('id');
+      // Prefer persisted media on disk; fall back to a live download.
+      const existing = findMediaFile(id);
+      if (existing) {
+        const buf = readMediaFile(existing);
+        const ext = existing.split('.').pop();
+        return json({ id, type: 'persisted', mimetype: mimetypeForExt(ext), base64: buf.toString('base64') });
+      }
       const m = socketStore.byId[id];
-      if (!m) throw new Error('mensaje no encontrado en buffer');
+      if (!m) throw new Error('mensaje no encontrado en buffer ni en disco');
       const { buf, type, mimetype } = await getMediaBuffer(m);
       return json({ id, type, mimetype, base64: buf.toString('base64') });
     }
