@@ -41,6 +41,8 @@ const EXT_BY_MIME = {
 };
 function extForMime(mime) { return EXT_BY_MIME[(mime || '').toLowerCase()] || 'bin'; }
 function mediaFileFor(id, mime) { return `${id}.${extForMime(mime)}`; }
+// Inline base64 only for small media; larger media is exposed as a download URL.
+const MAX_INLINE = 4 * 1024 * 1024; // 4 MB
 
 function historyFile(jid) {
   return path.join(HISTORY_DIR, (jid || 'unknown').replace(/[^a-zA-Z0-9@.\-_]/g, '_') + '.jsonl');
@@ -332,19 +334,38 @@ const server = http.createServer(async (req, res) => {
       const { chatId, mediaType, base64, caption, filename } = JSON.parse(body || '{}');
       return json(await sendMedia(chatId, mediaType, base64, caption, filename));
     }
-    if (url.pathname === '/media') {
-      const id = url.searchParams.get('id');
-      // Prefer persisted media on disk; fall back to a live download.
+    const serveMedia = async (id) => {
       const existing = findMediaFile(id);
       if (existing) {
-        const buf = readMediaFile(existing);
+        const full = path.join(MEDIA_DIR, existing);
         const ext = existing.split('.').pop();
-        return json({ id, type: 'persisted', mimetype: mimetypeForExt(ext), base64: buf.toString('base64') });
+        const mimetype = mimetypeForExt(ext);
+        const size = fs.statSync(full).size;
+        return { id, type: 'media', mimetype, size, url: `/download?id=${id}`, base64: size <= MAX_INLINE ? fs.readFileSync(full).toString('base64') : '' };
       }
       const m = socketStore.byId[id];
       if (!m) throw new Error('mensaje no encontrado en buffer ni en disco');
       const { buf, type, mimetype } = await getMediaBuffer(m);
-      return json({ id, type, mimetype, base64: buf.toString('base64') });
+      return { id, type, mimetype, size: buf.length, url: `/download?id=${id}`, base64: buf.length <= MAX_INLINE ? buf.toString('base64') : '' };
+    };
+    if (url.pathname === '/media') {
+      return json(await serveMedia(url.searchParams.get('id')));
+    }
+    if (url.pathname === '/download') {
+      const id = url.searchParams.get('id');
+      const existing = findMediaFile(id);
+      if (existing) {
+        const full = path.join(MEDIA_DIR, existing);
+        const ext = existing.split('.').pop();
+        const buf = fs.readFileSync(full);
+        res.writeHead(200, { 'Content-Type': mimetypeForExt(ext), 'Content-Length': buf.length });
+        return res.end(buf);
+      }
+      const m = socketStore.byId[id];
+      if (!m) { res.writeHead(404); res.end('not found'); return; }
+      const { buf, mimetype } = await getMediaBuffer(m);
+      res.writeHead(200, { 'Content-Type': mimetype });
+      return res.end(buf);
     }
     res.writeHead(404); res.end('not found');
   } catch (e) {
