@@ -135,7 +135,7 @@ function renderServicesGrid(services) {
   document.querySelectorAll(".btn-config-service").forEach(btn => {
     btn.addEventListener("click", (e) => {
       const sId = e.target.closest("button").getAttribute("data-id");
-      if (sId === "passbolt") openPassboltModal();
+      if (sId === "passbolt") openPassboltAccounts();
     });
   });
 
@@ -180,33 +180,146 @@ async function toggleServiceState(serviceId, enabled) {
   }
 }
 
-// --- Passbolt Configuration Modal ---
-function openPassboltModal() {
-  const modal = document.getElementById("passbolt-modal");
-  const s = loadedServices.find(x => x.id === "passbolt");
-  
-  if (s && s.config) {
-    document.getElementById("pb-base-url").value = s.config.base_url || "";
-    document.getElementById("pb-user-email").value = s.config.user_email || "";
-    
-    const fileLabel = document.getElementById("pb-key-status");
-    if (s.has_private_key) {
-      fileLabel.innerText = "✓ Clave privada configurada en base de datos";
-      fileLabel.className = "file-status-label loaded";
-    } else {
-      fileLabel.innerText = "Ninguna clave cargada";
-      fileLabel.className = "file-status-label";
-    }
+// --- Passbolt Accounts Manager ---
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
-    if (s.has_passphrase) {
-      document.getElementById("pb-passphrase").placeholder = "•••••••••••• (Guardada en base de datos)";
-    }
-  }
-
+function resetPassboltForm() {
+  document.getElementById("pb-instance-id").value = "";
+  document.getElementById("pb-account-name").value = "";
+  document.getElementById("pb-base-url").value = "";
+  document.getElementById("pb-user-email").value = "";
+  document.getElementById("pb-private-key-paste").value = "";
+  document.getElementById("pb-passphrase").value = "";
+  document.getElementById("pb-is-default").checked = false;
+  document.getElementById("pb-passphrase").placeholder = "Frase de paso si tu clave está cifrada";
+  passboltArmoredKey = "";
+  const label = document.getElementById("pb-key-status");
+  label.innerText = "Ninguna clave cargada";
+  label.className = "file-status-label";
   const feedback = document.getElementById("pb-test-feedback");
   feedback.className = "test-feedback-box hidden";
   feedback.innerText = "";
-  modal.classList.add("active");
+  document.getElementById("btn-delete-passbolt-account").classList.add("hidden");
+  document.getElementById("pb-modal-title").innerText = "Configurar cuenta Passbolt";
+}
+
+async function openPassboltAccounts() {
+  document.getElementById("passbolt-accounts-modal").classList.add("active");
+  await renderPassboltAccounts();
+}
+
+function closePassboltAccounts() {
+  document.getElementById("passbolt-accounts-modal").classList.remove("active");
+}
+
+async function renderPassboltAccounts() {
+  const list = document.getElementById("pb-accounts-list");
+  if (!list) return;
+  list.innerHTML = '<div class="empty-state">Cargando cuentas...</div>';
+  let accounts = [];
+  try {
+    const res = await apiFetch("/api/admin/passbolt/accounts");
+    accounts = await res.json();
+  } catch (e) {
+    list.innerHTML = '<div class="empty-state">Error cargando cuentas</div>';
+    return;
+  }
+  if (!accounts || accounts.length === 0) {
+    list.innerHTML = '<div class="empty-state">No hay cuentas configuradas. Añade la primera.</div>';
+    return;
+  }
+  list.innerHTML = "";
+  accounts.forEach(acc => {
+    const badges = [];
+    if (acc.is_default) badges.push('<span class="badge badge-primary">Principal</span>');
+    if (acc.configured) badges.push('<span class="badge badge-success">Conectada</span>');
+    else badges.push('<span class="badge">Sin clave</span>');
+
+    const row = document.createElement("div");
+    row.className = "account-row";
+    row.innerHTML = `
+      <div class="account-info">
+        <div class="account-title"><b>${escapeHtml(acc.instance_id)}</b> ${badges.join(" ")}</div>
+        <div class="account-sub">${escapeHtml(acc.user_email || "sin correo")}</div>
+        <div class="account-sub muted">${escapeHtml(acc.base_url || "sin URL")}${acc.fingerprint ? " · " + escapeHtml(acc.fingerprint) : ""}</div>
+      </div>
+      <div class="account-actions">
+        <button class="btn btn-secondary btn-sm pb-test-account" data-id="${escapeHtml(acc.instance_id)}">Probar</button>
+        <button class="btn btn-primary btn-sm pb-edit-account" data-id="${escapeHtml(acc.instance_id)}">Editar</button>
+        <button class="btn btn-ghost btn-sm btn-danger pb-delete-account" data-id="${escapeHtml(acc.instance_id)}">Eliminar</button>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+  list.querySelectorAll(".pb-test-account").forEach(b => b.addEventListener("click", () => testPassboltAccount(b.getAttribute("data-id"), b)));
+  list.querySelectorAll(".pb-edit-account").forEach(b => b.addEventListener("click", () => openPassboltEditor(b.getAttribute("data-id"))));
+  list.querySelectorAll(".pb-delete-account").forEach(b => b.addEventListener("click", () => deletePassboltAccount(b.getAttribute("data-id"))));
+}
+
+async function testPassboltAccount(instanceId, btn) {
+  const oldText = btn ? btn.innerText : "";
+  if (btn) { btn.disabled = true; btn.innerText = "Probando..."; }
+  try {
+    const res = await apiFetch(`/api/admin/passbolt/accounts/${encodeURIComponent(instanceId)}/test`, { method: "POST" });
+    const data = await res.json();
+    if (data.ok) showToast((data.message || "Conexión exitosa") + ` [${instanceId}]`, "success");
+    else showToast((data.message || "Fallo de conexión") + ` [${instanceId}]`, "error");
+  } catch (e) {
+    showToast("Error probando cuenta: " + e.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerText = oldText; }
+  }
+}
+
+async function deletePassboltAccount(instanceId) {
+  if (!confirm(`¿Eliminar la cuenta Passbolt '${instanceId}'? Esta acción no se puede deshacer.`)) return;
+  try {
+    const res = await apiFetch(`/api/admin/passbolt/accounts/${encodeURIComponent(instanceId)}`, { method: "DELETE" });
+    if (res.ok) {
+      showToast("Cuenta eliminada", "success");
+      loadServices();
+      await renderPassboltAccounts();
+    } else {
+      const err = await res.json();
+      showToast(err.detail || "Error eliminando cuenta", "error");
+    }
+  } catch (e) {
+    showToast(e.message, "error");
+  }
+}
+
+async function openPassboltEditor(instanceId) {
+  closePassboltAccounts();
+  resetPassboltForm();
+  if (instanceId) {
+    document.getElementById("pb-modal-title").innerText = "Editar cuenta Passbolt";
+    try {
+      const res = await apiFetch("/api/admin/passbolt/accounts");
+      const accounts = await res.json();
+      const acc = accounts.find(a => a.instance_id === instanceId);
+      if (acc) {
+        document.getElementById("pb-instance-id").value = acc.instance_id;
+        document.getElementById("pb-account-name").value = acc.instance_id;
+        document.getElementById("pb-base-url").value = acc.base_url || "";
+        document.getElementById("pb-user-email").value = acc.user_email || "";
+        document.getElementById("pb-is-default").checked = !!acc.is_default;
+        if (acc.has_private_key) {
+          const label = document.getElementById("pb-key-status");
+          label.innerText = "✓ Clave privada guardada en base de datos";
+          label.className = "file-status-label loaded";
+        }
+        if (acc.has_passphrase) {
+          document.getElementById("pb-passphrase").placeholder = "•••••••••••• (Guardada en BD)";
+        }
+        document.getElementById("btn-delete-passbolt-account").classList.remove("hidden");
+      }
+    } catch (e) {
+      showToast("Error cargando cuenta", "error");
+    }
+  }
+  document.getElementById("passbolt-modal").classList.add("active");
 }
 
 function closePassboltModal() {
@@ -215,6 +328,17 @@ function closePassboltModal() {
 
 document.getElementById("btn-close-passbolt-modal").addEventListener("click", closePassboltModal);
 document.getElementById("btn-cancel-passbolt").addEventListener("click", closePassboltModal);
+document.getElementById("btn-close-pb-accounts-modal").addEventListener("click", closePassboltAccounts);
+document.getElementById("btn-close-pb-accounts-modal-2").addEventListener("click", closePassboltAccounts);
+document.getElementById("btn-add-passbolt-account").addEventListener("click", () => openPassboltEditor(null));
+
+document.getElementById("btn-delete-passbolt-account").addEventListener("click", async () => {
+  const instanceId = document.getElementById("pb-instance-id").value;
+  if (!instanceId) return;
+  await deletePassboltAccount(instanceId);
+  closePassboltModal();
+  openPassboltAccounts();
+});
 
 // Toggle Passphrase Visibility
 document.getElementById("btn-toggle-pb-passphrase").addEventListener("click", () => {
@@ -260,15 +384,12 @@ function handleKeyFile(file) {
   reader.readAsText(file);
 }
 
-// Live Test Connection Button inside Modal
+// Live Test Connection Button inside the editor
 document.getElementById("btn-test-passbolt-live").addEventListener("click", async () => {
   const btn = document.getElementById("btn-test-passbolt-live");
   const feedback = document.getElementById("pb-test-feedback");
-  
+  const instanceId = document.getElementById("pb-instance-id").value;
   const baseUrl = document.getElementById("pb-base-url").value.trim();
-  const userEmail = document.getElementById("pb-user-email").value.trim();
-  const keyPaste = document.getElementById("pb-private-key-paste").value.trim();
-  const passphrase = document.getElementById("pb-passphrase").value;
 
   if (!baseUrl) {
     showToast("Ingresa la URL del servidor Passbolt", "error");
@@ -279,72 +400,83 @@ document.getElementById("btn-test-passbolt-live").addEventListener("click", asyn
   btn.innerText = "Probando conexión...";
   feedback.className = "test-feedback-box hidden";
 
+  const showFeedback = (ok, message, details) => {
+    feedback.classList.remove("hidden");
+    feedback.className = `test-feedback-box ${ok ? "success" : "error"}`;
+    feedback.innerHTML = ok
+      ? `<strong>✓ Conexión Exitosa:</strong> ${message}<br><small>Usuario: ${details?.user || 'N/A'} | Recursos: ${details?.vault_resources_count ?? 'N/A'}</small>`
+      : `<strong>✗ Fallo:</strong> ${message}`;
+  };
+
   try {
-    const res = await apiFetch("/api/admin/services/passbolt/test-config", {
-      method: "POST",
-      body: JSON.stringify({
-        config: { base_url: baseUrl, user_email: userEmail },
-        secrets: {
-          private_key: keyPaste || passboltArmoredKey || undefined,
-          passphrase: passphrase || undefined
-        }
-      })
-    });
-    const result = await res.json();
-    feedback.classList.remove("hidden");
-    if (result.ok) {
-      feedback.className = "test-feedback-box success";
-      feedback.innerHTML = `<strong>✓ Conexión Exitosa:</strong> ${result.message}<br><small>Usuario: ${result.details?.user || 'N/A'} | Recursos: ${result.details?.vault_resources_count ?? 'N/A'}</small>`;
+    // Existing account -> test from stored config; new account -> test the draft.
+    let result;
+    if (instanceId) {
+      const res = await apiFetch(`/api/admin/passbolt/accounts/${encodeURIComponent(instanceId)}/test`, { method: "POST" });
+      result = await res.json();
     } else {
-      feedback.className = "test-feedback-box error";
-      feedback.innerHTML = `<strong>✗ Fallo:</strong> ${result.message}`;
+      const userEmail = document.getElementById("pb-user-email").value.trim();
+      const keyPaste = document.getElementById("pb-private-key-paste").value.trim();
+      const passphrase = document.getElementById("pb-passphrase").value;
+      const res = await apiFetch("/api/admin/services/passbolt/test-config", {
+        method: "POST",
+        body: JSON.stringify({
+          config: { base_url: baseUrl, user_email: userEmail },
+          secrets: {
+            private_key: keyPaste || passboltArmoredKey || undefined,
+            passphrase: passphrase || undefined
+          }
+        })
+      });
+      result = await res.json();
     }
+    showFeedback(result.ok, result.message || "Sin mensaje", result.details);
   } catch (err) {
-    feedback.classList.remove("hidden");
-    feedback.className = "test-feedback-box error";
-    feedback.innerHTML = `<strong>✗ Error:</strong> ${err.message}`;
+    showFeedback(false, err.message);
   } finally {
     btn.disabled = false;
     btn.innerText = "Probar Conexión Live";
   }
 });
 
-// Save Passbolt Form
+// Save Passbolt Account Form
 document.getElementById("passbolt-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const instanceId = document.getElementById("pb-instance-id").value;
+  const name = document.getElementById("pb-account-name").value.trim();
   const baseUrl = document.getElementById("pb-base-url").value.trim();
   const userEmail = document.getElementById("pb-user-email").value.trim();
   const keyPaste = document.getElementById("pb-private-key-paste").value.trim();
   const passphrase = document.getElementById("pb-passphrase").value;
+  const isDefault = document.getElementById("pb-is-default").checked;
+
+  const resolvedId = instanceId || name;
+  if (!resolvedId) { showToast("Ingresa un nombre para la cuenta", "error"); return; }
+  if (!baseUrl) { showToast("Ingresa la URL del servidor Passbolt", "error"); return; }
 
   const payload = {
+    instance_id: resolvedId,
     enabled: true,
-    config: {
-      base_url: baseUrl,
-      user_email: userEmail
-    },
+    is_default: isDefault,
+    config: { base_url: baseUrl, user_email: userEmail },
     secrets: {}
   };
-
-  if (keyPaste || passboltArmoredKey) {
-    payload.secrets.private_key = keyPaste || passboltArmoredKey;
-  }
-  if (passphrase) {
-    payload.secrets.passphrase = passphrase;
-  }
+  if (keyPaste || passboltArmoredKey) payload.secrets.private_key = keyPaste || passboltArmoredKey;
+  if (passphrase) payload.secrets.passphrase = passphrase;
 
   try {
-    const res = await apiFetch("/api/admin/services/passbolt", {
+    const res = await apiFetch("/api/admin/passbolt/accounts", {
       method: "POST",
       body: JSON.stringify(payload)
     });
     if (res.ok) {
-      showToast("Configuración de Passbolt guardada con éxito", "success");
+      showToast("Cuenta Passbolt guardada", "success");
       closePassboltModal();
       loadServices();
+      await openPassboltAccounts();
     } else {
       const err = await res.json();
-      showToast(err.detail || "Error guardando configuración", "error");
+      showToast(err.detail || "Error guardando cuenta", "error");
     }
   } catch (err) {
     showToast(err.message, "error");

@@ -53,6 +53,21 @@ def init_db():
             );
         """)
         
+        # Multi-instance service accounts (e.g. multiple Passbolt accounts)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS service_instances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                service_id TEXT NOT NULL,
+                instance_id TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                config_json TEXT NOT NULL DEFAULT '{}',
+                encrypted_secrets_json TEXT NOT NULL DEFAULT '{}',
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (service_id, instance_id)
+            );
+        """)
+        
         conn.commit()
 
 def get_service_config(service_id: str) -> Optional[Dict[str, Any]]:
@@ -105,6 +120,117 @@ def save_service_config(service_id: str, enabled: bool, config: Dict[str, Any], 
                 updated_at = CURRENT_TIMESTAMP;
         """, (service_id, 1 if enabled else 0, json.dumps(config), json.dumps(encrypted_secrets)))
         conn.commit()
+
+def get_service_instances(service_id: str) -> List[Dict[str, Any]]:
+    """List all accounts/instances for a service (secrets decrypted)."""
+    init_db()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT instance_id, enabled, is_default, config_json, encrypted_secrets_json "
+            "FROM service_instances WHERE service_id = ? ORDER BY is_default DESC, id ASC",
+            (service_id,)
+        )
+        rows = cursor.fetchall()
+        instances = []
+        for r in rows:
+            config = json.loads(r["config_json"] or "{}")
+            encrypt_secrets = json.loads(r["encrypted_secrets_json"] or "{}")
+            secrets = {k: decrypt_value(v) for k, v in encrypt_secrets.items()}
+            instances.append({
+                "instance_id": r["instance_id"],
+                "enabled": bool(r["enabled"]),
+                "is_default": bool(r["is_default"]),
+                "config": config,
+                "secrets": secrets,
+            })
+        return instances
+
+
+def get_service_instance(service_id: str, instance_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve a single service instance (secrets decrypted) or None."""
+    for inst in get_service_instances(service_id):
+        if inst["instance_id"] == instance_id:
+            return inst
+    return None
+
+
+def save_service_instance(
+    service_id: str,
+    instance_id: str,
+    enabled: bool,
+    config: Dict[str, Any],
+    secrets: Dict[str, str],
+    is_default: bool = False,
+):
+    """Create or update a service instance, encrypting secrets. Optionally mark it default."""
+    init_db()
+    encrypted_secrets = {k: encrypt_value(v) for k, v in secrets.items() if v}
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        if is_default:
+            cursor.execute(
+                "UPDATE service_instances SET is_default = 0 WHERE service_id = ? AND is_default = 1",
+                (service_id,)
+            )
+        cursor.execute("""
+            INSERT INTO service_instances
+                (service_id, instance_id, enabled, is_default, config_json, encrypted_secrets_json, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(service_id, instance_id) DO UPDATE SET
+                enabled = excluded.enabled,
+                is_default = excluded.is_default,
+                config_json = excluded.config_json,
+                encrypted_secrets_json = excluded.encrypted_secrets_json,
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            service_id,
+            instance_id,
+            1 if enabled else 0,
+            1 if is_default else 0,
+            json.dumps(config),
+            json.dumps(encrypted_secrets),
+        ))
+        conn.commit()
+
+
+def delete_service_instance(service_id: str, instance_id: str):
+    """Delete a service instance."""
+    init_db()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM service_instances WHERE service_id = ? AND instance_id = ?",
+            (service_id, instance_id)
+        )
+        conn.commit()
+
+
+def ensure_default_instance(service_id: str, config: Dict[str, Any], secrets: Dict[str, str]):
+    """Guarantee a default instance exists for a service (used for seeding)."""
+    instances = get_service_instances(service_id)
+    if instances:
+        return
+    save_service_instance(service_id, "primary", True, config, secrets, is_default=True)
+
+
+def migrate_legacy_service_to_instances(service_id: str) -> bool:
+    """Move a legacy single service row into a default instance (returns True if migrated)."""
+    if get_service_instances(service_id):
+        return False
+    legacy = get_service_config(service_id)
+    if not legacy:
+        return False
+    save_service_instance(
+        service_id,
+        "primary",
+        legacy["enabled"],
+        legacy["config"],
+        legacy["secrets"],
+        is_default=True,
+    )
+    return True
+
 
 def get_setting(key: str, default: str = "") -> str:
     init_db()

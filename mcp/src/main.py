@@ -23,6 +23,33 @@ logger = logging.getLogger("mcp.main")
 ADMIN_PASSWORD = os.environ.get("MCP_ADMIN_PASSWORD", "admin")
 MCP_API_KEY = os.environ.get("MCP_API_KEY", "").strip()
 
+
+def _generate_instance_id(user_email: str = "") -> str:
+    """Build a stable, human-friendly account id from an email or fall back to a short uuid."""
+    local = (user_email or "").split("@")[0].strip()
+    if local:
+        safe = "".join(c for c in local if c.isalnum() or c in "_-").lower()
+        if safe:
+            return safe
+    return "account-" + uuid.uuid4().hex[:8]
+
+
+def _instance_status(it: Dict[str, Any]) -> Dict[str, Any]:
+    """Sanitized account summary for the Admin Panel (never includes secrets)."""
+    config = it.get("config", {}) or {}
+    secrets = it.get("secrets", {}) or {}
+    return {
+        "instance_id": it.get("instance_id"),
+        "enabled": bool(it.get("enabled")),
+        "is_default": bool(it.get("is_default")),
+        "configured": bool(config.get("base_url") and secrets.get("private_key")),
+        "base_url": config.get("base_url", ""),
+        "user_email": config.get("user_email", ""),
+        "fingerprint": config.get("fingerprint", "") or secrets.get("fingerprint", ""),
+        "has_private_key": bool(secrets.get("private_key")),
+        "has_passphrase": bool(secrets.get("passphrase") or config.get("fingerprint")),
+    }
+
 # Active SSE sessions: session_id -> asyncio.Queue
 _active_sse_queues: Dict[str, asyncio.Queue] = {}
 
@@ -175,6 +202,67 @@ async def test_service_draft_config(service_id: str, payload: TestConfigPayload,
         return await test_client.test_connection()
     
     return {"ok": False, "message": f"Tester not implemented for {service_id}"}
+
+# --- Passbolt multi-account admin API -----------------------------------------
+
+class PassboltAccountPayload(BaseModel):
+    instance_id: Optional[str] = None
+    enabled: bool = True
+    is_default: bool = False
+    config: Dict[str, Any] = {}
+    secrets: Dict[str, str] = {}
+
+@app.get("/api/admin/passbolt/accounts")
+async def list_passbolt_accounts(auth: bool = Depends(verify_admin_token)):
+    instances = registry.get_instances("passbolt")
+    return [_instance_status(it) for it in instances]
+
+@app.post("/api/admin/passbolt/accounts")
+async def save_passbolt_account(payload: PassboltAccountPayload, auth: bool = Depends(verify_admin_token)):
+    config = {
+        "base_url": (payload.config.get("base_url") or "").strip(),
+        "user_email": (payload.config.get("user_email") or "").strip(),
+        "fingerprint": (payload.config.get("fingerprint") or "").strip(),
+        "verify_ssl": bool(payload.config.get("verify_ssl", True)),
+    }
+    secrets = {
+        "private_key": payload.secrets.get("private_key", ""),
+        "passphrase": payload.secrets.get("passphrase", ""),
+        "server_key": payload.secrets.get("server_key", ""),
+        "fingerprint": payload.secrets.get("fingerprint", ""),
+    }
+
+    instance_id = (payload.instance_id or "").strip() or _generate_instance_id(config["user_email"])
+
+    existing = registry.get_instances("passbolt")
+    wants_default = payload.is_default or not existing or not any(e["is_default"] for e in existing)
+
+    registry.save_instance("passbolt", instance_id, payload.enabled, config, secrets, is_default=wants_default)
+    return {"ok": True, "message": f"Cuenta Passbolt '{instance_id}' guardada", "instance_id": instance_id}
+
+@app.delete("/api/admin/passbolt/accounts/{instance_id}")
+async def delete_passbolt_account(instance_id: str, auth: bool = Depends(verify_admin_token)):
+    registry.delete_instance("passbolt", instance_id)
+
+    # Guarantee at least one default account remains.
+    remaining = registry.get_instances("passbolt")
+    if remaining and not any(e["is_default"] for e in remaining):
+        first = remaining[0]
+        registry.save_instance(
+            "passbolt", first["instance_id"], first["enabled"],
+            first["config"], first["secrets"], is_default=True,
+        )
+    return {"ok": True, "message": f"Cuenta Passbolt '{instance_id}' eliminada"}
+
+@app.post("/api/admin/passbolt/accounts/{instance_id}/test")
+async def test_passbolt_account(instance_id: str, auth: bool = Depends(verify_admin_token)):
+    service = registry.get_service("passbolt")
+    if not service or not hasattr(service, "test_account"):
+        raise HTTPException(status_code=404, detail="Servicio Passbolt no disponible")
+    try:
+        return await service.test_account(instance_id)
+    except Exception as e:
+        return {"ok": False, "message": str(e), "details": {}}
 
 @app.get("/api/admin/tools")
 async def get_admin_tools(scope: str = Query("unified"), auth: bool = Depends(verify_admin_token)):
