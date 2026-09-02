@@ -73,6 +73,11 @@ class WhatsAppClient:
         data = await self._get(f"/messages?chatId={chat_id}")
         return data.get("messages", [])[:limit]
 
+    async def get_history(self, chat_id: str, limit: int = 50) -> list:
+        # Real, restart-proof history from disk (up to WHATSAPP_HISTORY_LIMIT).
+        data = await self._get(f"/history?chatId={chat_id}&limit={limit}")
+        return data.get("messages", [])
+
     async def send_message(self, chat_id: str, text: str) -> dict:
         return await self._post("/send", {"chatId": chat_id, "text": text})
 
