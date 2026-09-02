@@ -1,13 +1,13 @@
 ---
 name: scheduled-tasks
 description: "Schedule, create, and manage self-healing background tasks and cron jobs on the VPS using Sentinel MCP/CLI. Supports Python, Bash, and Node.js with git versioning, .env secrets, Docker isolation, and Steel Browser Human-in-the-Loop."
-version: 2.1.0
+version: 2.2.0
 author: VPS Tools
 license: MIT
 metadata:
   tags: [scheduled-tasks, cron, tasks, recurring, automation, sentinel, autoheal, opencode, self-healing, git, steel, hitl, docker]
   category: automation
-  related_skills: [browser-automation, passbolt-credentials]
+  related_skills: [browser-automation, passbolt-credentials, messaging-platforms]
 ---
 
 # Scheduled Tasks & Background Automation Skill (OpenCode)
@@ -55,9 +55,13 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
      if page.locator("text=Ingresa tu código 2FA").is_visible():
          live_url = f"https://{os.environ['STEEL_DOMAIN']}/v1/sessions/debug?sessionId={session_id}"
          approved = wait_for_user(session_id, live_url, task_name="Consulta Facturación", reason="2FA Bancario")
-         if not approved:
-             sys.exit(2) # Clean pause on timeout
-     ```
+      if not approved:
+              sys.exit(2) # Clean pause on timeout
+      ```
+5. **Integraciones con servicios de comunicación del usuario:**
+   - Si la tarea necesita **avisar, consultar o enviar** por **WhatsApp, Telegram, correo (Gmail/Outlook) o Google Workspace**, usa los **servicios MCP del gateway** de esa plataforma (`whatsapp_*`, `telegram_*`, `google_*`, `outlook_*`) en lugar de scrapear o inventar llamadas.
+   - Para **notificaciones al usuario**, prioriza **Telegram** (vía MCP o el bot nativo del agente).
+   - Consulta la skill **`messaging-platforms`** para el uso correcto (confirmar antes de enviar, tono del historial, etc.).
 
 ---
 
