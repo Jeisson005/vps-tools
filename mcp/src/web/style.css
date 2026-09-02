@@ -945,3 +945,10 @@ input:focus, select:focus, textarea:focus {
   padding-bottom: 0.35rem;
   border-bottom: 1px solid var(--border);
 }
+
+/* WhatsApp QR modal */
+.qr-body { display: flex; flex-direction: column; gap: 0.75rem; }
+.qr-center { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 0.5rem 0; }
+.qr-image { width: 260px; height: 260px; object-fit: contain; background: #fff; padding: 8px; border-radius: var(--radius); }
+.qr-hint { text-align: center; font-size: 0.85rem; }
+.qr-url-mono { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); word-break: break-all; text-align: center; max-width: 90%; }

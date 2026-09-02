@@ -300,6 +300,17 @@ async def test_service_account(service_id: str, instance_id: str, auth: bool = D
     except Exception as e:
         return {"ok": False, "message": str(e), "details": {}}
 
+@app.get("/api/admin/services/{service_id}/accounts/{instance_id}/qr")
+async def get_service_account_qr(service_id: str, instance_id: str, auth: bool = Depends(verify_admin_token)):
+    """Return a rendered QR (image data-URI) for pairing a WhatsApp account."""
+    service = registry.get_service(service_id)
+    if not service or not hasattr(service, "get_account_qr"):
+        raise HTTPException(status_code=404, detail=f"Servicio '{service_id}' no soporta QR")
+    try:
+        return await service.get_account_qr(instance_id)
+    except Exception as e:
+        return {"account": instance_id, "qr": "", "image": "", "message": str(e)}
+
 @app.get("/api/admin/services/{service_id}/account-schema")
 async def get_service_account_schema(service_id: str, auth: bool = Depends(verify_admin_token)):
     service = registry.get_service(service_id)

@@ -1,23 +1,32 @@
 import hashlib
 import os
+import re
 from typing import Dict, Any, List, Optional
 from ..base import BaseMcpService
 from .client import WhatsAppClient, DEFAULT_BRIDGE_URL
 from .tools import WHATSAPP_TOOLS
 
-# Bridge is provisioned per account (one Baileys process/container per phone) with
-# a stable port derived from the account id. Override the host via env if the
-# bridges run on another host.
-BRIDGE_HOST = os.environ.get("WHATSAPP_BRIDGE_HOST", "127.0.0.1")
+# Bridges run as containers on the same Docker network as the MCP gateway, so the
+# gateway resolves them by their container name (wa-<slug>) unless WHATSAPP_BRIDGE_HOST
+# is set to an explicit host/IP (e.g. if bridges run outside the shared network).
+BRIDGE_HOST = (os.environ.get("WHATSAPP_BRIDGE_HOST") or "").strip()
+
+
+def slug_for(instance_id: str) -> str:
+    """Deterministic, DNS-safe slug for a WhatsApp account (container name)."""
+    s = re.sub(r"[^a-z0-9]", "", (instance_id or "").lower())
+    return s or "account"
 
 
 def bridge_url_for(instance_id: str) -> str:
-    """Deterministic, collision-safe bridge URL for an account."""
+    """Deterministic bridge URL for an account (host + port derived from the slug)."""
+    slug = slug_for(instance_id)
     try:
-        port = 3001 + (int(hashlib.sha1(instance_id.encode()).hexdigest()[:8], 16) % 200)
+        port = 3001 + (int(hashlib.sha1(slug.encode()).hexdigest()[:8], 16) % 200)
     except Exception:
         port = 3010
-    return f"http://{BRIDGE_HOST}:{port}"
+    host = BRIDGE_HOST or f"wa-{slug}"
+    return f"http://{host}:{port}"
 
 
 class WhatsAppService(BaseMcpService):
@@ -139,6 +148,11 @@ class WhatsAppService(BaseMcpService):
         if self.accounts:
             return await next(iter(self.accounts.values())).test_connection()
         return {"ok": False, "message": "No hay cuentas de WhatsApp configuradas.", "details": {}}
+
+    async def get_account_qr(self, account: str) -> Dict[str, Any]:
+        client = self._resolve_client(account)
+        qr, image = await client.get_qr_data_uri()
+        return {"account": account, "qr": qr, "image": image}
 
     async def test_account(self, account: str) -> Dict[str, Any]:
         return await self._resolve_client(account).test_connection()
