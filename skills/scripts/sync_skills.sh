@@ -200,6 +200,11 @@ sync_opencode() {
   cp "${SKILLS_DIR}/scheduled-tasks/opencode.md" "${opencode_skills}/scheduled-tasks/SKILL.md"
   echo "  [+] OpenCode: scheduled-tasks skill enabled"
 
+  # 5. Messaging Platforms Skill
+  mkdir -p "${opencode_skills}/messaging-platforms"
+  cp "${SKILLS_DIR}/messaging-platforms/SKILL.md" "${opencode_skills}/messaging-platforms/SKILL.md"
+  echo "  [+] OpenCode: messaging-platforms skill enabled"
+
   chown -R "${TARGET_USER}:${TARGET_USER}" "${USER_HOME}/.config/opencode" 2>/dev/null || true
 }
 
@@ -261,6 +266,11 @@ sync_hermes() {
   mkdir -p "${hermes_skills}/automation/scheduled-tasks"
   cp "${SKILLS_DIR}/scheduled-tasks/hermes.md" "${hermes_skills}/automation/scheduled-tasks/SKILL.md"
   echo "  [+] Hermes: scheduled-tasks skill enabled"
+
+  # 6. Messaging Platforms Skill
+  mkdir -p "${hermes_skills}/communications/messaging-platforms"
+  cp "${SKILLS_DIR}/messaging-platforms/SKILL.md" "${hermes_skills}/communications/messaging-platforms/SKILL.md"
+  echo "  [+] Hermes: messaging-platforms skill enabled"
 
   chown -R "${TARGET_USER}:${TARGET_USER}" "${USER_HOME}/.hermes/skills" 2>/dev/null || true
 }
