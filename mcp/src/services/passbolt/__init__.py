@@ -94,7 +94,20 @@ class PassboltService(BaseMcpService):
     def get_tools(self) -> List[Dict[str, Any]]:
         if not self.enabled or not self.is_configured():
             return []
-        return PASSBOLT_TOOLS
+        # Enrich the account selector with the actual configured accounts so
+        # agents can discover and pick a specific vault.
+        import copy
+        account_ids = list(self.accounts.keys())
+        tools = []
+        for tool in copy.deepcopy(PASSBOLT_TOOLS):
+            props = tool.get("inputSchema", {}).get("properties", {})
+            account_prop = props.get("account")
+            if account_prop and account_ids:
+                account_prop["enum"] = account_ids
+                if self.default_account_id:
+                    account_prop.setdefault("default", self.default_account_id)
+            tools.append(tool)
+        return tools
 
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
         if not self.enabled or not self.is_configured():
@@ -102,6 +115,10 @@ class PassboltService(BaseMcpService):
 
         args = dict(arguments or {})
         account = args.pop("account", None)
+
+        if tool_name == "passbolt_list_accounts":
+            return self.get_account_summary()
+
         client = self._resolve_client(account)
 
         if tool_name == "passbolt_search_resources":

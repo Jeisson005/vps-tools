@@ -113,6 +113,7 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 | `passbolt_search_resources` | Search credentials by name, URI, username, or keyword. Returns metadata and UUIDs **without** exposing plaintext passwords in search results. | `query` (str), `folder_id` (optional str), `limit` (int, default 20), `account` (optional str) |
 | `passbolt_get_secret` | Retrieves and decrypts the password/credential for a specific resource UUID using the configured GPG private key. | `resource_id` (str, required), `account` (optional str) |
 | `passbolt_list_folders` | Inspects folder hierarchy to find categorized secrets. | `parent_id` (optional str), `account` (optional str) |
+| `passbolt_list_accounts` | Lists the configured Passbolt accounts (id, default flag, email, server) so agents can discover valid `account` values. | none |
 
 > **Multi-cuenta:** todas las herramientas aceptan un parámetro opcional `account` (nombre/alias de la
 > cuenta Passbolt). Si se omite se usa la **cuenta principal**; si solo hay una cuenta, esa se usa
