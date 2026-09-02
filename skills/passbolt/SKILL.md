@@ -1,7 +1,7 @@
 ---
 name: passbolt-credentials
 description: "Secure password, TOTP 2FA, and credential management via Passbolt MCP Gateway. Autonomous read-only access for queries, passwords, TOTPs, and folders. Mandatory human confirmation before creating, updating, or deleting any credential."
-version: 1.3.0
+version: 1.4.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -21,11 +21,11 @@ Empowers autonomous agents to search, decrypt, generate live 2FA TOTP codes, and
 ### 🟢 1. Operaciones de Lectura (100% Autónomas - Sin Preguntar)
 Ejecuta estas herramientas de forma inmediata y sin pedir confirmación:
 
-* **`passbolt_search_resources(query, folder_id, limit)`**:
+* **`passbolt_search_resources(query, folder_id, limit, account)`**:
   Busca credenciales por nombre del servicio, dominio/URL, usuario o palabra clave (ej. `"postgres"`, `"aws"`, `"github.com"`). Devuelve IDs y metadatos sin revelar contraseñas en texto plano en la lista.
-* **`passbolt_get_secret(resource_id)`**:
+* **`passbolt_get_secret(resource_id, account)`**:
   Desencripta y obtiene la información completa de la credencial: contraseña, usuario, URL, descripción, campos personalizados y el **código TOTP 2FA generado en vivo** (con sus segundos restantes de validez).
-* **`passbolt_list_folders(parent_id)`**:
+* **`passbolt_list_folders(parent_id, account)`**:
   Inspecciona la jerarquía y lista de carpetas de la bóveda.
 
 ---
@@ -33,16 +33,34 @@ Ejecuta estas herramientas de forma inmediata y sin pedir confirmación:
 ### 🔴 2. Operaciones de Escritura / Mutación (PROHIBIDO Ejecutar Sin Preguntar)
 **NUNCA** ejecutes estas herramientas automáticamente. Debes **SIEMPRE preguntar al usuario y esperar su autorización explícita**:
 
-* **`passbolt_create_resource(name, password, username, uri, description, folder_id, totp_secret, custom_fields)`**:
+* **`passbolt_create_resource(name, password, username, uri, description, folder_id, totp_secret, custom_fields, account)`**:
   Crea una nueva credencial en Passbolt con cifrado OpenPGP.
-* **`passbolt_update_resource(resource_id, name, password, username, uri, description, folder_id, totp_secret, custom_fields)`**:
+* **`passbolt_update_resource(resource_id, name, password, username, uri, description, folder_id, totp_secret, custom_fields, account)`**:
   Modifica una credencial existente (contraseña, usuario, URL, TOTP, notas o campos).
-* **`passbolt_delete_resource(resource_id)`**:
+* **`passbolt_delete_resource(resource_id, account)`**:
   Elimina definitivamente un recurso/credencial de Passbolt.
-* **`passbolt_create_folder(name, parent_id)`**:
+* **`passbolt_create_folder(name, parent_id, account)`**:
   Crea una nueva carpeta en la bóveda.
 
+> **`account` (opcional):** Nombre/alias de la cuenta Passbolt a usar (`"principal"`, `"rodrigo"`, ...).
+> Si se omite se usa la **cuenta principal**. Si solo hay una cuenta configurada, esa se usa automáticamente.
+> Consulta las cuentas disponibles con `passbolt_list_folders` no listará cuentas; usa el Panel de Administración
+> (apartado Passbolt → Cuentas) o revisa la info de `account` en errores.
+
 ---
+
+## 📚 Cuentas multiusuario
+
+El gateway puede gestionar **una o varias cuentas de Passbolt** (varias bóvedas/usuarios GPG).
+Cada cuenta es independiente: servidor, correo, clave privada y 2FA propios.
+
+* **Cuenta principal:** se usa por defecto cuando se omite el parámetro `account`.
+* **Selección explícita:** pasa `account` a cualquier herramienta para usar otra bóveda
+  (ej. `passbolt_get_secret(resource_id, account="rodrigo")`).
+* **Cuenta única:** si solo hay una cuenta configurada, todas las herramientas la usan
+  sin necesidad de especificar `account`.
+* Las cuentas se gestionan desde el **Panel de Administración** (Passbolt → Cuentas), donde
+  cada una puede subir su propio archivo `.asc`/`.key` y su passphrase.
 
 ## 🛡️ Reglas Operativas Estrictas
 

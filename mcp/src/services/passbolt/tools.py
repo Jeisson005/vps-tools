@@ -1,3 +1,11 @@
+# Helper inserted into every Passbolt tool schema so agents can select which
+# vault account to operate on when more than one is configured.
+_ACCOUNT_SCHEMA = {
+    "type": "string",
+    "description": "Nombre/alias de la cuenta Passbolt a usar (por ejemplo 'principal', 'rodrigo'). "
+                   "Omitir para usar la cuenta principal por defecto. Si solo hay una cuenta, esta se usa automáticamente."
+}
+
 PASSBOLT_TOOLS = [
     {
         "name": "passbolt_search_resources",
@@ -16,7 +24,8 @@ PASSBOLT_TOOLS = [
                 "limit": {
                     "type": "integer",
                     "description": "Maximum number of results to return (default: 20)."
-                }
+                },
+                "account": _ACCOUNT_SCHEMA
             }
         }
     },
@@ -29,7 +38,8 @@ PASSBOLT_TOOLS = [
                 "resource_id": {
                     "type": "string",
                     "description": "The unique UUID of the Passbolt resource to decrypt."
-                }
+                },
+                "account": _ACCOUNT_SCHEMA
             },
             "required": ["resource_id"]
         }
@@ -71,7 +81,8 @@ PASSBOLT_TOOLS = [
                 "custom_fields": {
                     "type": "object",
                     "description": "Optional custom key-value pairs or additional metadata."
-                }
+                },
+                "account": _ACCOUNT_SCHEMA
             },
             "required": ["name", "password"]
         }
@@ -117,7 +128,8 @@ PASSBOLT_TOOLS = [
                 "custom_fields": {
                     "type": "object",
                     "description": "Updated custom fields dictionary."
-                }
+                },
+                "account": _ACCOUNT_SCHEMA
             },
             "required": ["resource_id"]
         }
@@ -131,7 +143,8 @@ PASSBOLT_TOOLS = [
                 "resource_id": {
                     "type": "string",
                     "description": "The unique UUID of the resource to delete."
-                }
+                },
+                "account": _ACCOUNT_SCHEMA
             },
             "required": ["resource_id"]
         }
@@ -145,7 +158,8 @@ PASSBOLT_TOOLS = [
                 "parent_id": {
                     "type": "string",
                     "description": "Optional parent folder UUID to inspect subfolders. Omit to list root folders."
-                }
+                },
+                "account": _ACCOUNT_SCHEMA
             }
         }
     },
@@ -162,7 +176,8 @@ PASSBOLT_TOOLS = [
                 "parent_id": {
                     "type": "string",
                     "description": "Optional parent folder UUID to create a subfolder."
-                }
+                },
+                "account": _ACCOUNT_SCHEMA
             },
             "required": ["name"]
         }

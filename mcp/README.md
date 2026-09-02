@@ -86,11 +86,17 @@ bash scripts/update.sh
 Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once configured behind Nginx).
 
 ### Features:
-1. **Passbolt Configuration:**
-   - Server URL input (e.g. `https://passbolt.yourdomain.com`).
-   - Drag-and-drop GPG Private Key upload (`.asc`, `.key`, `.gpg`) or paste ASCII armored text.
-   - GPG Passphrase with show/hide toggle.
-   - **"Probar Conexión Live"** button: Performs an instant GPG challenge-response test against your Passbolt server and displays the result without needing to restart.
+1. **Passbolt Accounts Manager (multi-cuenta):**
+   - Gestiona **una o varias cuentas Passbolt** desde el panel: cada una con su servidor, correo, clave GPG y 2FA.
+   - Añadir / editar / eliminar cuentas; cada cuenta sube su propio archivo `.asc`/`.key` (o pega el bloque).
+   - Marcar una cuenta como **principal** (se usa cuando los agentes no especifican `account`).
+   - **"Probar Conexión Live"** por cuenta: GPG challenge-response instantáneo sin reiniciar.
+2. **Interactive Tool Tester & Inspector:**
+   - Execute tool calls directly from your browser (`passbolt_search_resources`, `passbolt_get_secret`, etc.) and view raw JSON-RPC 2.0 responses.
+3. **Client Configuration Snippets:**
+   - Real-time generated JSON configurations ready to copy into Cursor, Claude Desktop, and Open WebUI.
+4. **Audit Logs:**
+   - Visual inspection of tool executions, configuration updates, and error traces.
 2. **Interactive Tool Tester & Inspector:**
    - Execute tool calls directly from your browser (`passbolt_search_resources`, `passbolt_get_secret`, etc.) and view raw JSON-RPC 2.0 responses.
 3. **Client Configuration Snippets:**
@@ -104,9 +110,13 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 
 | Tool Name | Description | Arguments |
 | :--- | :--- | :--- |
-| `passbolt_search_resources` | Search credentials by name, URI, username, or keyword. Returns metadata and UUIDs **without** exposing plaintext passwords in search results. | `query` (str), `folder_id` (optional str), `limit` (int, default 20) |
-| `passbolt_get_secret` | Retrieves and decrypts the password/credential for a specific resource UUID using the configured GPG private key. | `resource_id` (str, required) |
-| `passbolt_list_folders` | Inspects folder hierarchy to find categorized secrets. | `parent_id` (optional str) |
+| `passbolt_search_resources` | Search credentials by name, URI, username, or keyword. Returns metadata and UUIDs **without** exposing plaintext passwords in search results. | `query` (str), `folder_id` (optional str), `limit` (int, default 20), `account` (optional str) |
+| `passbolt_get_secret` | Retrieves and decrypts the password/credential for a specific resource UUID using the configured GPG private key. | `resource_id` (str, required), `account` (optional str) |
+| `passbolt_list_folders` | Inspects folder hierarchy to find categorized secrets. | `parent_id` (optional str), `account` (optional str) |
+
+> **Multi-cuenta:** todas las herramientas aceptan un parámetro opcional `account` (nombre/alias de la
+> cuenta Passbolt). Si se omite se usa la **cuenta principal**; si solo hay una cuenta, esa se usa
+> automáticamente. Las cuentas se gestionan en el panel (Passbolt → Cuentas).
 
 ---
 
