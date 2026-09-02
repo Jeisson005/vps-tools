@@ -178,7 +178,7 @@ async function ingestMessage(m) {
     media: mediaType,
     mediaFile,
     sender: senderName,
-    text: m.message?.conversation || m.message?.extendedTextMessage?.text || '',
+    text: messageText(m.message),
     ts: m.messageTimestamp,
   };
   // Avoid duplicates from history + live sync by checking the tail.
@@ -192,8 +192,16 @@ async function ingestMessage(m) {
   if (!socketStore.chats.find(c => c.id === jid)) socketStore.chats.push({ id: jid, name: resolveChatName(jid) });
 }
 
+function unwrapMessage(msg) {
+  for (const w of ['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension', 'ephemeralMessage', 'documentWithCaptionMessage']) {
+    if (msg[w] && msg[w].message) msg = msg[w].message;
+  }
+  return msg;
+}
+
 function mediaTypeOf(msg) {
   if (!msg) return null;
+  msg = unwrapMessage(msg);
   if (msg.imageMessage) return 'image';
   if (msg.videoMessage) return 'video';
   if (msg.audioMessage) return 'audio';
@@ -202,10 +210,23 @@ function mediaTypeOf(msg) {
   return null;
 }
 
+function messageText(msg) {
+  if (!msg) return '';
+  msg = unwrapMessage(msg);
+  return (msg.conversation || msg.extendedTextMessage?.text || msg.imageMessage?.caption ||
+          msg.videoMessage?.caption || msg.documentMessage?.caption || msg.audioMessage?.caption || '') || '';
+}
+
 async function getMediaBuffer(m) {
-  const content = m?.message;
+  const raw = m?.message || {};
+  const viewOnce = !!(raw.viewOnceMessage || raw.viewOnceMessageV2 || raw.viewOnceMessageV2Extension || raw.ephemeralMessage);
+  const content = unwrapMessage(raw);
   const type = mediaTypeOf(content);
   if (!type) throw new Error('mensaje sin media');
+  if (viewOnce) {
+    // view-once / ephemeral media is not reliably re-downloadable; fail cleanly.
+    throw new Error('media de un solo uso no disponible para descarga');
+  }
   const opts = {};
   if (content.documentMessage) opts.mimeType = content.documentMessage.mimetype;
   const buf = await downloadMediaMessage(m, 'buffer', opts, logger).catch(() => null) ||
