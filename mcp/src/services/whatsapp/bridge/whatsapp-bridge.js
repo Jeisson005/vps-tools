@@ -17,6 +17,9 @@ function opt(name, def) {
 }
 const PORT = parseInt(opt('--port', String(Number(process.env.PORT || 3010))), 10);
 const SESSION_DIR = opt('--session-dir', process.env.SESSION_DIR || './sessions/wa');
+// Max messages kept per chat (in-memory). Default 10000. Bounded per chat: total
+// RAM grows as chats x limit, so lower it on very chat-heavy accounts.
+const MESSAGE_LIMIT = parseInt(process.env.WHATSAPP_MESSAGE_LIMIT || '10000', 10);
 
 const logger = pino({ level: 'silent' });
 let sock = null;
@@ -69,7 +72,10 @@ function attach(s) {
         text: m.message?.conversation || m.message?.extendedTextMessage?.text || '',
         ts: m.messageTimestamp,
       });
-      if (socketStore.messages[jid].length > 100) socketStore.messages[jid].pop();
+      if (socketStore.messages[jid].length > MESSAGE_LIMIT) {
+        const dropped = socketStore.messages[jid].pop();
+        if (dropped && socketStore.byId[dropped.id]) delete socketStore.byId[dropped.id];
+      }
       if (!socketStore.chats.find(c => c.id === jid)) socketStore.chats.push({ id: jid, name: jid });
     }
   });
