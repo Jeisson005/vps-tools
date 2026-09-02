@@ -451,9 +451,10 @@ document.getElementById("passbolt-form").addEventListener("submit", async (e) =>
 
   const resolvedId = instanceId || name;
   if (!resolvedId) { showToast("Ingresa un nombre para la cuenta", "error"); return; }
-  // Only require credentials when creating a brand-new account; when editing, the
-  // stored secrets are preserved by the backend if left blank.
-  if (!instanceId && !Object.keys(secrets).length) { showToast("Completa al menos una credencial", "error"); return; }
+  // Require at least one value (config OR secrets) when creating a new account.
+  // Some services (e.g. WhatsApp) only need configuration, no secrets.
+  const hasAny = Object.keys(config).length || Object.keys(secrets).length;
+  if (!instanceId && !hasAny) { showToast("Completa al menos un dato (configuración o credencial)", "error"); return; }
 
   const payload = { instance_id: resolvedId, name, enabled: true, is_default: isDefault, config, secrets };
   try {
