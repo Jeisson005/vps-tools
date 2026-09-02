@@ -181,5 +181,13 @@ PASSBOLT_TOOLS = [
             },
             "required": ["name"]
         }
+    },
+    {
+        "name": "passbolt_list_accounts",
+        "description": "List the configured Passbolt accounts (vaults) managed by this gateway. Use this to discover the 'account' values you can pass to the other passbolt tools. Returns account id, whether it is the default, the user email and server, WITHOUT exposing secrets.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
     }
 ]
