@@ -132,13 +132,18 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 
 > **WhatsApp:** la cuenta **solo pide el número de teléfono**. El bridge Baileys se provee **un contenedor por
 > cuenta** en el host (el contenedor MCP no tiene Node). La dirección se deriva automáticamente
-> (`http://127.0.0.1:<puerto>` con puerto estable por cuenta). Para levantarlos:
+> (`http://127.0.0.1:<puerto>` con puerto estable por cuenta). Automatizado:
 > ```
-> bash mcp/scripts/whatsapp_bridge_provision.sh build   # construye la imagen del bridge
-> bash mcp/scripts/whatsapp_bridge_provision.sh          # levanta un contenedor wa-<cuenta> por cada cuenta
+> # 1) una vez: construir la imagen y, en el host, instalar el timer systemd
+> bash mcp/scripts/whatsapp_bridge_provision.sh build
+> sudo cp mcp/templates/whatsapp-bridges.{service,timer} /etc/systemd/system/
+>   # ajusta {{VPS_TOOLS_DIR}} y {{WHATSAPP_USER}}
+> sudo systemctl daemon-reload && sudo systemctl enable --now whatsapp-bridges.timer
 > ```
-> Luego vincula cada teléfono escaneando el QR (verás el QR en `whatsapp_status`). Si los bridges corren en
-> otro host, setea `WHATSAPP_BRIDGE_HOST`. El puerto exacto se ve con `... provision.sh list`.
+> El timer ejecuta el `provision.sh reconcile` cada 60s: al añadir una cuenta levanta su contenedor
+> `wa-<cuenta>`, al quitarla lo elimina, y autorrepara si alguno se cae. Manual: `... provision.sh {build|list|stop-all}`.
+> Luego vincula cada teléfono escaneando el QR (visible en `whatsapp_status`). Para otro host, setea
+> `WHATSAPP_BRIDGE_HOST`.
 > **Telegram:** en el panel pon `api_id`/`api_hash` (de my.telegram.org) y el teléfono; luego llama
 > `telegram_request_code` → `telegram_sign_in(code)` para guardar la sesión.
 
