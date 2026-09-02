@@ -150,8 +150,8 @@ class TelegramService(BaseMcpService):
     async def _persist_session(self, client: TelegramMTClient):
         """Persist the (possibly updated) session string back to the account."""
         try:
-            from ..core.registry import registry
-            from ..core.db import get_service_instance
+            from ...core.registry import registry
+            from ...core.db import get_service_instance
             iid = next((k for k, c in self.accounts.items() if c is client), None)
             if not iid:
                 return

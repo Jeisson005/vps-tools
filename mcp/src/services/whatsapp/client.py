@@ -106,7 +106,7 @@ class WhatsAppClient:
             raw = await self.get_media_bytes(message_id)
         except Exception as e:
             return {"ok": False, "message": f"Error descargando media: {e}", "media": data}
-        from ..core.asr import transcribe
+        from ...core.asr import transcribe
         mimetype = data.get("mimetype", "")
         ext = (mimetype.rsplit("/", 1)[-1] if "/" in mimetype else "oga") or "oga"
         try:
