@@ -934,3 +934,14 @@ input:focus, select:focus, textarea:focus {
   border: 1px dashed var(--border);
   border-radius: var(--radius);
 }
+
+.form-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
