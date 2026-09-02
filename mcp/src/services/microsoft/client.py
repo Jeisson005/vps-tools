@@ -69,8 +69,19 @@ class MSGraphClient:
             "isRead": m.get("isRead"),
         } for m in data.get("value", [])]
 
-    async def mail_get(self, message_id: str) -> dict:
-        data = await self._request("GET", f"/me/messages/{message_id}")
+    async def mail_get(self, message_id: str, include_attachments: bool = False) -> dict:
+        path = f"/me/messages/{message_id}"
+        params = {"$expand": "attachments"} if include_attachments else None
+        data = await self._request("GET", path, params=params)
+        attachments = []
+        if include_attachments:
+            for a in data.get("attachments", []) or []:
+                attachments.append({
+                    "filename": a.get("name", ""),
+                    "contentType": a.get("contentType", ""),
+                    "data": a.get("contentBytes", ""),
+                    "size": a.get("size"),
+                })
         return {
             "id": data.get("id"),
             "subject": data.get("subject", ""),
@@ -78,22 +89,62 @@ class MSGraphClient:
             "to": ", ".join((r.get("emailAddress", {}) or {}).get("address", "") for r in data.get("toRecipients", []) or []),
             "body": (data.get("body", {}) or {}).get("content", "")[:5000],
             "receivedDateTime": data.get("receivedDateTime", ""),
+            "isRead": data.get("isRead"),
+            "attachments": attachments,
         }
 
-    async def mail_send(self, to: str, subject: str, body: str, cc: str = "") -> dict:
+    async def mail_send(self, to: str, subject: str, body: str, cc: str = "", attachments: Optional[list] = None) -> dict:
         recipients = [{"emailAddress": {"address": x.strip()}} for x in to.split(",") if x.strip()]
         cc_list = [{"emailAddress": {"address": x.strip()}} for x in cc.split(",") if x.strip()] if cc else []
-        payload = {
-            "message": {
-                "subject": subject,
-                "body": {"contentType": "Text", "content": body},
-                "toRecipients": recipients,
-                **({"ccRecipients": cc_list} if cc_list else {}),
-            },
-            "saveToSentItems": True,
+        message = {
+            "subject": subject,
+            "body": {"contentType": "Text", "content": body},
+            "toRecipients": recipients,
+            **({"ccRecipients": cc_list} if cc_list else {}),
         }
+        if attachments:
+            message["attachments"] = [
+                {"@odata.type": "#microsoft.graph.fileAttachment", "name": a.get("filename", "archivo"),
+                 "contentType": a.get("mimeType", "application/octet-stream"), "contentBytes": a.get("data", "")}
+                for a in attachments
+            ]
+        payload = {"message": message, "saveToSentItems": True}
         await self._request("POST", "/me/sendMail", json_body=payload)
         return {"status": "sent", "to": to, "subject": subject}
+
+    async def mail_set_read(self, message_id: str, read: bool = True) -> dict:
+        await self._request("PATCH", f"/me/messages/{message_id}", json_body={"isRead": read})
+        return {"id": message_id, "read": read}
+
+    async def drafts(self) -> list:
+        data = await self._request("GET", "/me/mailFolders/drafts/messages", params={"$top": 20})
+        return [{
+            "id": m.get("id"),
+            "subject": m.get("subject", ""),
+            "to": ", ".join((r.get("emailAddress", {}) or {}).get("address", "") for r in (m.get("toRecipients") or [])),
+        } for m in data.get("value", [])]
+
+    async def draft_send(self, message_id: str) -> dict:
+        await self._request("POST", f"/me/messages/{message_id}/send")
+        return {"id": message_id, "status": "sent"}
+
+    async def folders(self) -> list:
+        data = await self._request("GET", "/me/mailFolders")
+        return [{"id": f.get("id"), "name": f.get("displayName", ""), "unread": f.get("unreadItemCount"), "total": f.get("totalItemCount")} for f in data.get("value", [])]
+
+    async def mail_transcribe_attachment(self, message_id: str, attachment_index: int = 0, language: str = "") -> dict:
+        import base64
+        data = await self.mail_get(message_id, include_attachments=True)
+        atts = data.get("attachments", []) or []
+        if not atts or attachment_index >= len(atts):
+            return {"ok": False, "message": "Adjunto no encontrado."}
+        att = atts[attachment_index]
+        from ..core.asr import transcribe
+        try:
+            text = transcribe(base64.b64decode(att["data"]), filename=att.get("filename") or "audio.m4a", language=language)
+        except Exception as e:
+            return {"ok": False, "message": f"Error transcribiendo: {e}"}
+        return {"ok": True, "text": text, "filename": att.get("filename"), "contentType": att.get("contentType")}
 
     async def calendar_events(self, top: int = 20, calendar_id: str = "calendars/me") -> list:
         params = {"$top": top, "$orderby": "start/dateTime asc", "$select": "id,subject,start,end,organizer"}

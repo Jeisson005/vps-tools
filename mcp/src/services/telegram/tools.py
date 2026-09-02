@@ -69,4 +69,47 @@ TELEGRAM_TOOLS = [
             "required": ["entity"],
         },
     },
+    {
+        "name": "telegram_get_media",
+        "description": "Download media (photo/video/audio/document) of a Telegram message, returning it base64-encoded.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity": {"type": "string"},
+                "message_id": {"type": "integer"},
+                "account": _ACCOUNT,
+            },
+            "required": ["entity", "message_id"],
+        },
+    },
+    {
+        "name": "telegram_send_media",
+        "description": "Send media (photo/video/audio/file/voice) to a Telegram chat. IMPORTANT: Ask the user for explicit confirmation before sending.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity": {"type": "string"},
+                "media_type": {"type": "string", "enum": ["photo", "video", "audio", "voice", "video_note", "document"]},
+                "data": {"type": "string", "description": "File content base64 (or data: URL)."},
+                "filename": {"type": "string"},
+                "caption": {"type": "string"},
+                "account": _ACCOUNT,
+            },
+            "required": ["entity", "media_type", "data"],
+        },
+    },
+    {
+        "name": "telegram_transcribe_media",
+        "description": "Download an audio/voice message and transcribe it using the configured ASR (same backend as Hermes by default).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity": {"type": "string"},
+                "message_id": {"type": "integer"},
+                "language": {"type": "string"},
+                "account": _ACCOUNT,
+            },
+            "required": ["entity", "message_id"],
+        },
+    },
 ]

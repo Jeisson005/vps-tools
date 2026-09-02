@@ -42,4 +42,45 @@ WHATSAPP_TOOLS = [
             "required": ["chat_id", "message"],
         },
     },
+    {
+        "name": "whatsapp_send_media",
+        "description": "Send media (image/video/audio/file) to a WhatsApp chat. IMPORTANT: Ask the user for explicit confirmation before sending.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "chat_id": {"type": "string", "description": "JID of the chat/group."},
+                "media_type": {"type": "string", "enum": ["image", "video", "audio", "voice", "document", "sticker"], "description": "Type of media."},
+                "base64": {"type": "string", "description": "File content encoded in base64."},
+                "caption": {"type": "string", "description": "Optional caption."},
+                "filename": {"type": "string", "description": "Optional file name (for document)."},
+                "account": _ACCOUNT,
+            },
+            "required": ["chat_id", "media_type", "base64"],
+        },
+    },
+    {
+        "name": "whatsapp_get_media",
+        "description": "Download an attachment/media from a WhatsApp message, returning it base64-encoded (and mimetype).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "message_id": {"type": "string", "description": "Message id (from whatsapp_get_messages)."},
+                "account": _ACCOUNT,
+            },
+            "required": ["message_id"],
+        },
+    },
+    {
+        "name": "whatsapp_transcribe_media",
+        "description": "Download an audio/voice message and transcribe it to text using the configured ASR (same backend as Hermes by default).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "message_id": {"type": "string"},
+                "language": {"type": "string", "description": "Optional language hint (e.g. 'es')."},
+                "account": _ACCOUNT,
+            },
+            "required": ["message_id"],
+        },
+    },
 ]
