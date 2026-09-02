@@ -189,12 +189,46 @@
     </main>
   </div>
 
-  <!-- Passbolt Settings Modal -->
+  <!-- Passbolt Accounts Manager Modal -->
+  <div id="passbolt-accounts-modal" class="modal">
+    <div class="modal-card config-modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h3>Cuentas Passbolt</h3>
+          <span class="subtitle">Gestiona una o varias cuentas de Passbolt</span>
+        </div>
+        <button id="btn-close-pb-accounts-modal" class="btn-icon" title="Cerrar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p class="muted">
+          Cada cuenta tiene su propio servidor, correo y clave GPG. La cuenta <b>principal</b> se usa
+          automáticamente cuando Hermes u OpenCode no especifican la cuenta.
+        </p>
+        <div id="pb-accounts-list" class="accounts-list">
+          <div class="empty-state">Cargando cuentas...</div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="modal-actions-left">
+          <button type="button" id="btn-add-passbolt-account" class="btn btn-primary">＋ Añadir cuenta</button>
+        </div>
+        <div class="modal-actions-right">
+          <button type="button" id="btn-close-pb-accounts-modal-2" class="btn btn-ghost">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Passbolt Account Editor Modal -->
   <div id="passbolt-modal" class="modal">
     <div class="modal-card config-modal-card">
       <div class="modal-header">
         <div class="modal-title-group">
-          <h3>Configurar Passbolt</h3>
+          <h3 id="pb-modal-title">Configurar cuenta Passbolt</h3>
         </div>
         <button id="btn-close-passbolt-modal" class="btn-icon" title="Cerrar">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -202,10 +236,17 @@
       </div>
 
       <form id="passbolt-form">
+        <input type="hidden" id="pb-instance-id" value="">
         <div class="form-body">
-          <div class="input-group">
-            <label for="pb-base-url">URL de tu Servidor Passbolt</label>
-            <input type="url" id="pb-base-url" placeholder="https://passbolt.yourdomain.com" required>
+          <div class="form-row">
+            <div class="input-group">
+              <label for="pb-account-name">Nombre / Alias de la cuenta</label>
+              <input type="text" id="pb-account-name" placeholder="principal, rodrigo, contabilidad..." required>
+            </div>
+            <div class="input-group">
+              <label for="pb-base-url">URL del Servidor Passbolt</label>
+              <input type="url" id="pb-base-url" placeholder="https://passbolt.yourdomain.com" required>
+            </div>
           </div>
 
           <div class="input-group">
@@ -235,17 +276,25 @@
             </div>
           </div>
 
+          <label class="checkbox-row" for="pb-is-default">
+            <input type="checkbox" id="pb-is-default">
+            <span>Usar esta cuenta como <b>principal</b> (por defecto)</span>
+          </label>
+
           <!-- Live test connection result feedback -->
           <div id="pb-test-feedback" class="test-feedback-box hidden"></div>
         </div>
 
         <div class="modal-footer">
+          <button type="button" id="btn-delete-passbolt-account" class="btn btn-danger btn-ghost hidden">
+            Eliminar cuenta
+          </button>
           <button type="button" id="btn-test-passbolt-live" class="btn btn-secondary">
             Probar Conexión Live
           </button>
           <div class="modal-actions-right">
-            <button type="button" id="btn-cancel-passbolt" class="btn btn-ghost">Cancelar</button>
-            <button type="submit" id="btn-save-passbolt" class="btn btn-primary">Guardar</button>
+            <button type="button" id="btn-cancel-passbolt" class="btn btn-ghost">Cerrar</button>
+            <button type="submit" id="btn-save-passbolt" class="btn btn-primary">Guardar cuenta</button>
           </div>
         </div>
       </form>
