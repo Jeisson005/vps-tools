@@ -451,7 +451,9 @@ document.getElementById("passbolt-form").addEventListener("submit", async (e) =>
 
   const resolvedId = instanceId || name;
   if (!resolvedId) { showToast("Ingresa un nombre para la cuenta", "error"); return; }
-  if (!Object.keys(secrets).length) { showToast("Completa al menos una credencial", "error"); return; }
+  // Only require credentials when creating a brand-new account; when editing, the
+  // stored secrets are preserved by the backend if left blank.
+  if (!instanceId && !Object.keys(secrets).length) { showToast("Completa al menos una credencial", "error"); return; }
 
   const payload = { instance_id: resolvedId, name, enabled: true, is_default: isDefault, config, secrets };
   try {
