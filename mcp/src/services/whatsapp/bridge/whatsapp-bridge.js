@@ -7,6 +7,8 @@
 //   GET  /messages?chatId=<jid> -> [{ id, fromMe, text, ts }]
 //   POST /send      -> { chatId, text } (JSON body)
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { useMultiFileAuthState, fetchLatestBaileysVersion, makeWASocket, DisconnectReason, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 
@@ -17,9 +19,48 @@ function opt(name, def) {
 }
 const PORT = parseInt(opt('--port', String(Number(process.env.PORT || 3010))), 10);
 const SESSION_DIR = opt('--session-dir', process.env.SESSION_DIR || './sessions/wa');
-// Max messages kept per chat (in-memory). Default 10000. Bounded per chat: total
-// RAM grows as chats x limit, so lower it on very chat-heavy accounts.
+// Max messages kept per chat in-memory (fast/media). Default 10000. RAM grows as
+// chats x limit, so keep it moderate; older messages persist to disk.
 const MESSAGE_LIMIT = parseInt(process.env.WHATSAPP_MESSAGE_LIMIT || '10000', 10);
+// Max persisted history lines per chat on disk (real, restart-proof history).
+const HISTORY_LIMIT = parseInt(process.env.WHATSAPP_HISTORY_LIMIT || '100000', 10);
+const HISTORY_DIR = path.join(SESSION_DIR, 'history');
+
+let appendCounter = 0;
+function ensureDir(d) { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); }
+
+function historyFile(jid) {
+  return path.join(HISTORY_DIR, (jid || 'unknown').replace(/[^a-zA-Z0-9@.\-_]/g, '_') + '.jsonl');
+}
+
+function appendHistory(jid, obj) {
+  ensureDir(HISTORY_DIR);
+  try {
+    fs.appendFileSync(historyFile(jid), JSON.stringify(obj) + '\n', 'utf8');
+  } catch (e) { /* ignore */ }
+  // Occasionally trim the file to HISTORY_LIMIT lines to bound disk usage.
+  if (++appendCounter % 250 === 0) pruneHistory(jid);
+}
+
+function pruneHistory(jid) {
+  try {
+    const f = historyFile(jid);
+    if (!fs.existsSync(f)) return;
+    const lines = fs.readFileSync(f, 'utf8').split('\n').filter(Boolean);
+    if (lines.length > HISTORY_LIMIT) {
+      fs.writeFileSync(f, lines.slice(lines.length - HISTORY_LIMIT).join('\n') + '\n', 'utf8');
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function readHistory(jid, limit) {
+  try {
+    const f = historyFile(jid);
+    if (!fs.existsSync(f)) return [];
+    const lines = fs.readFileSync(f, 'utf8').split('\n').filter(Boolean);
+    return lines.slice(Math.max(0, lines.length - limit)).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
+  } catch (e) { return []; }
+}
 
 const logger = pino({ level: 'silent' });
 let sock = null;
@@ -66,12 +107,14 @@ function attach(s) {
       const jid = m.key?.remoteJid || 'unknown';
       if (m.key?.id) socketStore.byId[m.key.id] = m;
       if (!socketStore.messages[jid]) socketStore.messages[jid] = [];
-      socketStore.messages[jid].unshift({
+      const entry = {
         id: m.key?.id, fromMe: !!m.key?.fromMe,
         media: mediaTypeOf(m.message),
         text: m.message?.conversation || m.message?.extendedTextMessage?.text || '',
         ts: m.messageTimestamp,
-      });
+      };
+      appendHistory(jid, entry);
+      socketStore.messages[jid].unshift(entry);
       if (socketStore.messages[jid].length > MESSAGE_LIMIT) {
         const dropped = socketStore.messages[jid].pop();
         if (dropped && socketStore.byId[dropped.id]) delete socketStore.byId[dropped.id];
@@ -161,6 +204,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/messages') {
       const chatId = url.searchParams.get('chatId');
       return json({ messages: socketStore.messages[chatId] || [] });
+    }
+    if (url.pathname === '/history') {
+      const chatId = url.searchParams.get('chatId');
+      const limit = parseInt(url.searchParams.get('limit') || '50', 10) || 50;
+      return json({ messages: readHistory(chatId, Math.min(limit, HISTORY_LIMIT)) });
     }
     if (url.pathname === '/send' && req.method === 'POST') {
       let body = '';
