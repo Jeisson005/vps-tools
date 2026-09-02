@@ -149,7 +149,10 @@ function attach(s) {
   // Preload a window of history at connect (bounded by what WhatsApp syncs).
   s.ev.on('messaging-history.set', async ({ messages, contacts, chats }) => {
     for (const c of contacts || []) { if (c?.jid) storeContactName(c.jid, c.notify || c.verifiedName || c.name || ''); }
-    for (const ch of chats || []) { if (ch?.id && !socketStore.chats.find(x => x.id === ch.id)) socketStore.chats.push({ id: ch.id, name: ch.name || ch.id }); }
+    for (const ch of chats || []) {
+      if (ch?.id && ch.name) storeContactName(ch.id, ch.name);
+      if (ch?.id && !socketStore.chats.find(x => x.id === ch.id)) socketStore.chats.push({ id: ch.id, name: ch.name || ch.id });
+    }
     for (const m of messages || []) await ingestMessage(m);
   });
 
@@ -305,17 +308,31 @@ const server = http.createServer(async (req, res) => {
       return json({ connected: loggedIn, loggedIn, qr });
     }
     if (url.pathname === '/chats') {
-      const chats = socketStore.chats.map(c => ({
-        id: c.id,
-        name: resolveChatName(c.id) || c.name || c.id,
-        realJid: realJidFor(c.id),
-      }));
-      return json({ chats });
+      const set = new Set();
+      const out = [];
+      for (const c of socketStore.chats) {
+        if (set.has(c.id)) continue;
+        set.add(c.id);
+        out.push({ id: c.id, name: resolveChatName(c.id) || c.name || c.id, realJid: realJidFor(c.id) });
+      }
+      // Include chats we have persisted history for (may not be in the live buffer).
+      try {
+        for (const f of fs.readdirSync(HISTORY_DIR)) {
+          const id = f.replace(/\.jsonl$/, '');
+          if (set.has(id)) continue;
+          set.add(id);
+          out.push({ id, name: resolveChatName(id) || id, realJid: realJidFor(id) });
+        }
+      } catch (e) { /* ignore */ }
+      return json({ chats: out });
     }
     if (url.pathname === '/messages') {
       const chatId = url.searchParams.get('chatId');
-      const msgs = (socketStore.messages[chatId] || []).map(x => ({ ...x, sender: x.sender || resolveChatName(x.id) || "" }));
-      return json({ messages: msgs });
+      let msgs = socketStore.messages[chatId] || [];
+      // If not in the live buffer, fall back to the persisted history.
+      if (!msgs.length) msgs = readHistory(chatId, parseInt(url.searchParams.get('limit') || '50', 10) || 50);
+      const mapped = msgs.map(x => ({ ...x, sender: x.sender || resolveChatName(x.id) || "" }));
+      return json({ messages: mapped });
     }
     if (url.pathname === '/history') {
       const chatId = url.searchParams.get('chatId');
