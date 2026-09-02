@@ -5,6 +5,7 @@ from .google import GoogleService
 from .microsoft import MicrosoftService
 from .telegram import TelegramService
 from .whatsapp import WhatsAppService
+from .ai import AiService
 
 AVAILABLE_SERVICES: Dict[str, Type[BaseMcpService]] = {
     "passbolt": PassboltService,
@@ -12,4 +13,5 @@ AVAILABLE_SERVICES: Dict[str, Type[BaseMcpService]] = {
     "microsoft": MicrosoftService,
     "telegram": TelegramService,
     "whatsapp": WhatsAppService,
+    "ai": AiService,
 }

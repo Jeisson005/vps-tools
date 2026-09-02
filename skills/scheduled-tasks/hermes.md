@@ -1,7 +1,7 @@
 ---
 name: scheduled-tasks
 description: "Schedule, create, and manage self-healing background tasks and cron jobs on the VPS using Sentinel MCP/CLI. Supports Python, Bash, and Node.js with git versioning, .env secrets, Docker isolation, and Steel Browser Human-in-the-Loop."
-version: 2.3.0
+version: 2.4.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -55,4 +55,9 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
 
 7. **Reutiliza watchers existentes:** Antes de crear una tarea nueva que vigile un canal, revisa `sentinel-ctl list`. Si **ya existe una** que consulta ese mismo servicio, **amplíala/actualízala** (`sentinel-ctl update` / `sentinel_update_task`) para cubrir el nuevo criterio en vez de duplicar el polling (evita varias tareas llamando al mismo canal y carpetas de datos duplicadas).
 
-8. **IA puntual en tareas:** Si una tarea necesita una llamada de IA muy concreta (resumir, clasificar, redactar una respuesta), usa **`litellm`** en el script. Pon la `api_key` (y, si aplica, `model` y `base_url`) en el `.env` de la tarea (regla de secretos). Mantén la llamada mínima y manejable (no uses IA para cosas triviales que el script pueda hacer determinista).
+8. **IA puntual en tareas (sin pedir claves al usuario):** Si una tarea necesita una llamada de IA muy concreta
+   (resumir, clasificar, redactar), usa la tool MCP **`ai_complete`** del gateway: **la `api_key`/`model`/`base_url`
+   ya están configuradas** en el gateway (`MCP_AI_BASE_URL`, `MCP_AI_API_KEY`, `MCP_AI_MODEL`) — **nunca preguntes
+   al usuario por claves de IA**. Desde un script de Sentinel, llama al endpoint MCP `/ai` con la `MCP_API_KEY` del
+   gateway, o si prefieres `litellm`, lee esas mismas vars. Mantén la llamada mínima; no uses IA para cosas
+   deterministas.

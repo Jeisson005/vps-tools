@@ -178,7 +178,7 @@ class TelegramMTClient:
             return {"ok": False, "message": "No se pudo obtener la media."}
         if data.get("type") not in ("audio", "voice", "video"):
             return {"ok": False, "message": "El mensaje no es de audio para transcribir.", "type": data.get("type")}
-        from ..core.asr import transcribe
+        from ...core.asr import transcribe
         try:
             text = transcribe(base64.b64decode(data["base64"]), filename=data.get("filename") or "audio.oga", language=language)
         except Exception as e:

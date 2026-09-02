@@ -139,7 +139,7 @@ class MSGraphClient:
         if not atts or attachment_index >= len(atts):
             return {"ok": False, "message": "Adjunto no encontrado."}
         att = atts[attachment_index]
-        from ..core.asr import transcribe
+        from ...core.asr import transcribe
         try:
             text = transcribe(base64.b64decode(att["data"]), filename=att.get("filename") or "audio.m4a", language=language)
         except Exception as e:
