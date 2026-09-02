@@ -4,12 +4,17 @@ import httpx
 
 logger = logging.getLogger("mcp.whatsapp")
 
+# Default bridge location used when an account does not specify one. The bridge is
+# a host-side process (the MCP container has no Node); override per deployment via
+# env if needed.
+DEFAULT_BRIDGE_URL = "http://127.0.0.1:3010"
+
 
 class WhatsAppClient:
     """WhatsApp client that talks to a per-account Baileys bridge over HTTP."""
 
     def __init__(self, bridge_url: str, phone: str = ""):
-        self.bridge_url = (bridge_url or "").rstrip("/")
+        self.bridge_url = (bridge_url or DEFAULT_BRIDGE_URL).rstrip("/")
         self.phone = phone or ""
 
     def is_configured(self) -> bool:

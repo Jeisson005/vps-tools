@@ -235,15 +235,28 @@ async def list_service_accounts(service_id: str, auth: bool = Depends(verify_adm
 
 @app.post("/api/admin/services/{service_id}/accounts")
 async def save_service_account(service_id: str, payload: ServiceAccountPayload, auth: bool = Depends(verify_admin_token)):
-    instance_id = (payload.instance_id or "").strip() or _generate_instance_id(payload.name or payload.config.get("user_email", "") or payload.config.get("email", ""))
-    name = payload.name or "" if not payload.instance_id else (payload.name or "")
+    instance_id = (payload.instance_id or "").strip() or _generate_instance_id(
+        payload.name or payload.config.get("user_email", "") or payload.config.get("email", "")
+    )
+    name = (payload.name or "").strip()
 
-    existing = registry.get_instances(service_id)
-    wants_default = payload.is_default or not existing or not any(e["is_default"] for e in existing)
+    existing_accounts = registry.get_instances(service_id)
+    existing_account = next((a for a in existing_accounts if a["instance_id"] == instance_id), None)
+
+    # Merge: keep existing config/secrets and only overwrite with non-empty values,
+    # so editing just a label never wipes stored credentials.
+    merged_config = dict(existing_account["config"]) if existing_account else {}
+    merged_secrets = dict(existing_account["secrets"]) if existing_account else {}
+    if payload.config:
+        merged_config.update({k: v for k, v in payload.config.items() if v is not None and str(v).strip()})
+    if payload.secrets:
+        merged_secrets.update({k: v for k, v in payload.secrets.items() if v is not None and str(v).strip()})
+
+    wants_default = payload.is_default or not existing_accounts or not any(e["is_default"] for e in existing_accounts)
 
     registry.save_instance(
-        service_id, instance_id, payload.enabled, dict(payload.config or {}),
-        dict(payload.secrets or {}), is_default=wants_default, name=name,
+        service_id, instance_id, payload.enabled, merged_config, merged_secrets,
+        is_default=wants_default, name=name or existing_account.get("name", "") if existing_account else name,
     )
     return {"ok": True, "message": f"Cuenta '{instance_id}' guardada", "instance_id": instance_id}
 

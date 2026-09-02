@@ -62,8 +62,8 @@ class WhatsAppService(BaseMcpService):
             "config": [
                 {"key": "phone", "label": "Número de WhatsApp (código de país + número)", "type": "text",
                  "required": True, "placeholder": "+573001234567"},
-                {"key": "bridge_url", "label": "URL del bridge Baileys", "type": "url", "required": True,
-                 "placeholder": "http://127.0.0.1:3010"},
+                {"key": "bridge_url", "label": "URL del bridge Baileys (opcional, default 3010)", "type": "url",
+                 "required": False, "placeholder": "http://127.0.0.1:3010"},
             ],
             "secrets": [],
         }
