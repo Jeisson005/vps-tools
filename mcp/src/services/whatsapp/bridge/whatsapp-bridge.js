@@ -22,36 +22,43 @@ const logger = pino({ level: 'silent' });
 let sock = null;
 let qr = '';
 let loggedIn = false;
+let makeSocket = null;
+let saveCreds = null;
 const socketStore = { chats: [], messages: {} };
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
-async function start() {
-  const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
-  const { version } = await fetchLatestBaileysVersion();
-  const makeSocket = () => makeWASocket({
-    version,
-    auth: state,
-    printQRInTerminal: false,
-    logger,
-    browser: ['Ubuntu', 'Chrome', '22.04'],
-  });
+let everOpen = false;
 
-  sock = makeSocket();
-  sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', (update) => {
+function attach(s) {
+  s.ev.on('creds.update', saveCreds);
+  s.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr: q } = update;
     if (q) qr = q;
-    if (connection === 'open') { loggedIn = true; qr = ''; log('connected'); }
+    if (connection === 'open') {
+      everOpen = true;
+      loggedIn = true;
+      qr = '';
+      log('connected');
+    }
     if (connection === 'close') {
       loggedIn = false;
       const code = lastDisconnect?.error?.output?.statusCode;
       if (code !== DisconnectReason.loggedOut) {
-        setTimeout(() => { sock = makeSocket(); bind(sock); }, 3000);
+        // Reconnect, but with a pause: an early reconnect regenerates the QR and
+        // can invalidate the code the user is about to scan. Only reconnect
+        // quickly if we were already linked; otherwise wait longer.
+        const delay = everOpen ? 3000 : 10000;
+        setTimeout(() => {
+          if (!loggedIn) {
+            sock = makeSocket();
+            attach(sock);
+          }
+        }, delay);
       }
     }
   });
-  sock.ev.on('messages.upsert', ({ messages }) => {
+  s.ev.on('messages.upsert', ({ messages }) => {
     for (const m of messages || []) {
       const jid = m.key?.remoteJid || 'unknown';
       if (!socketStore.messages[jid]) socketStore.messages[jid] = [];
@@ -64,11 +71,22 @@ async function start() {
       if (!socketStore.chats.find(c => c.id === jid)) socketStore.chats.push({ id: jid, name: jid });
     }
   });
-  bind(sock);
 }
 
-function bind(s) {
-  if (!s.ev) return;
+async function start() {
+  const { state, saveCreds: _saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+  saveCreds = _saveCreds;
+  const { version } = await fetchLatestBaileysVersion();
+  makeSocket = () => makeWASocket({
+    version,
+    auth: state,
+    printQRInTerminal: false,
+    logger,
+    browser: ['Windows', 'Chrome', 'Chrome 127.0.0.0'],
+    markOnlineOnConnect: false,
+  });
+  sock = makeSocket();
+  attach(sock);
 }
 
 async function send(chatId, text) {

@@ -277,6 +277,8 @@ async function renderServiceAccounts() {
 // WhatsApp QR modal -----------------------------------------------------------
 let currentQrAccount = "";
 
+let qrRefreshTimer = null;
+
 async function showQr(instanceId) {
   currentQrAccount = instanceId;
   const modal = document.getElementById("qr-modal");
@@ -287,6 +289,9 @@ async function showQr(instanceId) {
   urlEl.innerText = "";
   modal.classList.add("active");
   await loadQrImage(instanceId);
+  // WhatsApp rotates the QR ~every 20s; keep showing a fresh one while the modal is open.
+  clearInterval(qrRefreshTimer);
+  qrRefreshTimer = setInterval(() => { if (currentQrAccount) loadQrImage(currentQrAccount); }, 12000);
 }
 
 async function loadQrImage(instanceId) {
@@ -303,8 +308,13 @@ async function loadQrImage(instanceId) {
   }
 }
 
-document.getElementById("btn-close-qr-modal").addEventListener("click", () => document.getElementById("qr-modal").classList.remove("active"));
-document.getElementById("btn-close-qr-modal-2").addEventListener("click", () => document.getElementById("qr-modal").classList.remove("active"));
+function closeQrModal() {
+  clearInterval(qrRefreshTimer);
+  qrRefreshTimer = null;
+  document.getElementById("qr-modal").classList.remove("active");
+}
+document.getElementById("btn-close-qr-modal").addEventListener("click", closeQrModal);
+document.getElementById("btn-close-qr-modal-2").addEventListener("click", closeQrModal);
 document.getElementById("btn-refresh-qr").addEventListener("click", () => {
   if (currentQrAccount) loadQrImage(currentQrAccount);
 });
