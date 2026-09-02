@@ -1,7 +1,23 @@
+import hashlib
+import os
 from typing import Dict, Any, List, Optional
 from ..base import BaseMcpService
-from .client import WhatsAppClient
+from .client import WhatsAppClient, DEFAULT_BRIDGE_URL
 from .tools import WHATSAPP_TOOLS
+
+# Bridge is provisioned per account (one Baileys process/container per phone) with
+# a stable port derived from the account id. Override the host via env if the
+# bridges run on another host.
+BRIDGE_HOST = os.environ.get("WHATSAPP_BRIDGE_HOST", "127.0.0.1")
+
+
+def bridge_url_for(instance_id: str) -> str:
+    """Deterministic, collision-safe bridge URL for an account."""
+    try:
+        port = 3001 + (int(hashlib.sha1(instance_id.encode()).hexdigest()[:8], 16) % 200)
+    except Exception:
+        port = 3010
+    return f"http://{BRIDGE_HOST}:{port}"
 
 
 class WhatsAppService(BaseMcpService):
@@ -19,8 +35,8 @@ class WhatsAppService(BaseMcpService):
         self.reload_accounts(instances or [])
 
     @staticmethod
-    def _build_client(cfg: Dict[str, Any], sec: Dict[str, str]) -> WhatsAppClient:
-        return WhatsAppClient(bridge_url=cfg.get("bridge_url", ""), phone=cfg.get("phone", ""))
+    def _build_client(instance_id: str, cfg: Dict[str, Any], sec: Dict[str, str]) -> WhatsAppClient:
+        return WhatsAppClient(bridge_url=bridge_url_for(instance_id), phone=cfg.get("phone", ""))
 
     def reload_accounts(self, instances: List[Dict[str, Any]]):
         self.accounts = {}
@@ -31,7 +47,7 @@ class WhatsAppService(BaseMcpService):
             iid = inst.get("instance_id")
             if not iid:
                 continue
-            self.accounts[iid] = self._build_client(inst.get("config", {}), inst.get("secrets", {}))
+            self.accounts[iid] = self._build_client(iid, inst.get("config", {}), inst.get("secrets", {}))
             if inst.get("is_default"):
                 self.default_account_id = iid
         if not self.default_account_id and self.accounts:
@@ -62,8 +78,6 @@ class WhatsAppService(BaseMcpService):
             "config": [
                 {"key": "phone", "label": "Número de WhatsApp (código de país + número)", "type": "text",
                  "required": True, "placeholder": "+573001234567"},
-                {"key": "bridge_url", "label": "URL del bridge Baileys (opcional, default 3010)", "type": "url",
-                 "required": False, "placeholder": "http://127.0.0.1:3010"},
             ],
             "secrets": [],
         }
