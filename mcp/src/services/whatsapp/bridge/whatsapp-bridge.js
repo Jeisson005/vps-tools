@@ -68,7 +68,23 @@ let qr = '';
 let loggedIn = false;
 let makeSocket = null;
 let saveCreds = null;
-const socketStore = { chats: [], messages: {}, byId: {} };
+const socketStore = { chats: [], messages: {}, byId: {}, names: {}, lidJid: {} };
+
+function contactName(jid) {
+  return socketStore.names[jid] || '';
+}
+function resolveChatName(jid) {
+  return contactName(jid) || jid;
+}
+function storeContactName(jid, name) {
+  if (jid && name) socketStore.names[jid] = name;
+}
+function storeLidMapping(lidJid, realJid) {
+  if (lidJid && realJid) socketStore.lidJid[lidJid] = realJid;
+}
+function realJidFor(jid) {
+  return socketStore.lidJid[jid] || jid;
+}
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
@@ -102,26 +118,53 @@ function attach(s) {
       }
     }
   });
-  s.ev.on('messages.upsert', ({ messages }) => {
-    for (const m of messages || []) {
-      const jid = m.key?.remoteJid || 'unknown';
-      if (m.key?.id) socketStore.byId[m.key.id] = m;
-      if (!socketStore.messages[jid]) socketStore.messages[jid] = [];
-      const entry = {
-        id: m.key?.id, fromMe: !!m.key?.fromMe,
-        media: mediaTypeOf(m.message),
-        text: m.message?.conversation || m.message?.extendedTextMessage?.text || '',
-        ts: m.messageTimestamp,
-      };
-      appendHistory(jid, entry);
-      socketStore.messages[jid].unshift(entry);
-      if (socketStore.messages[jid].length > MESSAGE_LIMIT) {
-        const dropped = socketStore.messages[jid].pop();
-        if (dropped && socketStore.byId[dropped.id]) delete socketStore.byId[dropped.id];
-      }
-      if (!socketStore.chats.find(c => c.id === jid)) socketStore.chats.push({ id: jid, name: jid });
+  s.ev.on('contacts.set', ({ contacts }) => {
+    for (const c of contacts || []) { if (c?.jid) storeContactName(c.jid, c.notify || c.verifiedName || c.name || ''); }
+  });
+  s.ev.on('contacts.update', (contacts) => {
+    for (const c of contacts || []) {
+      if (!c?.jid) continue;
+      storeContactName(c.jid, c.notify || c.verifiedName || c.name || '');
+      if (c.lid) storeLidMapping(c.lid, c.jid);
     }
   });
+  // Preload a window of history at connect (bounded by what WhatsApp syncs).
+  s.ev.on('messaging-history.set', ({ messages, contacts, chats }) => {
+    for (const c of contacts || []) { if (c?.jid) storeContactName(c.jid, c.notify || c.verifiedName || c.name || ''); }
+    for (const ch of chats || []) { if (ch?.id && !socketStore.chats.find(x => x.id === ch.id)) socketStore.chats.push({ id: ch.id, name: ch.name || ch.id }); }
+    for (const m of messages || []) ingestMessage(m);
+  });
+
+  s.ev.on('messages.upsert', ({ messages }) => {
+    for (const m of messages || []) ingestMessage(m);
+  });
+}
+
+function ingestMessage(m) {
+  const jid = m.key?.remoteJid || 'unknown';
+  const id = m.key?.id;
+  if (id && socketStore.byId[id]) return; // already ingested
+  if (id) socketStore.byId[id] = m;
+  if (m.pushName) storeContactName(realJidFor(jid), m.pushName);
+  const senderKey = realJidFor(jid);
+  const senderName = contactName(senderKey) || m.pushName || (jid === senderKey ? jid : senderKey);
+  if (!socketStore.messages[jid]) socketStore.messages[jid] = [];
+  const entry = {
+    id, fromMe: !!m.key?.fromMe,
+    media: mediaTypeOf(m.message),
+    sender: senderName,
+    text: m.message?.conversation || m.message?.extendedTextMessage?.text || '',
+    ts: m.messageTimestamp,
+  };
+  // Avoid duplicates from history + live sync by checking the tail.
+  if (socketStore.messages[jid].some(x => x.id === id)) return;
+  appendHistory(jid, entry);
+  socketStore.messages[jid].unshift(entry);
+  if (socketStore.messages[jid].length > MESSAGE_LIMIT) {
+    const dropped = socketStore.messages[jid].pop();
+    if (dropped && socketStore.byId[dropped.id]) delete socketStore.byId[dropped.id];
+  }
+  if (!socketStore.chats.find(c => c.id === jid)) socketStore.chats.push({ id: jid, name: resolveChatName(jid) });
 }
 
 function mediaTypeOf(msg) {
@@ -199,11 +242,17 @@ const server = http.createServer(async (req, res) => {
       return json({ connected: loggedIn, loggedIn, qr });
     }
     if (url.pathname === '/chats') {
-      return json({ chats: socketStore.chats });
+      const chats = socketStore.chats.map(c => ({
+        id: c.id,
+        name: resolveChatName(c.id) || c.name || c.id,
+        realJid: realJidFor(c.id),
+      }));
+      return json({ chats });
     }
     if (url.pathname === '/messages') {
       const chatId = url.searchParams.get('chatId');
-      return json({ messages: socketStore.messages[chatId] || [] });
+      const msgs = (socketStore.messages[chatId] || []).map(x => ({ ...x, sender: x.sender || resolveChatName(x.id) || "" }));
+      return json({ messages: msgs });
     }
     if (url.pathname === '/history') {
       const chatId = url.searchParams.get('chatId');
