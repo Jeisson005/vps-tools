@@ -103,37 +103,178 @@ class PassboltClient:
 
         return ""
 
-    def decrypt_pgp_message(self, armored_text: str) -> str:
-        """Decrypt an OpenPGP encrypted message using python-gnupg or PGPy."""
+    def _pgp_decrypt(
+        self,
+        armored_text: str,
+        private_key_armored: Optional[str] = None,
+        passphrase: Optional[str] = None,
+    ) -> str:
+        """Decrypt an OpenPGP encrypted message using python-gnupg or PGPy.
+
+        Decrypts with a chosen private key/passphrase. When omitted, it uses the
+        configured user's own key. This is required because Passbolt v5 resource
+        metadata can be encrypted either with the user's personal key
+        (``user_key``) or with an organisation-level shared key (``shared_key``),
+        which must be retrieved and decrypted separately.
+        """
         if not armored_text:
             return ""
+
+        key = private_key_armored or self.private_key_armored
+        passph = self.passphrase if passphrase is None else passphrase
 
         try:
             import gnupg
             gpg = gnupg.GPG()
-            gpg.import_keys(self.private_key_armored)
-            decrypted = gpg.decrypt(armored_text, passphrase=self.passphrase)
-            if decrypted.ok:
+            gpg.import_keys(key)
+            decrypted = gpg.decrypt(armored_text, passphrase=passph)
+            # gpg may return a non-zero exit code (and python-gnupg sets
+            # ``decrypted.ok`` to False) for signed messages whose signature is
+            # from an untrusted key - e.g. Passbolt metadata encrypted with the
+            # organisation shared metadata key - even though the payload is
+            # decrypted successfully. Accept the payload whenever gpg produced
+            # it, and only treat a genuinely empty result as a failure.
+            if decrypted.data:
                 return str(decrypted.data.decode("utf-8", errors="ignore"))
         except Exception as e:
             logger.debug(f"gnupg decrypt attempt: {e}")
 
+        # python-gnupg can report "No valid OpenPGP data" for signed metadata
+        # that raw gpg decrypts fine. Fall back to an isolated gpg subprocess
+        # (reliable across PGP algorithm variants such as ECDH/EDDSA shared keys).
+        try:
+            raw = self._gpg_subprocess_decrypt(armored_text, key, passph)
+            if raw:
+                return raw
+        except Exception as e:
+            logger.debug(f"gpg subprocess decrypt attempt: {e}")
+
         try:
             import pgpy
-            key, _ = pgpy.PGPKey.from_blob(self.private_key_armored)
-            if key.is_protected and self.passphrase:
-                with key.unlock(self.passphrase):
+            key_obj, _ = pgpy.PGPKey.from_blob(key)
+            if key_obj.is_protected and passph:
+                with key_obj.unlock(passph):
                     msg = pgpy.PGPMessage.from_blob(armored_text)
-                    dec = key.decrypt(msg)
+                    dec = key_obj.decrypt(msg)
                     return dec.message if hasattr(dec, "message") else str(dec)
             else:
                 msg = pgpy.PGPMessage.from_blob(armored_text)
-                dec = key.decrypt(msg)
+                dec = key_obj.decrypt(msg)
                 return dec.message if hasattr(dec, "message") else str(dec)
         except Exception as e:
             logger.debug(f"PGPy decrypt attempt: {e}")
 
         raise RuntimeError("Failed to decrypt OpenPGP payload with provided private key and passphrase.")
+
+    def _gpg_subprocess_decrypt(
+        self,
+        armored_text: str,
+        private_key_armored: str,
+        passphrase: str,
+    ) -> str:
+        """Decrypt an armored message via the ``gpg`` binary in an isolated keyring.
+
+        gpg sometimes returns a non-zero exit code (typically ``2``) yet still
+        writes the decrypted plaintext to stdout - this happens with signed
+        messages from an untrusted key, which is the norm for Passbolt shared
+        metadata keys. We therefore read stdout rather than trusting the exit
+        code, and only treat an empty result as a failure.
+        """
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as homedir:
+            os.chmod(homedir, 0o700)
+            key_file = os.path.join(homedir, "key.asc")
+            msg_file = os.path.join(homedir, "msg.asc")
+            with open(key_file, "w") as f:
+                f.write(private_key_armored)
+            with open(msg_file, "w") as f:
+                f.write(armored_text)
+
+            subprocess.run(
+                ["gpg", "--batch", "--homedir", homedir,
+                 "--pinentry-mode", "loopback", "--import", key_file],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+
+            proc = subprocess.run(
+                ["gpg", "--batch", "--homedir", homedir,
+                 "--pinentry-mode", "loopback", "--trust-model", "always",
+                 "--passphrase", passphrase or "", "--decrypt", msg_file],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            return proc.stdout
+
+    def decrypt_pgp_message(self, armored_text: str) -> str:
+        """Decrypt an OpenPGP encrypted message using the configured user private key."""
+        return self._pgp_decrypt(armored_text)
+
+    async def _load_metadata_keys(self, client: httpx.AsyncClient) -> Dict[str, Any]:
+        """Fetch shared metadata keys the user can decrypt, keyed by UUID.
+
+        Passbolt v5 encrypts metadata of group-shared resources with an
+        organisation shared metadata key. The server stores one encrypted copy
+        of the corresponding private key per user (``metadata_private_keys``),
+        which we must fetch and decrypt before we can read resource metadata
+        whose ``metadata_key_type`` is ``shared_key``.
+        """
+        res = await client.get(
+            f"{self.base_url}/metadata/keys.json?contain[metadata_private_keys]=1",
+            headers={"Accept": "application/json"},
+        )
+        if res.status_code != 200:
+            logger.warning(f"metadata/keys.json responded with HTTP {res.status_code}")
+            return {}
+        body = res.json().get("body", []) or []
+        return {k.get("id"): k for k in body if k.get("id")}
+
+    def _decrypt_resource_metadata(
+        self,
+        resource_info: Dict[str, Any],
+        metadata_keys: Dict[str, Any],
+    ) -> Optional[str]:
+        """Decrypt resource metadata, honoring ``user_key`` vs ``shared_key``.
+
+        - ``user_key``: metadata is encrypted to the user's own key, decrypt
+          directly with the configured user private key.
+        - ``shared_key``: metadata is encrypted to an organisation shared key;
+          locate the key by ``metadata_key_id``, decrypt this user's copy of the
+          shared private key, then decrypt the metadata with it.
+        """
+        meta = resource_info.get("metadata")
+        if not meta or not isinstance(meta, str) or "BEGIN PGP MESSAGE" not in meta:
+            return None
+
+        key_type = resource_info.get("metadata_key_type")
+        if key_type == "shared_key":
+            key_id = resource_info.get("metadata_key_id")
+            key_entry = metadata_keys.get(key_id or "")
+            if not key_entry:
+                raise RuntimeError(f"Shared metadata key not accessible (id={key_id}).")
+
+            user_id = (self._user_info or {}).get("id")
+            enc_entry = None
+            for pk in key_entry.get("metadata_private_keys") or []:
+                if str(pk.get("user_id", "")).lower() == str(user_id or "").lower():
+                    enc_entry = pk
+                    break
+            if not enc_entry or not enc_entry.get("data"):
+                raise RuntimeError(f"No decryptable copy of shared key (id={key_id}) for current user.")
+
+            shared_clear = self._pgp_decrypt(
+                enc_entry.get("data"), self.private_key_armored, self.passphrase
+            )
+            shared_json = json.loads(shared_clear)
+            armored_shared = (shared_json.get("armored_key") or "").replace("\\n", "\n")
+            if not armored_shared:
+                raise RuntimeError("Shared metadata key payload is missing 'armored_key'.")
+
+            # Shared keys may carry their own passphrase; fall back to empty string.
+            shared_passph = shared_json.get("passphrase") or ""
+            return self._pgp_decrypt(meta, armored_shared, shared_passph)
+
+        # user_key (and fallback): metadata is encrypted to the user's own key.
+        return self._pgp_decrypt(meta, self.private_key_armored, self.passphrase)
 
     def encrypt_pgp_message(self, plaintext: str) -> str:
         """Encrypt message using user's OpenPGP public key."""
@@ -270,18 +411,19 @@ class PassboltClient:
         async with httpx.AsyncClient(verify=self.verify_ssl, timeout=25.0) as client:
             await self._login(client)
 
-            params: Dict[str, Any] = {}
-            if folder_id:
-                params["filter[folder_id]"] = folder_id
-
+            # Passbolt's resources.json does not honour filter[folder_id], so we
+            # request all accessible resources and scope them client-side on
+            # folder_parent_id.
             url = f"{self.base_url}/resources.json"
-            res = await client.get(url, params=params, headers={"Accept": "application/json"})
+            res = await client.get(url, headers={"Accept": "application/json"})
             if res.status_code != 200:
                 raise RuntimeError(f"Error fetching resources ({res.status_code}): {res.text}")
 
             items = res.json().get("body", [])
             results = []
             query_lower = query.lower().strip() if query else ""
+            metadata_keys: Dict[str, Any] = {}
+            metadata_keys_loaded = False
 
             for item in items:
                 res_id = item.get("id")
@@ -290,10 +432,17 @@ class PassboltClient:
                 uri = item.get("uri") or ""
                 description = item.get("description") or ""
 
+                # Scope results to the requested folder when one is given.
+                if folder_id and (item.get("folder_parent_id") or "") != folder_id:
+                    continue
+
                 meta_encrypted = item.get("metadata")
                 if meta_encrypted and isinstance(meta_encrypted, str) and "BEGIN PGP MESSAGE" in meta_encrypted:
                     try:
-                        dec_meta_str = self.decrypt_pgp_message(meta_encrypted)
+                        if not metadata_keys_loaded:
+                            metadata_keys = await self._load_metadata_keys(client)
+                            metadata_keys_loaded = True
+                        dec_meta_str = self._decrypt_resource_metadata(item, metadata_keys)
                         if dec_meta_str:
                             meta_json = json.loads(dec_meta_str)
                             name = meta_json.get("name") or name
@@ -345,7 +494,10 @@ class PassboltClient:
             meta_encrypted = resource_info.get("metadata")
             if meta_encrypted and isinstance(meta_encrypted, str) and "BEGIN PGP MESSAGE" in meta_encrypted:
                 try:
-                    dec_meta_str = self.decrypt_pgp_message(meta_encrypted)
+                    metadata_keys: Dict[str, Any] = {}
+                    if resource_info.get("metadata_key_type") == "shared_key":
+                        metadata_keys = await self._load_metadata_keys(client)
+                    dec_meta_str = self._decrypt_resource_metadata(resource_info, metadata_keys)
                     if dec_meta_str:
                         meta_json = json.loads(dec_meta_str)
                         name = meta_json.get("name") or name
