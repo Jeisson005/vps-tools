@@ -30,6 +30,15 @@ WHATSAPP_TOOLS = [
         },
     },
     {
+        "name": "whatsapp_get_history",
+        "description": "Get persisted history from a chat (real, survives bridge restarts, up to WHATSAPP_HISTORY_LIMIT).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"chat_id": {"type": "string"}, "limit": {"type": "integer", "description": "Max messages (default 50)."}, "account": _ACCOUNT},
+            "required": ["chat_id"],
+        },
+    },
+    {
         "name": "whatsapp_send_message",
         "description": "Send a WhatsApp message to a chat id. IMPORTANT: Ask the user for explicit confirmation before sending.",
         "inputSchema": {
