@@ -130,10 +130,15 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 | `telegram` | `/telegram` | `telegram_send_message`, `telegram_list_chats`, ... | MTProto (api_id/api_hash) + login por código |
 | `whatsapp` | `/whatsapp` | `whatsapp_send_message`, `whatsapp_list_chats`, ... | bridge Baileys (por teléfono, link por QR) |
 
-> **WhatsApp:** el bridge Baileys corre en el host (el contenedor MCP no tiene Node). Para cada cuenta:
-> `cd mcp/src/services/whatsapp/bridge && npm install @whiskeysockets/baileys@^6 pino` y arranca
-> `node whatsapp-bridge.js --port 3010 --session-dir ./sessions/<cuenta>`; en el panel de la cuenta pon
-> `bridge_url: http://<host>:3010` y vincúlalo escaneando el QR.
+> **WhatsApp:** el bridge Baileys corre en el **host** (el contenedor MCP no tiene Node). El `bridge_url`
+> de la cuenta es **opcional**; si se omite se usa `http://127.0.0.1:3010`. Se levanta **un bridge por cuenta**:
+> ```
+> cd mcp/src/services/whatsapp/bridge && npm install @whiskeysockets/baileys@^6 pino
+> node whatsapp-bridge.js --port 3010 --session-dir ./sessions/<cuenta>
+> ```
+> O como servicio systemd: `mcp/templates/whatsapp-bridge@.service` (una instancia por cuenta,
+> `/etc/systemd/system/whatsapp-bridge@<cuenta>.service` → `systemctl enable --now whatsapp-bridge@<cuenta>`).
+> Luego vincula la cuenta escaneando el QR (lo verás vía `whatsapp_status`).
 > **Telegram:** en el panel pon `api_id`/`api_hash` (de my.telegram.org) y el teléfono; luego llama
 > `telegram_request_code` → `telegram_sign_in(code)` para guardar la sesión.
 
