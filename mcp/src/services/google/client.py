@@ -69,7 +69,7 @@ class GoogleClient:
             out.append({"id": m.get("id"), "threadId": m.get("threadId")})
         return out
 
-    async def gmail_get(self, message_id: str, format: str = "full") -> dict:
+    async def gmail_get(self, message_id: str, format: str = "full", include_attachments: bool = False) -> dict:
         data = await self._request(
             "GET", f"{self.GMAIL_API}/users/me/messages/{message_id}",
             params={"format": format},
@@ -80,6 +80,9 @@ class GoogleClient:
         body = ""
         if format in ("full", "text"):
             body = self._decode_body(data.get("payload", {}))
+        attachments = []
+        if include_attachments:
+            attachments = await self.gmail_get_attachments(message_id, data.get("payload", {}))
         return {
             "id": data.get("id"),
             "threadId": data.get("threadId"),
@@ -89,16 +92,87 @@ class GoogleClient:
             "date": headers.get("Date", ""),
             "snippet": data.get("snippet", ""),
             "body": body[:5000],
+            "attachments": attachments,
         }
 
-    async def gmail_send(self, to: str, subject: str, body: str, cc: str = "", bcc: str = "") -> dict:
-        mime = self._build_mime(to, subject, body, cc, bcc)
+    async def gmail_send(self, to: str, subject: str, body: str, cc: str = "", bcc: str = "", attachments: Optional[list] = None) -> dict:
+        mime = self._build_mime(to, subject, body, cc, bcc, attachments=attachments or [])
         raw = base64.urlsafe_b64encode(mime.encode("utf-8")).decode("ascii")
         data = await self._request(
             "POST", f"{self.GMAIL_API}/users/me/messages/send",
             json_body={"raw": raw}, headers={"Content-Type": "application/json"},
         )
         return {"id": data.get("id"), "status": "sent"}
+
+    async def gmail_get_attachments(self, message_id: str, payload: dict) -> list:
+        """Collect base64 attachments from a Gmail message payload."""
+        out = []
+        async def walk(part):
+            if part.get("filename") and part.get("body", {}).get("attachmentId"):
+                att = await self._request("GET", f"{self.GMAIL_API}/users/me/messages/{message_id}/attachments/{part['body']['attachmentId']}")
+                out.append({
+                    "filename": part.get("filename"),
+                    "mimeType": part.get("mimeType", ""),
+                    "size": part.get("body", {}).get("size"),
+                    "data": att.get("data", ""),
+                })
+                return
+            for p in part.get("parts", []) or []:
+                await walk(p)
+        await walk(payload)
+        return out
+
+    async def gmail_drafts(self) -> list:
+        data = await self._request("GET", f"{self.GMAIL_API}/users/me/drafts", params={"maxResults": 20})
+        return [{"id": d.get("id"), "message_id": (d.get("message") or {}).get("id")} for d in data.get("drafts", [])]
+
+    async def gmail_draft_create(self, to: str, subject: str, body: str, attachments: Optional[list] = None) -> dict:
+        mime = self._build_mime(to, subject, body, "", "", attachments=attachments or [])
+        raw = base64.urlsafe_b64encode(mime.encode("utf-8")).decode("ascii")
+        data = await self._request("POST", f"{self.GMAIL_API}/users/me/drafts", json_body={"message": {"raw": raw}})
+        return {"id": data.get("id"), "message_id": (data.get("message") or {}).get("id"), "status": "draft"}
+
+    async def gmail_draft_send(self, draft_id: str) -> dict:
+        data = await self._request("POST", f"{self.GMAIL_API}/users/me/drafts/{draft_id}/send")
+        return {"id": (data.get("message") or {}).get("id", data.get("id")), "status": "sent"}
+
+    async def gmail_labels(self) -> list:
+        data = await self._request("GET", f"{self.GMAIL_API}/users/me/labels")
+        return [{"id": l.get("id"), "name": l.get("name"), "type": l.get("type")} for l in data.get("labels", [])]
+
+    async def gmail_set_read(self, message_id: str, read: bool = True) -> dict:
+        body = {"removeLabelIds": ["UNREAD"]} if read else {"addLabelIds": ["UNREAD"]}
+        await self._request("POST", f"{self.GMAIL_API}/users/me/messages/{message_id}/modify", json_body=body)
+        return {"id": message_id, "read": read}
+
+    async def gmail_thread(self, thread_id: str) -> dict:
+        data = await self._request("GET", f"{self.GMAIL_API}/users/me/threads/{thread_id}", params={"format": "full"})
+        msgs = []
+        for m in data.get("messages", []):
+            headers = {}
+            for h in m.get("payload", {}).get("headers", []) or []:
+                headers[h.get("name", "")] = h.get("value", "")
+            msgs.append({
+                "id": m.get("id"),
+                "from": headers.get("From", ""),
+                "subject": headers.get("Subject", ""),
+                "snippet": m.get("snippet", ""),
+            })
+        return {"id": thread_id, "messages": msgs}
+
+    async def gmail_transcribe_attachment(self, message_id: str, attachment_index: int = 0, language: str = "") -> dict:
+        import base64
+        info = await self._request("GET", f"{self.GMAIL_API}/users/me/messages/{message_id}", params={"format": "full"})
+        atts = await self.gmail_get_attachments(message_id, info.get("payload", {}))
+        if not atts or attachment_index >= len(atts):
+            return {"ok": False, "message": "Adjunto no encontrado."}
+        att = atts[attachment_index]
+        from ..core.asr import transcribe
+        try:
+            text = transcribe(base64.urlsafe_b64decode(att["data"] + "=" * (-len(att["data"]) % 4)), filename=att.get("filename") or "audio.m4a", language=language)
+        except Exception as e:
+            return {"ok": False, "message": f"Error transcribiendo: {e}"}
+        return {"ok": True, "text": text, "filename": att.get("filename"), "mimeType": att.get("mimeType")}
 
     # ---- Calendar ----
     async def calendar_events(self, calendar_id: str = "primary", time_min: str = "", time_max: str = "", max_results: int = 20) -> list:
@@ -152,11 +226,41 @@ class GoogleClient:
         return "\n".join(p for p in parts if p)
 
     @staticmethod
-    def _build_mime(to: str, subject: str, body: str, cc: str = "", bcc: str = "") -> str:
+    def _build_mime(to: str, subject: str, body: str, cc: str = "", bcc: str = "", attachments: Optional[list] = None) -> str:
+        import mimetypes
+        attachments = attachments or []
+        boundary = "vpsmcp" + uuid.uuid4().hex[:12]
         lines = ["From: me", f"To: {to}"]
         if cc:
             lines.append(f"Cc: {cc}")
         if bcc:
             lines.append(f"Bcc: {bcc}")
-        lines += ["Subject: " + subject[:998], "MIME-Version: 1.0", "Content-Type: text/plain; charset=UTF-8", "", body]
+        lines += [
+            "Subject: " + subject[:998],
+            "MIME-Version: 1.0",
+            f"Content-Type: multipart/mixed; boundary=\"{boundary}\"",
+            "",
+            f"--{boundary}",
+            "Content-Type: text/plain; charset=UTF-8",
+            "",
+            body,
+        ]
+        for att in attachments:
+            filename = att.get("filename", "archivo")
+            mime_type = att.get("mimeType") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            data = att.get("data", "")
+            # Gmail raw expects URL-safe base64.
+            try:
+                raw_b64 = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
+            except Exception:
+                raw_b64 = data.encode("latin-1", errors="ignore")
+            lines += [
+                f"--{boundary}",
+                f"Content-Type: {mime_type}",
+                "Content-Transfer-Encoding: base64",
+                f"Content-Disposition: attachment; filename=\"{filename}\"",
+                "",
+                base64.b64encode(raw_b64).decode(),
+            ]
+        lines += [f"--{boundary}--", ""]
         return "\r\n".join(lines)

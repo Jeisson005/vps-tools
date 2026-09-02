@@ -25,11 +25,12 @@ MICROSOFT_TOOLS = [
     },
     {
         "name": "outlook_mail_get",
-        "description": "Get a full Outlook message by id.",
+        "description": "Get a full Outlook message by id (optionally with attachments).",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "message_id": {"type": "string"},
+                "include_attachments": {"type": "boolean"},
                 "account": _ACCOUNT,
             },
             "required": ["message_id"],
@@ -45,9 +46,47 @@ MICROSOFT_TOOLS = [
                 "subject": {"type": "string"},
                 "body": {"type": "string"},
                 "cc": {"type": "string"},
+                "attachments": {"type": "array", "items": {"type": "object", "properties": {"filename": {"type": "string"}, "data": {"type": "string", "description": "File content base64."}}, "required": ["filename", "data"]}},
                 "account": _ACCOUNT,
             },
             "required": ["to", "subject", "body"],
+        },
+    },
+    {
+        "name": "outlook_mail_set_read",
+        "description": "Mark an Outlook message as read or unread.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"message_id": {"type": "string"}, "read": {"type": "boolean"}, "account": _ACCOUNT},
+            "required": ["message_id"],
+        },
+    },
+    {
+        "name": "outlook_drafts",
+        "description": "List Outlook drafts.",
+        "inputSchema": {"type": "object", "properties": {"account": _ACCOUNT}},
+    },
+    {
+        "name": "outlook_draft_send",
+        "description": "Send an Outlook draft.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"message_id": {"type": "string"}, "account": _ACCOUNT},
+            "required": ["message_id"],
+        },
+    },
+    {
+        "name": "outlook_folders",
+        "description": "List Outlook mail folders with unread/total counts.",
+        "inputSchema": {"type": "object", "properties": {"account": _ACCOUNT}},
+    },
+    {
+        "name": "outlook_mail_transcribe_attachment",
+        "description": "Transcribe an audio attachment of an Outlook message using the configured ASR (same backend as Hermes by default).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"message_id": {"type": "string"}, "attachment_index": {"type": "integer"}, "language": {"type": "string"}, "account": _ACCOUNT},
+            "required": ["message_id"],
         },
     },
     {

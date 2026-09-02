@@ -122,12 +122,29 @@ class GoogleService(BaseMcpService):
         if tool_name == "google_gmail_list":
             return await client.gmail_list(query=args.get("query", ""), max_results=int(args.get("max_results") or 10))
         if tool_name == "google_gmail_get":
-            return await client.gmail_get(args.get("message_id"), format=args.get("format") or "full")
+            return await client.gmail_get(args.get("message_id"), format=args.get("format") or "full", include_attachments=bool(args.get("include_attachments")))
         if tool_name == "google_gmail_send":
             return await client.gmail_send(
                 to=args.get("to", ""), subject=args.get("subject", ""), body=args.get("body", ""),
-                cc=args.get("cc", ""), bcc=args.get("bcc", ""),
+                cc=args.get("cc", ""), bcc=args.get("bcc", ""), attachments=args.get("attachments"),
             )
+        if tool_name == "google_gmail_drafts":
+            return await client.gmail_drafts()
+        if tool_name == "google_gmail_draft_create":
+            return await client.gmail_draft_create(
+                to=args.get("to", ""), subject=args.get("subject", ""), body=args.get("body", ""),
+                attachments=args.get("attachments"),
+            )
+        if tool_name == "google_gmail_draft_send":
+            return await client.gmail_draft_send(args.get("draft_id", ""))
+        if tool_name == "google_gmail_labels":
+            return await client.gmail_labels()
+        if tool_name == "google_gmail_set_read":
+            return await client.gmail_set_read(args.get("message_id", ""), bool(args.get("read", True)))
+        if tool_name == "google_gmail_thread":
+            return await client.gmail_thread(args.get("thread_id", ""))
+        if tool_name == "google_gmail_transcribe_attachment":
+            return await client.gmail_transcribe_attachment(args.get("message_id", ""), int(args.get("attachment_index") or 0), args.get("language", ""))
         if tool_name == "google_calendar_events":
             return await client.calendar_events(
                 calendar_id=args.get("calendar_id") or "primary",

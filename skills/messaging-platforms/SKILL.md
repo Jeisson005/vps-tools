@@ -17,10 +17,12 @@ El modelo puede tener acceso a **cuentas de comunicación del usuario** a travé
 
 | Plataforma | Servidor MCP | Tools principales |
 | :--- | :--- | :--- |
-| WhatsApp | `whatsapp` | `whatsapp_list_chats`, `whatsapp_get_messages`, `whatsapp_send_message`, `whatsapp_status` |
-| Telegram | `telegram` | `telegram_list_chats`, `telegram_get_messages`, `telegram_send_message`, `telegram_status` |
-| Gmail / Calendar | `google` | `google_gmail_list`, `google_gmail_get`, `google_gmail_send`, `google_calendar_events`, `google_calendar_create` |
-| Outlook / Calendar | `microsoft` | `outlook_mail_list`, `outlook_mail_get`, `outlook_mail_send`, `outlook_calendar_events`, `outlook_calendar_create` |
+| WhatsApp | `whatsapp` | `whatsapp_list_chats`, `whatsapp_get_messages`, `whatsapp_get_media`, `whatsapp_send_message`, `whatsapp_send_media`, `whatsapp_transcribe_media`, `whatsapp_status` |
+| Telegram | `telegram` | `telegram_list_chats`, `telegram_get_messages`, `telegram_get_media`, `telegram_send_message`, `telegram_send_media`, `telegram_transcribe_media`, `telegram_status` |
+| Gmail / Calendar | `google` | `google_gmail_list`, `google_gmail_get` (+adjuntos), `google_gmail_send` (+adjuntos), `google_gmail_drafts`, `google_gmail_draft_create/send`, `google_gmail_labels`, `google_gmail_set_read`, `google_gmail_thread`, `google_gmail_transcribe_attachment`, `google_calendar_*` |
+| Outlook / Calendar | `microsoft` | `outlook_mail_list`, `outlook_mail_get` (+adjuntos), `outlook_mail_send` (+adjuntos), `outlook_mail_set_read`, `outlook_drafts`, `outlook_draft_send`, `outlook_folders`, `outlook_mail_transcribe_attachment`, `outlook_calendar_*` |
+
+**Multimedia:** puedes **leer y enviar** imágenes, audio/voz, video y archivos en WhatsApp/Telegram, y **adjuntos** en Gmail/Outlook. Los audios/voz se pueden **transcribir** con `*_transcribe_*` (usa el **mismo ASR que Hermes por defecto**: local `faster-whisper`, modelo `base`, configurable vía `MCP_ASR_*`).
 
 Cada plataforma tiene **varias cuentas** posibles. Descubre y elige con la tool `*_list_accounts()` de cada una,
 y pasa `account` para seleccionar la bóveda/cuenta (si se omite, se usa la cuenta principal).
@@ -54,14 +56,15 @@ y pasa `account` para seleccionar la bóveda/cuenta (si se omite, se usa la cuen
 
 ---
 
-## ⚠️ Limitaciones actuales (transparencia con el usuario)
+## ⚠️ Notas y límites (transparencia con el usuario)
 
-- Los conectores son **solo texto**: `*_get_messages` devuelve el cuerpo de texto y `*_send_message`/`*_mail_send`
-  envían texto. **Aún no** se leen ni envían adjuntos/audiovisuales (imágenes, audio, videos, archivos), ni hay
-  gestión de borradores ni marcado de leído/no leído.
-- El "historial" disponible es lo que devuelven las tools (mensajes recientes); no hay procesamiento periódico ni
-  notificaciones automáticas de mensajes nuevos.
-- Si el usuario pide algo fuera de estas capacidades (multimedia, leído/no leído), **dilo claramente** en vez de fingir.
+- **Media**: leer/enviar imágenes, audio/voz, video y archivos en WhatsApp/Telegram; adjuntos en Gmail/Outlook.
+  Para **transcribir** audios/voz usa `*_transcribe_media`/`*_transcribe_attachment`.
+- **Historial**: lo que devuelven las tools (mensajes/correos recientes). No hay procesamiento periódico ni
+  notificación automática de mensajes nuevos (eso es un watcher aparte).
+- **Leído/no leído**: disponible en Gmail (`google_gmail_set_read`) y Outlook (`outlook_mail_set_read`).
+- **Borradores**: disponibles en Gmail (`google_gmail_draft_create/send`) y Outlook (`outlook_drafts`/`outlook_draft_send`).
+- Si el usuario pide algo fuera de estas capacidades, **dilo claramente** en vez de fingir.
 
 ---
 

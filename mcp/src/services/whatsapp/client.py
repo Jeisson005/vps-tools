@@ -76,6 +76,27 @@ class WhatsAppClient:
     async def send_message(self, chat_id: str, text: str) -> dict:
         return await self._post("/send", {"chatId": chat_id, "text": text})
 
+    async def get_media(self, message_id: str) -> dict:
+        return await self._get(f"/media?id={message_id}")
+
+    async def send_media(self, chat_id: str, media_type: str, base64: str, caption: str = "", filename: str = "") -> dict:
+        return await self._post("/send-media", {
+            "chatId": chat_id, "mediaType": media_type, "base64": base64,
+            "caption": caption, "filename": filename,
+        })
+
+    async def transcribe_media(self, message_id: str, language: str = "") -> dict:
+        import base64
+        data = await self.get_media(message_id)
+        if not data.get("base64"):
+            return {"ok": False, "message": "No se pudo descargar la media.", "media": data}
+        from ..core.asr import transcribe
+        try:
+            text = transcribe(base64.b64decode(data["base64"]), filename="msg." + (data.get("type") or "oga"), language=language)
+        except Exception as e:
+            return {"ok": False, "message": f"Error transcribiendo: {e}", "media": data}
+        return {"ok": True, "text": text, "type": data.get("type"), "mimetype": data.get("mimetype")}
+
     async def test_connection(self) -> Dict[str, Any]:
         try:
             data = await self.status()
