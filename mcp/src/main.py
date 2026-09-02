@@ -230,6 +230,22 @@ class ServiceAccountPayload(BaseModel):
 
 @app.get("/api/admin/services/{service_id}/accounts")
 async def list_service_accounts(service_id: str, auth: bool = Depends(verify_admin_token)):
+    service = registry.get_service(service_id)
+    summary = service.get_account_summary() if service and hasattr(service, "get_account_summary") else None
+    if summary:
+        # Pair the live service state with the persisted label/id/default flags.
+        by_id = {a["instance_id"]: a for a in summary}
+        out = []
+        for it in registry.get_instances(service_id):
+            row = dict(_instance_status(it))
+            live = by_id.get(it["instance_id"], {})
+            row["configured"] = live.get("configured", row["configured"])
+            if live.get("base_url"):
+                row["base_url"] = live["base_url"]
+            if live.get("user_email"):
+                row["user_email"] = live["user_email"]
+            out.append(row)
+        return out
     instances = registry.get_instances(service_id)
     return [_instance_status(it) for it in instances]
 
