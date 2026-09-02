@@ -30,10 +30,16 @@ port_for() { # deterministic port: 3001 + (sha1(instance_id) % 200)
 }
 
 accounts() { # instance_id list for service 'whatsapp'
-  if command -v sqlite3 >/dev/null 2>&1 && [[ -f "$MCP_DB" ]]; then
-    sqlite3 "$MCP_DB" "SELECT instance_id FROM service_instances WHERE service_id='whatsapp' AND enabled=1 ORDER BY id;"
-  else
-    echo ""
+  if [[ -f "$MCP_DB" ]]; then
+    python3 - "$MCP_DB" <<'PY'
+import sqlite3, sys
+try:
+    con = sqlite3.connect(sys.argv[1])
+    for (i,) in con.execute("SELECT instance_id FROM service_instances WHERE service_id='whatsapp' AND enabled=1 ORDER BY id"):
+        print(i)
+except Exception:
+    pass
+PY
   fi
 }
 
@@ -70,13 +76,26 @@ stop_one() {
 }
 
 reconcile() {
-  local ids
-  ids="$(accounts)"
-  [[ -z "$ids" ]] && { echo "[i] No WhatsApp accounts configured."; return; }
-  mapfile -t rows <<< "$ids"
-  for id in "${rows[@]}"; do
-    [[ -z "$id" ]] && continue
-    start_one "$id"
+  local ids; ids="$(accounts)"
+  declare -A wanted=()
+  if [[ -n "$ids" ]]; then
+    while IFS= read -r id; do
+      [[ -z "$id" ]] && continue
+      wanted["$id"]=1
+      start_one "$id"
+    done <<< "$ids"
+  else
+    echo "[i] No WhatsApp accounts configured."
+  fi
+
+  # Remove orphaned bridge containers whose account no longer exists (or is disabled).
+  local name
+  for name in $(docker ps -a --format '{{.Names}}' 2>/dev/null | grep '^wa-' || true); do
+    local id="${name#wa-}"
+    if [[ -z "${wanted[$id]:-}" ]]; then
+      echo "[-] Removing orphaned bridge ${name}"
+      docker rm -f "$name" >/dev/null 2>&1 || true
+    fi
   done
 }
 

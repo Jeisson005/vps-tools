@@ -1,0 +1,26 @@
+[Unit]
+Description=Reconcile WhatsApp Baileys bridge containers (one per account)
+Documentation=file:{{VPS_TOOLS_DIR}}/mcp/README.md
+After=docker.service
+Requires=docker.service
+# Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{WHATSAPP_USER}}
+Group={{WHATSAPP_USER}}
+# The provisioner is idempotent: it creates wa-<account> bridges for every
+# configured WhatsApp account (minus orphaned ones) and never restarts healthy
+# ones. Paths are derived relative to the script; override via Environment only
+# if your deployment differs.
+ExecStart=/usr/bin/bash {{VPS_TOOLS_DIR}}/mcp/scripts/whatsapp_bridge_provision.sh reconcile
+Environment=WHATSAPP_BRIDGE_HOST=127.0.0.1
+Environment=MCP_WA_IMAGE=mcp-whatsapp-bridge
+# Optional custom DB location (defaults to <vps-tools>/mcp/data/mcp.db):
+# Environment=MCP_DB=/custom/path/mcp.db
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target
