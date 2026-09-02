@@ -7,11 +7,22 @@ class BaseMcpService(ABC):
     service_id: str = "base"
     name: str = "Base Service"
     description: str = "Base MCP Service"
+    # When True the service can manage multiple accounts/instances (e.g. Passbolt,
+    # Google, Microsoft Graph). The registry loads instances and the service
+    # receives them via the ``instances`` constructor argument.
+    supports_instances: bool = False
     
-    def __init__(self, config: Dict[str, Any], secrets: Dict[str, str], enabled: bool = True):
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        secrets: Dict[str, str],
+        enabled: bool = True,
+        instances: Optional[List[Dict[str, Any]]] = None,
+    ):
         self.config = config or {}
         self.secrets = secrets or {}
         self.enabled = enabled
+        self.instances = instances or []
 
     @abstractmethod
     def is_configured(self) -> bool:

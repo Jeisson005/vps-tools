@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from .core.db import init_db, get_recent_activity, log_activity
 from .core.registry import registry
 from .core.mcp_protocol import McpProtocolHandler
+from .services import AVAILABLE_SERVICES
 from .services.passbolt.client import PassboltClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -38,16 +39,19 @@ def _instance_status(it: Dict[str, Any]) -> Dict[str, Any]:
     """Sanitized account summary for the Admin Panel (never includes secrets)."""
     config = it.get("config", {}) or {}
     secrets = it.get("secrets", {}) or {}
+    has_secrets = any(str(v) for v in secrets.values() if v)
     return {
         "instance_id": it.get("instance_id"),
+        "name": it.get("name") or "",
         "enabled": bool(it.get("enabled")),
         "is_default": bool(it.get("is_default")),
-        "configured": bool(config.get("base_url") and secrets.get("private_key")),
+        "configured": bool(has_secrets),
         "base_url": config.get("base_url", ""),
-        "user_email": config.get("user_email", ""),
+        "user_email": config.get("user_email", "") or config.get("email", ""),
         "fingerprint": config.get("fingerprint", "") or secrets.get("fingerprint", ""),
         "has_private_key": bool(secrets.get("private_key")),
-        "has_passphrase": bool(secrets.get("passphrase") or config.get("fingerprint")),
+        "has_passphrase": bool(secrets.get("passphrase") or secrets.get("client_secret") or secrets.get("access_token")),
+        "has_secrets": has_secrets,
     }
 
 # Active SSE sessions: session_id -> asyncio.Queue
@@ -200,69 +204,96 @@ async def test_service_draft_config(service_id: str, payload: TestConfigPayload,
             fingerprint=cfg.get("fingerprint", "")
         )
         return await test_client.test_connection()
-    
+
+    # Generic: for any instance-capable service, build a temp client from the
+    # draft config/secrets and run its connection test.
+    service = registry.get_service(service_id)
+    builder = getattr(type(service), "_build_client", None) if service else None
+    if builder:
+        try:
+            client = builder(cfg, sec)
+            return await client.test_connection()
+        except Exception as e:
+            return {"ok": False, "message": str(e), "details": {"error": str(e)}}
+
     return {"ok": False, "message": f"Tester not implemented for {service_id}"}
 
-# --- Passbolt multi-account admin API -----------------------------------------
+# --- Generic per-service multi-account admin API -------------------------------
 
-class PassboltAccountPayload(BaseModel):
+class ServiceAccountPayload(BaseModel):
     instance_id: Optional[str] = None
+    name: Optional[str] = ""
     enabled: bool = True
     is_default: bool = False
     config: Dict[str, Any] = {}
     secrets: Dict[str, str] = {}
 
-@app.get("/api/admin/passbolt/accounts")
-async def list_passbolt_accounts(auth: bool = Depends(verify_admin_token)):
-    instances = registry.get_instances("passbolt")
+@app.get("/api/admin/services/{service_id}/accounts")
+async def list_service_accounts(service_id: str, auth: bool = Depends(verify_admin_token)):
+    instances = registry.get_instances(service_id)
     return [_instance_status(it) for it in instances]
 
-@app.post("/api/admin/passbolt/accounts")
-async def save_passbolt_account(payload: PassboltAccountPayload, auth: bool = Depends(verify_admin_token)):
-    config = {
-        "base_url": (payload.config.get("base_url") or "").strip(),
-        "user_email": (payload.config.get("user_email") or "").strip(),
-        "fingerprint": (payload.config.get("fingerprint") or "").strip(),
-        "verify_ssl": bool(payload.config.get("verify_ssl", True)),
-    }
-    secrets = {
-        "private_key": payload.secrets.get("private_key", ""),
-        "passphrase": payload.secrets.get("passphrase", ""),
-        "server_key": payload.secrets.get("server_key", ""),
-        "fingerprint": payload.secrets.get("fingerprint", ""),
-    }
+@app.post("/api/admin/services/{service_id}/accounts")
+async def save_service_account(service_id: str, payload: ServiceAccountPayload, auth: bool = Depends(verify_admin_token)):
+    instance_id = (payload.instance_id or "").strip() or _generate_instance_id(payload.name or payload.config.get("user_email", "") or payload.config.get("email", ""))
+    name = payload.name or "" if not payload.instance_id else (payload.name or "")
 
-    instance_id = (payload.instance_id or "").strip() or _generate_instance_id(config["user_email"])
-
-    existing = registry.get_instances("passbolt")
+    existing = registry.get_instances(service_id)
     wants_default = payload.is_default or not existing or not any(e["is_default"] for e in existing)
 
-    registry.save_instance("passbolt", instance_id, payload.enabled, config, secrets, is_default=wants_default)
-    return {"ok": True, "message": f"Cuenta Passbolt '{instance_id}' guardada", "instance_id": instance_id}
+    registry.save_instance(
+        service_id, instance_id, payload.enabled, dict(payload.config or {}),
+        dict(payload.secrets or {}), is_default=wants_default, name=name,
+    )
+    return {"ok": True, "message": f"Cuenta '{instance_id}' guardada", "instance_id": instance_id}
 
-@app.delete("/api/admin/passbolt/accounts/{instance_id}")
-async def delete_passbolt_account(instance_id: str, auth: bool = Depends(verify_admin_token)):
-    registry.delete_instance("passbolt", instance_id)
+@app.delete("/api/admin/services/{service_id}/accounts/{instance_id}")
+async def delete_service_account(service_id: str, instance_id: str, auth: bool = Depends(verify_admin_token)):
+    registry.delete_instance(service_id, instance_id)
 
     # Guarantee at least one default account remains.
-    remaining = registry.get_instances("passbolt")
+    remaining = registry.get_instances(service_id)
     if remaining and not any(e["is_default"] for e in remaining):
         first = remaining[0]
         registry.save_instance(
-            "passbolt", first["instance_id"], first["enabled"],
-            first["config"], first["secrets"], is_default=True,
+            service_id, first["instance_id"], first["enabled"],
+            first["config"], first["secrets"], is_default=True, name=first.get("name", ""),
         )
-    return {"ok": True, "message": f"Cuenta Passbolt '{instance_id}' eliminada"}
+    return {"ok": True, "message": f"Cuenta '{instance_id}' eliminada"}
 
-@app.post("/api/admin/passbolt/accounts/{instance_id}/test")
-async def test_passbolt_account(instance_id: str, auth: bool = Depends(verify_admin_token)):
-    service = registry.get_service("passbolt")
+@app.post("/api/admin/services/{service_id}/accounts/{instance_id}/test")
+async def test_service_account(service_id: str, instance_id: str, auth: bool = Depends(verify_admin_token)):
+    service = registry.get_service(service_id)
     if not service or not hasattr(service, "test_account"):
-        raise HTTPException(status_code=404, detail="Servicio Passbolt no disponible")
+        raise HTTPException(status_code=404, detail=f"Servicio '{service_id}' no disponible")
     try:
         return await service.test_account(instance_id)
     except Exception as e:
         return {"ok": False, "message": str(e), "details": {}}
+
+@app.get("/api/admin/services/{service_id}/account-schema")
+async def get_service_account_schema(service_id: str, auth: bool = Depends(verify_admin_token)):
+    service = registry.get_service(service_id)
+    if not service or not hasattr(service, "get_account_schema"):
+        return {"config": [], "secrets": []}
+    return service.get_account_schema()
+
+# Backward-compatible Passbolt aliases -----------------------------------------
+@app.get("/api/admin/passbolt/accounts")
+async def list_passbolt_accounts(auth: bool = Depends(verify_admin_token)):
+    return await list_service_accounts("passbolt", auth)
+
+@app.post("/api/admin/passbolt/accounts")
+async def save_passbolt_account(payload: ServiceAccountPayload, auth: bool = Depends(verify_admin_token)):
+    return await save_service_account("passbolt", payload, auth)
+
+@app.delete("/api/admin/passbolt/accounts/{instance_id}")
+async def delete_passbolt_account(instance_id: str, auth: bool = Depends(verify_admin_token)):
+    return await delete_service_account("passbolt", instance_id, auth)
+
+@app.post("/api/admin/passbolt/accounts/{instance_id}/test")
+async def test_passbolt_account(instance_id: str, auth: bool = Depends(verify_admin_token)):
+    return await test_service_account("passbolt", instance_id, auth)
 
 @app.get("/api/admin/tools")
 async def get_admin_tools(scope: str = Query("unified"), auth: bool = Depends(verify_admin_token)):
@@ -350,61 +381,66 @@ async def _sse_stream_generator(scope: str, session_id: str, request: Request):
     finally:
         _active_sse_queues.pop(session_id, None)
 
-# Subroute: Passbolt isolated endpoint
-@app.post("/passbolt")
-@app.post("/passbolt/mcp")
-async def passbolt_http_post(request: Request):
-    return await _process_mcp_http_post(scope="passbolt", request=request)
+# Subroutes: one isolated MCP endpoint per registered service
+def _register_service_routes(service_id: str):
+    @app.post(f"/{service_id}")
+    @app.post(f"/{service_id}/mcp")
+    async def service_http_post(request: Request, _service_id: str = service_id):
+        return await _process_mcp_http_post(scope=_service_id, request=request)
 
-@app.get("/passbolt")
-@app.get("/passbolt/sse")
-async def passbolt_sse_get(request: Request):
-    verify_client_mcp_auth(request)
-    session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId") or str(uuid.uuid4())
-    return StreamingResponse(
-        _sse_stream_generator(scope="passbolt", session_id=session_id, request=request),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-            "Mcp-Session-Id": session_id
-        }
-    )
+    @app.get(f"/{service_id}")
+    @app.get(f"/{service_id}/sse")
+    async def service_sse_get(request: Request, _service_id: str = service_id):
+        verify_client_mcp_auth(request)
+        session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId") or str(uuid.uuid4())
+        return StreamingResponse(
+            _sse_stream_generator(scope=_service_id, session_id=session_id, request=request),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                "Mcp-Session-Id": session_id,
+            }
+        )
 
-@app.delete("/passbolt")
-@app.delete("/passbolt/mcp")
-async def passbolt_http_delete(request: Request):
-    verify_client_mcp_auth(request)
-    session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId")
-    if session_id and session_id in _active_sse_queues:
-        _active_sse_queues.pop(session_id, None)
-    return Response(status_code=204)
+    @app.delete(f"/{service_id}")
+    @app.delete(f"/{service_id}/mcp")
+    async def service_http_delete(request: Request, _service_id: str = service_id):
+        verify_client_mcp_auth(request)
+        session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId")
+        if session_id and session_id in _active_sse_queues:
+            _active_sse_queues.pop(session_id, None)
+        return Response(status_code=204)
 
-@app.post("/passbolt/message")
-@app.post("/passbolt/sse")
-async def passbolt_sse_message(request: Request, sessionId: Optional[str] = Query(None)):
-    verify_client_mcp_auth(request)
-    session_id = sessionId or request.headers.get("Mcp-Session-Id") or "default-session"
-    
-    try:
-        body = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON-RPC payload")
+    @app.post(f"/{service_id}/message")
+    @app.post(f"/{service_id}/sse")
+    async def service_sse_message(request: Request, sessionId: Optional[str] = Query(None), _service_id: str = service_id):
+        verify_client_mcp_auth(request)
+        session_id = sessionId or request.headers.get("Mcp-Session-Id") or "default-session"
 
-    handler = McpProtocolHandler(scope="passbolt")
-    response_data, effective_sid = await handler.handle_request(body, session_id=session_id)
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON-RPC payload")
 
-    # If an SSE stream is active for this session, push event to the stream
-    q = _active_sse_queues.get(effective_sid)
-    if q and response_data:
-        await q.put(response_data)
-        return Response(status_code=202, headers={"Mcp-Session-Id": effective_sid})
+        handler = McpProtocolHandler(scope=_service_id)
+        response_data, effective_sid = await handler.handle_request(body, session_id=session_id)
 
-    if response_data is None:
-        return Response(status_code=204, headers={"Mcp-Session-Id": effective_sid})
+        # If an SSE stream is active for this session, push event to the stream
+        q = _active_sse_queues.get(effective_sid)
+        if q and response_data:
+            await q.put(response_data)
+            return Response(status_code=202, headers={"Mcp-Session-Id": effective_sid})
 
-    return JSONResponse(content=response_data, headers={"Mcp-Session-Id": effective_sid})
+        if response_data is None:
+            return Response(status_code=204, headers={"Mcp-Session-Id": effective_sid})
+
+        return JSONResponse(content=response_data, headers={"Mcp-Session-Id": effective_sid})
+
+
+for _sid in AVAILABLE_SERVICES.keys():
+    _register_service_routes(_sid)
 
 # Subroute: Unified aggregator endpoint (/unified, /mcp, /sse)
 @app.post("/unified")

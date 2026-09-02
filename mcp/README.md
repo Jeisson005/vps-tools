@@ -86,11 +86,11 @@ bash scripts/update.sh
 Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once configured behind Nginx).
 
 ### Features:
-1. **Passbolt Accounts Manager (multi-cuenta):**
-   - Gestiona **una o varias cuentas Passbolt** desde el panel: cada una con su servidor, correo, clave GPG y 2FA.
-   - Añadir / editar / eliminar cuentas; cada cuenta sube su propio archivo `.asc`/`.key` (o pega el bloque).
+1. **Accounts Manager multi-cuenta (para cualquier servicio):**
+   - Gestiona **una o varias cuentas** por servicio (Passbolt, Google, Microsoft 365) desde el panel, con campos dinámicos según el servicio y un **nombre/etiqueta** opcional por cuenta.
+   - Añadir / editar / eliminar cuentas; cada cuenta guarda sus credenciales cifradas (clave GPG, OAuth tokens, etc.).
    - Marcar una cuenta como **principal** (se usa cuando los agentes no especifican `account`).
-   - **"Probar Conexión Live"** por cuenta: GPG challenge-response instantáneo sin reiniciar.
+   - **"Probar Conexión Live"** por cuenta sin reiniciar.
 2. **Interactive Tool Tester & Inspector:**
    - Execute tool calls directly from your browser (`passbolt_search_resources`, `passbolt_get_secret`, etc.) and view raw JSON-RPC 2.0 responses.
 3. **Client Configuration Snippets:**
@@ -116,8 +116,19 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 | `passbolt_list_accounts` | Lists the configured Passbolt accounts (id, default flag, email, server) so agents can discover valid `account` values. | none |
 
 > **Multi-cuenta:** todas las herramientas aceptan un parámetro opcional `account` (nombre/alias de la
-> cuenta Passbolt). Si se omite se usa la **cuenta principal**; si solo hay una cuenta, esa se usa
-> automáticamente. Las cuentas se gestionan en el panel (Passbolt → Cuentas).
+> cuenta). Si se omite se usa la **cuenta principal**; si solo hay una cuenta, esa se usa automáticamente.
+> Las cuentas se gestionan en el panel (Servicio → Cuentas). Cada servicio expone además una tool
+> `*_list_accounts()` para descubrir las cuentas disponibles.
+
+## 4b. Servicios incluidos (multi-instancia)
+
+| Service | Subroute | Tools | Credenciales por cuenta |
+| :--- | :--- | :--- | :--- |
+| `passbolt` | `/passbolt` | `passbolt_*` | clave GPG + passphrase |
+| `google` | `/google` | `google_gmail_*`, `google_calendar_*` | OAuth2 (client id/secret + refresh_token) |
+| `microsoft` | `/microsoft` | `outlook_mail_*`, `outlook_calendar_*` | OAuth2 (tenant/client id/secret + refresh_token) |
+
+> Los agentes los consumen todos desde el endpoint **unificado** `/unified` (o `/mcp`).
 
 ---
 

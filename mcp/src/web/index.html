@@ -194,8 +194,8 @@
     <div class="modal-card config-modal-card">
       <div class="modal-header">
         <div class="modal-title-group">
-          <h3>Cuentas Passbolt</h3>
-          <span class="subtitle">Gestiona una o varias cuentas de Passbolt</span>
+          <h3 id="pb-accounts-title">Cuentas</h3>
+          <span class="subtitle">Gestiona una o varias cuentas</span>
         </div>
         <button id="btn-close-pb-accounts-modal" class="btn-icon" title="Cerrar">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -238,43 +238,12 @@
       <form id="passbolt-form">
         <input type="hidden" id="pb-instance-id" value="">
         <div class="form-body">
-          <div class="form-row">
-            <div class="input-group">
-              <label for="pb-account-name">Nombre / Alias de la cuenta</label>
-              <input type="text" id="pb-account-name" placeholder="principal, rodrigo, contabilidad..." required>
-            </div>
-            <div class="input-group">
-              <label for="pb-base-url">URL del Servidor Passbolt</label>
-              <input type="url" id="pb-base-url" placeholder="https://passbolt.yourdomain.com" required>
-            </div>
+          <div class="input-group">
+            <label for="pb-account-name">Nombre / Alias de la cuenta</label>
+            <input type="text" id="pb-account-name" placeholder="trabajo, personal, principal..." required>
           </div>
 
-          <div class="input-group">
-            <label for="pb-user-email">Correo de Usuario Passbolt</label>
-            <input type="email" id="pb-user-email" placeholder="user@domain.com">
-          </div>
-
-          <div class="input-group">
-            <label>Clave Privada GPG (OpenPGP)</label>
-            <div id="pb-file-drop" class="file-drop-area">
-              <input type="file" id="pb-key-file" accept=".asc,.gpg,.key,.txt" class="file-input-hidden">
-              <div class="drop-content">
-                <p>Arrastra tu archivo <code>.asc</code> / <code>.key</code> o <span class="browse-link">examinar</span></p>
-                <span id="pb-key-status" class="file-status-label">Ninguna clave cargada</span>
-              </div>
-            </div>
-            <textarea id="pb-private-key-paste" rows="3" placeholder="O pega el bloque -----BEGIN PGP PRIVATE KEY BLOCK----- aquí..." class="code-input"></textarea>
-          </div>
-
-          <div class="input-group">
-            <label for="pb-passphrase">Frase de Paso (Passphrase)</label>
-            <div class="input-with-icon">
-              <input type="password" id="pb-passphrase" placeholder="Frase de paso si tu clave está cifrada">
-              <button type="button" id="btn-toggle-pb-passphrase" class="btn-toggle-pwd">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
-            </div>
-          </div>
+          <div id="account-form-fields"></div>
 
           <label class="checkbox-row" for="pb-is-default">
             <input type="checkbox" id="pb-is-default">

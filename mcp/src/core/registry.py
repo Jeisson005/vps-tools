@@ -29,8 +29,8 @@ class ServiceRegistry:
 
         for s_id, s_class in AVAILABLE_SERVICES.items():
             try:
-                if s_id == "passbolt":
-                    self._load_passbolt_accounts(s_class)
+                if getattr(s_class, "supports_instances", False):
+                    self._load_instances(s_id, s_class)
                     continue
 
                 db_data = get_service_config(s_id)
@@ -58,39 +58,52 @@ class ServiceRegistry:
             except Exception as e:
                 logger.error(f"Failed to initialize service '{s_id}': {e}")
 
-    def _load_passbolt_accounts(self, s_class):
-        """Load all Passbolt accounts (instances), migrating/seeding as needed."""
-        instances = get_service_instances("passbolt")
+    def _load_instances(self, s_id: str, s_class):
+        """Load accounts/instances for a multi-instance service, migrating/seeding as needed."""
+        instances = get_service_instances(s_id)
 
         if not instances:
-            # Migrate the legacy single-account row (services_config) if present.
-            migrate_legacy_service_to_instances("passbolt")
-            instances = get_service_instances("passbolt")
+            # Migrate a legacy single-account row (services_config) if present.
+            migrate_legacy_service_to_instances(s_id)
+            instances = get_service_instances(s_id)
 
         if not instances:
-            # Seed a default account from environment variables.
-            config = {
-                "base_url": os.environ.get("PASSBOLT_URL", ""),
-                "user_email": os.environ.get("PASSBOLT_USER_EMAIL", ""),
-                "fingerprint": os.environ.get("PASSBOLT_FINGERPRINT", ""),
-                "verify_ssl": True,
-            }
-            secrets = {
-                "passphrase": os.environ.get("PASSBOLT_PASSPHRASE", ""),
-                "private_key": "",
-                "server_key": "",
-            }
-            save_service_instance("passbolt", "primary", True, config, secrets, is_default=True)
-            instances = get_service_instances("passbolt")
+            # Seed a default account from environment variables when the service
+            # declares an env default (e.g. Passbolt). New services typically stay
+            # unconfigured until an account is added from the Admin Panel.
+            env_config, env_secrets = self._env_defaults(s_id)
+            if env_config:
+                save_service_instance(s_id, "primary", True, env_config, env_secrets, is_default=True, name="primary")
+                instances = get_service_instances(s_id)
 
         instance = s_class(config={}, secrets={}, enabled=True, instances=instances)
-        self._services["passbolt"] = instance
+        self._services[s_id] = instance
 
         if instance.enabled and instance.is_configured():
             for tool in instance.get_tools():
-                self._tool_map[tool["name"]] = "passbolt"
+                self._tool_map[tool["name"]] = s_id
 
-        logger.info(f"Loaded service 'passbolt' (accounts={len(instance.accounts)})")
+        accounts = getattr(instance, "accounts", None)
+        logger.info(f"Loaded service '{s_id}' (accounts={len(accounts) if accounts else 0})")
+
+    @staticmethod
+    def _env_defaults(s_id: str):
+        """Return (config, secrets) to seed a default instance from environment, if any."""
+        if s_id == "passbolt":
+            return (
+                {
+                    "base_url": os.environ.get("PASSBOLT_URL", ""),
+                    "user_email": os.environ.get("PASSBOLT_USER_EMAIL", ""),
+                    "fingerprint": os.environ.get("PASSBOLT_FINGERPRINT", ""),
+                    "verify_ssl": True,
+                },
+                {
+                    "passphrase": os.environ.get("PASSBOLT_PASSPHRASE", ""),
+                    "private_key": "",
+                    "server_key": "",
+                },
+            )
+        return {}, {}
 
     def get_service(self, service_id: str) -> Optional[BaseMcpService]:
         return self._services.get(service_id)
@@ -106,8 +119,8 @@ class ServiceRegistry:
                 status["config"] = service.config
                 status["has_private_key"] = bool(service.secrets.get("private_key"))
                 status["has_passphrase"] = bool(service.secrets.get("passphrase"))
-                # Multi-account summary (Passbolt)
-                if s_id == "passbolt" and hasattr(service, "get_account_summary"):
+                # Multi-account summary (for any instance-capable service)
+                if hasattr(service, "get_account_summary"):
                     status["accounts"] = service.get_account_summary()
                 statuses.append(status)
             else:
@@ -127,11 +140,12 @@ class ServiceRegistry:
     def update_service(self, service_id: str, enabled: bool, config: Dict[str, Any], secrets: Dict[str, str]):
         """Persist changes to DB and re-instantiate service in memory.
 
-        Multi-instance services (Passbolt) route legacy single-service updates to
-        their default account so they never wipe other accounts.
+        Multi-instance services route legacy single-service updates to their
+        default account so they never wipe other accounts.
         """
-        if service_id == "passbolt":
-            self._update_passbolt_account(enabled, config, secrets)
+        s_class = AVAILABLE_SERVICES.get(service_id)
+        if s_class and getattr(s_class, "supports_instances", False):
+            self._update_default_instance(service_id, enabled, config, secrets)
             return
 
         # Merge with existing secrets so omitting a secret does not wipe it out
@@ -160,12 +174,12 @@ class ServiceRegistry:
             }
             log_activity(service_id, "update_config", "success", f"Updated config (enabled={enabled})")
 
-    def _update_passbolt_account(self, enabled: bool, config: Dict[str, Any], secrets: Dict[str, str]):
-        """Apply a legacy single-service config to the default Passbolt account."""
-        instances = get_service_instances("passbolt")
+    def _update_default_instance(self, service_id: str, enabled: bool, config: Dict[str, Any], secrets: Dict[str, str]):
+        """Apply a legacy single-service config to a service's default account."""
+        instances = get_service_instances(service_id)
         if not instances:
-            save_service_instance("passbolt", "primary", enabled, config, secrets, is_default=True)
-            self._reload_instances("passbolt")
+            save_service_instance(service_id, "primary", enabled, config, secrets, is_default=True)
+            self._reload_instances(service_id)
             return
 
         target = next((i for i in instances if i.get("is_default")), instances[0])
@@ -175,17 +189,18 @@ class ServiceRegistry:
             if v is not None and v != "":
                 merged_secrets[k] = v
         save_service_instance(
-            "passbolt", target["instance_id"], enabled, merged_config, merged_secrets, target.get("is_default", True)
+            service_id, target["instance_id"], enabled, merged_config, merged_secrets,
+            target.get("is_default", True), target.get("name", ""),
         )
-        self._reload_instances("passbolt")
+        self._reload_instances(service_id)
 
     def get_instances(self, service_id: str) -> List[Dict[str, Any]]:
         """List all configured accounts/instances for a service."""
         return get_service_instances(service_id)
 
-    def save_instance(self, service_id: str, instance_id: str, enabled: bool, config: Dict[str, Any], secrets: Dict[str, str], is_default: bool = False):
+    def save_instance(self, service_id: str, instance_id: str, enabled: bool, config: Dict[str, Any], secrets: Dict[str, str], is_default: bool = False, name: str = ""):
         """Persist an instance and reload the owning service in memory."""
-        save_service_instance(service_id, instance_id, enabled, config, secrets, is_default)
+        save_service_instance(service_id, instance_id, enabled, config, secrets, is_default, name=name)
         self._reload_instances(service_id)
 
     def delete_instance(self, service_id: str, instance_id: str):
@@ -194,12 +209,12 @@ class ServiceRegistry:
         self._reload_instances(service_id)
 
     def _reload_instances(self, service_id: str):
-        """Rebuild a multi-instance service (e.g. Passbolt) after account changes."""
+        """Rebuild a multi-instance service after account changes."""
         s_class = AVAILABLE_SERVICES.get(service_id)
         if not s_class:
             return
         instances = get_service_instances(service_id)
-        if service_id == "passbolt":
+        if getattr(s_class, "supports_instances", False):
             instance = s_class(config={}, secrets={}, enabled=True, instances=instances)
             self._services[service_id] = instance
             log_activity(service_id, "update_accounts", "success", f"{len(instances)} cuenta(s)")
