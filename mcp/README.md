@@ -149,6 +149,52 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 
 > Los agentes los consumen todos desde el endpoint **unificado** `/unified` (o `/mcp`).
 
+### 4c. WhatsApp MCP — capacidades
+
+**Cuenta:** solo el número de teléfono. El bridge Baileys vive en un **contenedor por cuenta** (`wa-<slug>`)
+en la misma red Docker que el gateway, con **persistencia total** en su volumen (`<session>/`):
+
+#### Mensajes y chats
+- `whatsapp_list_chats` → lista **todos** los chats con datos (union del buffer en vivo + historial en disco).
+- `whatsapp_get_messages(chat_id, limit)` → mensajes recientes (cae al historial si el chat no está en memoria).
+- `whatsapp_get_history(chat_id, limit)` → **historial real desde disco** (`history/<jid>.jsonl`), sobrevive reinicios.
+- `whatsapp_status`, `whatsapp_list_accounts`.
+
+#### Media (leer, enviar, transcribir)
+- `whatsapp_get_media(message_id)` → devuelve `{size, mimetype, url}` y `base64` **solo si ≤ 4 MB**.
+  - Para media grande devuelve un **enlace de descarga**: `http://127.0.0.1:<puerto>/download?id=<id>`
+    (el agente lo baja con `curl`). Servido por el bridge `GET /download`.
+- `whatsapp_send_media(chat_id, media_type, base64, caption, filename)` → imagen/video/audio/nota de voz/documento/sticker.
+- `whatsapp_transcribe_media(message_id, language)` → transcribe audio/voz con el **ASR compartido**
+  (por defecto local `faster-whisper`, modelo `base`, **el mismo que usa Hermes**; configurable vía
+  `MCP_ASR_PROVIDER/MODEL/BASE_URL/API_KEY/LANGUAGE`).
+
+#### Persistencia
+- **Todo lo enviado/recibido se guarda**: metadatos+texto en `history/<jid>.jsonl` y **media en `media/<id>.<ext>`**
+  (imágenes, audio/voz, video, PDF, documentos, stickers).
+- **Límite**: `WHATSAPP_HISTORY_LIMIT` (default **100 000** líneas por chat). Al podar, **se borra la media**
+  de los mensajes que salen para limitar disco. El buffer en memoria es `WHATSAPP_MESSAGE_LIMIT` (default 10 000).
+
+#### Mensajes especiales
+- **Stickers** → se detectan (`sticker`), se persisten (webp) y se descargan.
+- **Notas de video / video** → se detectan como `video` y se persisten (mp4); se pueden transcribir si traen audio.
+- **Mensajes / fotos de "ver una vez" (view-once) y temporales (ephemeral)** → se **detectan** el tipo y se muestra
+  su caption, pero **NO se persiste la media** (WhatsApp no permite re-descargarla tras verla una vez;
+  el bridge falla limpiamente en `whatsapp_get_media`).
+- **Borrados / ediciones** → **no se procesan**: los mensajes borrados **quedan guardados** en el historial
+  (comportamiento deliberado).
+
+### 4d. Capacidades de Telegram / Google / Outlook
+- **Telegram**: `telegram_get_media`, `telegram_send_media` (foto/video/audio/voz/video-note/archivo),
+  `telegram_transcribe_media`; `get_messages` indica el tipo de media.
+- **Google (Gmail)**: adjuntos en `google_gmail_get`/`_send`, borradores (`google_gmail_drafts`,
+  `google_gmail_draft_create/send`), etiquetas (`google_gmail_labels`), leído/no leído (`google_gmail_set_read`),
+  hilos (`google_gmail_thread`), transcribir adjunto (`google_gmail_transcribe_attachment`).
+- **Outlook (Graph)**: adjuntos en `outlook_mail_get`/`_send`, leído/no leído (`outlook_mail_set_read`),
+  borradores (`outlook_drafts`, `outlook_draft_send`), carpetas (`outlook_folders`),
+  transcribir adjunto (`outlook_mail_transcribe_attachment`).
+- La transcripción de todas usa el **mismo ASR que Hermes** por defecto.
+
 ---
 
 ## 5. Connecting AI Clients
