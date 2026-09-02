@@ -1,0 +1,14 @@
+[Unit]
+Description=Periodically reconcile WhatsApp Baileys bridges (auto-provision per account)
+
+[Timer]
+# Run shortly after boot and then every 60s. The service is a no-op when there
+# are no WhatsApp accounts, so this also self-heals crashed bridges.
+OnBootSec=30s
+OnUnitActiveSec=60s
+Unit=whatsapp-bridges.service
+Persistent=true
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target
