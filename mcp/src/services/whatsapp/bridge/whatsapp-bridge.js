@@ -104,6 +104,17 @@ function realJidFor(jid) {
   return socketStore.lidJid[jid] || jid;
 }
 
+// Authoritative group subject via groupMetadata (Baileys), cached.
+async function refreshGroupName(jid) {
+  if (!jid || jid.indexOf('@g.us') < 0) return;
+  if (contactName(jid)) return; // already resolved
+  if (!sock || typeof sock.groupMetadata !== 'function') return;
+  try {
+    const md = await sock.groupMetadata(jid);
+    if (md && md.subject) storeContactName(jid, md.subject);
+  } catch (e) { /* ignore */ }
+}
+
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 let everOpen = false;
@@ -152,6 +163,7 @@ function attach(s) {
     for (const ch of chats || []) {
       if (ch?.id && ch.name) storeContactName(ch.id, ch.name);
       if (ch?.id && !socketStore.chats.find(x => x.id === ch.id)) socketStore.chats.push({ id: ch.id, name: ch.name || ch.id });
+      if (ch?.id && ch.id.indexOf('@g.us') >= 0) refreshGroupName(ch.id).catch(() => {});
     }
     for (const m of messages || []) await ingestMessage(m);
   });
@@ -166,6 +178,7 @@ async function ingestMessage(m) {
   const id = m.key?.id;
   if (id && socketStore.byId[id]) return; // already ingested
   if (id) socketStore.byId[id] = m;
+  if (jid.indexOf('@g.us') >= 0) refreshGroupName(jid).catch(() => {});
   if (m.pushName) storeContactName(realJidFor(jid), m.pushName);
   const senderKey = realJidFor(jid);
   const senderName = contactName(senderKey) || m.pushName || (jid === senderKey ? jid : senderKey);
@@ -345,7 +358,12 @@ const server = http.createServer(async (req, res) => {
           out.push({ id, name: resolveChatName(id) || id, realJid: realJidFor(id) });
         }
       } catch (e) { /* ignore */ }
-      return json({ chats: out });
+      // Resolve group subjects lazily for any group chat still lacking a name.
+      for (const c of out) {
+        if (c.id.indexOf('@g.us') >= 0 && !contactName(c.id)) refreshGroupName(c.id).catch(() => {});
+      }
+      const chats = out.map(c => ({ ...c, name: resolveChatName(c.id) || c.id }));
+      return json({ chats });
     }
     if (url.pathname === '/messages') {
       const chatId = url.searchParams.get('chatId');
