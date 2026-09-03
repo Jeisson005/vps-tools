@@ -78,6 +78,12 @@ class WhatsAppClient:
         data = await self._get(f"/history?chatId={chat_id}&limit={limit}")
         return data.get("messages", [])
 
+    async def get_group_info(self, jid: str) -> dict:
+        try:
+            return await self._get(f"/group?id={jid}")
+        except Exception as e:
+            return {"ok": False, "message": str(e)}
+
     async def send_message(self, chat_id: str, text: str) -> dict:
         return await self._post("/send", {"chatId": chat_id, "text": text})
 

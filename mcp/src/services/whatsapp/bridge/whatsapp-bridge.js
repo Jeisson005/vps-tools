@@ -26,6 +26,16 @@ const MESSAGE_LIMIT = parseInt(process.env.WHATSAPP_MESSAGE_LIMIT || '10000', 10
 const HISTORY_LIMIT = parseInt(process.env.WHATSAPP_HISTORY_LIMIT || '100000', 10);
 const HISTORY_DIR = path.join(SESSION_DIR, 'history');
 const MEDIA_DIR = path.join(SESSION_DIR, 'media');
+const NAMES_FILE = path.join(SESSION_DIR, 'names.json');
+
+function loadNames() {
+  try { if (fs.existsSync(NAMES_FILE)) Object.assign(socketStore.names, JSON.parse(fs.readFileSync(NAMES_FILE, 'utf8'))); } catch (e) {}
+}
+let saveTimer = null;
+function saveNames() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try { fs.writeFileSync(NAMES_FILE, JSON.stringify(socketStore.names), 'utf8'); } catch (e) {} }, 1500);
+}
 
 let appendCounter = 0;
 function ensureDir(d) { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); }
@@ -95,7 +105,7 @@ function resolveChatName(jid) {
   return contactName(jid) || jid;
 }
 function storeContactName(jid, name) {
-  if (jid && name) socketStore.names[jid] = name;
+  if (jid && name) { socketStore.names[jid] = name; saveNames(); }
 }
 function storeLidMapping(lidJid, realJid) {
   if (lidJid && realJid) socketStore.lidJid[lidJid] = realJid;
@@ -313,6 +323,7 @@ async function sendMedia(chatId, mediaType, base64, caption, filename) {
 }
 
 async function start() {
+  loadNames();
   const { state, saveCreds: _saveCreds } = await useMultiFileAuthState(SESSION_DIR);
   saveCreds = _saveCreds;
   const { version } = await fetchLatestBaileysVersion();
@@ -377,6 +388,19 @@ const server = http.createServer(async (req, res) => {
       const chatId = url.searchParams.get('chatId');
       const limit = parseInt(url.searchParams.get('limit') || '50', 10) || 50;
       return json({ messages: readHistory(chatId, Math.min(limit, HISTORY_LIMIT)) });
+    }
+    if (url.pathname === '/group') {
+      const id = url.searchParams.get('id');
+      if (!sock || typeof sock.groupMetadata !== 'function') { res.writeHead(404); res.end('no bridge'); return; }
+      const md = await sock.groupMetadata(id).catch(() => null);
+      if (!md) { res.writeHead(404); res.end('no group'); return; }
+      return json({
+        id,
+        subject: md.subject || contactName(id) || id,
+        participants: (md.participants || []).map(p => ({
+          id: p.id, name: contactName(p.id) || p.id, admin: !!(p.isAdmin || p.isSuperAdmin),
+        })),
+      });
     }
     if (url.pathname === '/send' && req.method === 'POST') {
       let body = '';

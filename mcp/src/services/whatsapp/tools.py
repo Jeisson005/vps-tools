@@ -39,6 +39,15 @@ WHATSAPP_TOOLS = [
         },
     },
     {
+        "name": "whatsapp_get_group_info",
+        "description": "Get a WhatsApp group's subject and participants (with admin flags) by group jid (…@g.us).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"jid": {"type": "string", "description": "Group jid, e.g. '1203...@g.us'."}, "account": _ACCOUNT},
+            "required": ["jid"],
+        },
+    },
+    {
         "name": "whatsapp_send_message",
         "description": "Send a WhatsApp message to a chat id. IMPORTANT: Ask the user for explicit confirmation before sending.",
         "inputSchema": {
