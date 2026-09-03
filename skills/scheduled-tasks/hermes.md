@@ -1,7 +1,7 @@
 ---
 name: scheduled-tasks
 description: "Schedule, create, and manage self-healing background tasks and cron jobs on the VPS using Sentinel MCP/CLI. Supports Python, Bash, and Node.js with git versioning, .env secrets, Docker isolation, and Steel Browser Human-in-the-Loop."
-version: 2.4.0
+version: 2.5.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -53,7 +53,10 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
    - Valida el criterio (remitente, mención, palabra clave) y **notifica** (preferiblemente por **Telegram**) solo si matchea.
    - Es una tarea **frecuente** (cron), no un servicio en primer plano que corra indefinidamente.
 
-7. **Reutiliza watchers existentes:** Antes de crear una tarea nueva que vigile un canal, revisa `sentinel-ctl list`. Si **ya existe una** que consulta ese mismo servicio, **amplíala/actualízala** (`sentinel-ctl update` / `sentinel_update_task`) para cubrir el nuevo criterio en vez de duplicar el polling (evita varias tareas llamando al mismo canal y carpetas de datos duplicadas).
+7. **Decide tú si reutilizas un watcher existente:** Antes de crear una tarea nueva que vigile un canal, revisa `sentinel-ctl list` y **juzga con criterio**:
+   - **Reutiliza/amplía** (`sentinel-ctl update` / `sentinel_update_task`) cuando el nuevo criterio comparta el **mismo canal, cadencia compatible y datos** (p. ej. otro filtro sobre la misma bandeja o grupo).
+   - **Crea una tarea separada** cuando cambien la **cadencia/latencia** requerida (p. ej. cada 5 min vs. diario), el **destinatario o severidad** de la alerta, los **secretos** necesarios, o si fusionar criterios enredaría la lógica.
+   - En caso de duda, prefiere tareas pequeñas y legibles; evita duplicar polling innecesario, pero no fuerces una fusión que complique la tarea.
 
 8. **IA puntual en tareas (sin pedir claves al usuario):** Si una tarea necesita una llamada de IA muy concreta
    (resumir, clasificar, redactar), usa la tool MCP **`ai_complete`** del gateway: **la `api_key`/`model`/`base_url`
@@ -61,3 +64,16 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
    al usuario por claves de IA**. Desde un script de Sentinel, llama al endpoint MCP `/ai` con la `MCP_API_KEY` del
    gateway, o si prefieres `litellm`, lee esas mismas vars. Mantén la llamada mínima; no uses IA para cosas
    deterministas.
+
+9. **🔔 Bots de notificación y cómo obtienen credenciales tus scripts:**
+   - Hay **cuatro bots** con rol distinto; usa el correcto en vez de inventar envíos:
+     - **Bot 1 · Urgent** (`TELEGRAM_BOT_URGENT_TOKEN`): fallos de tareas, coincidencias críticas de watchers, auto-heal que requiera atención. El texto lleva el prefijo `🔴 *[SENTINEL URGENTE]*`.
+     - **Bot 2 · Routine** (`TELEGRAM_BOT_ROUTINE_TOKEN`): avisos informativos, resúmenes, coincidencias no críticas.
+     - **Bot 4 · HITL** (`TELEGRAM_BOT_HITL_TOKEN`): **solo** checkpoints interactivos (2FA/captcha) vía `sentinel-hitl` (ver regla 4); no lo uses como canal de avisos.
+     - **Bot 3 · Hermes** (`TELEGRAM_BOT_HERMES_USERNAME`): chat conversacional con el usuario; **no** envíes alertas automáticas por esa vía salvo que el usuario lo pida.
+   - El destino es **`TELEGRAM_CHAT_ID`** (chat compartido/admin).
+   - **¿Cómo obtiene el script las credenciales?** De dos formas, sin pedirle nada al usuario:
+     1. **Recomendado:** inclúyelas en `env_vars` al crear la tarea (`sentinel_create_task` o `TELEGRAM_BOT_*_TOKEN` + `TELEGRAM_CHAT_ID`); llegan como `.env` `chmod 600` dentro de la carpeta de la tarea.
+     2. Importa el hub `sentinel/core/telegram_hub.py` (`TelegramHub.send_urgent` / `send_routine`, con fallback automático entre bots) si el script corre dentro del árbol de Sentinel.
+   - Envío directo (si no usas el hub): `POST https://api.telegram.org/bot<TOKEN>/sendMessage` con `chat_id` + `text` (+ `parse_mode`).
+   - **Nunca imprimas ni registres los tokens** en logs, respuestas o commits.
