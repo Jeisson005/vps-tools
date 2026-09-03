@@ -1,7 +1,7 @@
 ---
 name: scheduled-tasks
 description: "Schedule, create, and manage self-healing background tasks and cron jobs on the VPS using Sentinel MCP/CLI. Supports Python, Bash, and Node.js with git versioning, .env secrets, Docker isolation, and Steel Browser Human-in-the-Loop."
-version: 2.5.0
+version: 2.5.1
 author: VPS Tools
 license: MIT
 metadata:
@@ -66,14 +66,14 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
    deterministas.
 
 9. **🔔 Bots de notificación y cómo obtienen credenciales tus scripts:**
-   - Hay **cuatro bots** con rol distinto; usa el correcto en vez de inventar envíos:
-     - **Bot 1 · Urgent** (`TELEGRAM_BOT_URGENT_TOKEN`): fallos de tareas, coincidencias críticas de watchers, auto-heal que requiera atención. El texto lleva el prefijo `🔴 *[SENTINEL URGENTE]*`.
-     - **Bot 2 · Routine** (`TELEGRAM_BOT_ROUTINE_TOKEN`): avisos informativos, resúmenes, coincidencias no críticas.
-     - **Bot 4 · HITL** (`TELEGRAM_BOT_HITL_TOKEN`): **solo** checkpoints interactivos (2FA/captcha) vía `sentinel-hitl` (ver regla 4); no lo uses como canal de avisos.
-     - **Bot 3 · Hermes** (`TELEGRAM_BOT_HERMES_USERNAME`): chat conversacional con el usuario; **no** envíes alertas automáticas por esa vía salvo que el usuario lo pida.
-   - El destino es **`TELEGRAM_CHAT_ID`** (chat compartido/admin).
-   - **¿Cómo obtiene el script las credenciales?** De dos formas, sin pedirle nada al usuario:
-     1. **Recomendado:** inclúyelas en `env_vars` al crear la tarea (`sentinel_create_task` o `TELEGRAM_BOT_*_TOKEN` + `TELEGRAM_CHAT_ID`); llegan como `.env` `chmod 600` dentro de la carpeta de la tarea.
-     2. Importa el hub `sentinel/core/telegram_hub.py` (`TelegramHub.send_urgent` / `send_routine`, con fallback automático entre bots) si el script corre dentro del árbol de Sentinel.
+   - Hay varios bots con rol distinto; usa el correcto en vez de inventar envíos:
+     - **Bot 1 · Urgent** (`TELEGRAM_BOT_URGENT_TOKEN`): **reservado a la gestión interna de Sentinel** (fallos de tareas, auto-heal crítico). Ni tú ni tus tareas deben enviar por esta vía por su cuenta.
+     - **Bot 2 · Routine** (`TELEGRAM_BOT_ROUTINE_TOKEN`): **el que sí puedes usar** para avisos informativos, resúmenes y coincidencias de watchers.
+     - **Bot 4 · HITL** (`TELEGRAM_BOT_HITL_TOKEN`): **solo** checkpoints interactivos (2FA/captcha) vía `sentinel-hitl` (ver regla 4); jamás como canal de avisos.
+     - **Bot 3 · Hermes** (`TELEGRAM_BOT_HERMES_USERNAME`): chat conversacional con el usuario; **tampoco** envíes alertas automáticas por esa vía salvo que el usuario lo pida expresamente.
+   - El destino de tus avisos es **`TELEGRAM_CHAT_ID`** (chat compartido/admin).
+   - **¿Cómo obtiene el script las credenciales?** Sin pedirle nada al usuario:
+     1. **Recomendado:** inclúyelas en `env_vars` al crear la tarea (`TELEGRAM_BOT_ROUTINE_TOKEN` —y el HITL solo para checkpoints— más `TELEGRAM_CHAT_ID`); llegan como `.env` `chmod 600` dentro de la carpeta de la tarea.
+     2. Si el script corre dentro del árbol de Sentinel, puedes importar `sentinel/core/telegram_hub.py` (`TelegramHub.send_routine`, con fallback entre bots).
    - Envío directo (si no usas el hub): `POST https://api.telegram.org/bot<TOKEN>/sendMessage` con `chat_id` + `text` (+ `parse_mode`).
-   - **Nunca imprimas ni registres los tokens** en logs, respuestas o commits.
+   - **Nunca imprimas ni registres los tokens** en logs, respuestas o commits — ni siquiera el de rutina.
