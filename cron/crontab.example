@@ -54,6 +54,11 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # Flags in cron/.env (all default true). Requires passwordless sudo for systemctl.
 30 7 * * * /path/to/vps-tools/cron/nightly_refresh.sh >> /path/to/vps-tools/cron/logs/refresh.log 2>&1
 
+# 14. CPU, Steal & IOWait Health Check (Hourly at minute 15)
+# Load saturation alerts via urgent bot; steal-only via routine bot.
+# cpu.log doubles as evidence for provider overselling disputes.
+15 * * * * /path/to/vps-tools/cron/check_cpu.sh >> /path/to/vps-tools/cron/logs/cpu.log 2>&1
+
 
 # ==============================================================================
 # EXAMPLE 2: SPECIFIC CONFIGURATION (ROOT-BASED EXECUTION & DATE-BASED LOGS)
