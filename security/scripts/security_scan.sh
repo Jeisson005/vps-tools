@@ -17,6 +17,13 @@ mkdir -p "${REPORT_DIR}"
 log() { echo "[scan ${PERIOD}] $*"; }
 log "Report dir: ${REPORT_DIR}"
 
+# --- 0. Local overrides (gitignored, see baseline/*.example) ---
+TRIVY_IGNORE=""
+if [[ -f "${SEC_DIR}/baseline/local/.trivyignore" ]]; then
+  TRIVY_IGNORE="--ignorefile ${SEC_DIR}/baseline/local/.trivyignore"
+  log "using local trivy ignorefile"
+fi
+
 # --- 1. Inventory ---
 {
 echo "# Inventory ${PERIOD} ($(date -R), $(hostname))"
@@ -45,7 +52,7 @@ else
   for img in $(docker ps --format '{{.Image}}' 2>/dev/null | sort -u); do
     safe="$(echo "${img}" | tr '/:.' '___')"
     log "trivy image: ${img}"
-    if timeout 600 trivy image --severity HIGH,CRITICAL --format json --quiet "${img}" > "${REPORT_DIR}/trivy-${safe}.json" 2>/dev/null; then
+    if timeout 600 trivy image --severity HIGH,CRITICAL --format json --quiet ${TRIVY_IGNORE} "${img}" > "${REPORT_DIR}/trivy-${safe}.json" 2>/dev/null; then
       h="$(jq '[.Results[]?.Vulnerabilities[]?] | length' "${REPORT_DIR}/trivy-${safe}.json" 2>/dev/null || echo 0)"
       echo "{\"image\":\"${img}\",\"high_critical\":${h}}" >> "${REPORT_DIR}/trivy-images.jsonl"
     else
@@ -57,7 +64,7 @@ else
   # trivy fs on the repo (vuln + misconfig; secrets are gitleaks' job)
   # NOTE: runtime data dirs may be root-owned -> prefer sudo when available
   log "trivy fs: repo"
-  TRIVY_FS="timeout 300 trivy fs --severity HIGH,CRITICAL --scanners vuln,misconfig --format json --quiet"
+  TRIVY_FS="timeout 300 trivy fs --severity HIGH,CRITICAL --scanners vuln,misconfig --format json --quiet ${TRIVY_IGNORE}"
   if sudo -n true 2>/dev/null; then
     sudo -n ${TRIVY_FS} "${REPO_ROOT}" > "${REPORT_DIR}/trivy-fs.json" 2>"${REPORT_DIR}/trivy-fs.err" || log "WARNING: trivy fs issues (see trivy-fs.err)"
   else
