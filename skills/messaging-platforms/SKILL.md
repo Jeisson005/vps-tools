@@ -1,7 +1,7 @@
 ---
 name: messaging-platforms
 description: "Enviar y leer mensajes de las cuentas del usuario (WhatsApp, Telegram, Gmail, Outlook) vía MCP; revisa antes de enviar y mantén el tono del historial."
-version: 1.1.0
+version: 1.1.1
 author: VPS Tools
 license: MIT
 metadata:
@@ -77,6 +77,7 @@ y pasa `account` para seleccionar la bóveda/cuenta (si se omite, se usa la cuen
 | Acción | Comportamiento |
 | :--- | :--- |
 | 🔍 Listar / leer mensajes y correos | ✅ Autónomo |
+| 🗑️ Leer mensajes eliminados (`whatsapp_get_deleted`, ya guardados) | ✅ Autónomo |
 | 📅 Consultar calendario | ✅ Autónomo |
 | ✉️ Enviar mensaje / correo | ⚠️ Enseñar el contenido y confirmar; enviar por cuenta del usuario |
 | 📝 Usar borradores (si existe) | ✅ Al revisar antes de enviar |
