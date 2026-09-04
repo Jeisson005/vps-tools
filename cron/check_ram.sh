@@ -17,10 +17,24 @@ if [[ -f "${SCRIPT_DIR}/.env" ]]; then
   source "${SCRIPT_DIR}/.env"
 fi
 
-# 2. Fallback: reuse Sentinel Telegram config so no token is duplicated here
-if [[ -z "${TELEGRAM_CHAT_ID:-}" && -f "${BASE_DIR}/sentinel/.env" ]]; then
+# 2. Fallback: reuse Sentinel Telegram config for vars NOT explicitly set.
+# Explicitly exported vars (even empty, e.g. TELEGRAM_CHAT_ID="") win over
+# the fallback file, so tests can run without sending real alerts.
+if [[ -f "${BASE_DIR}/sentinel/.env" ]]; then
+  _saved_vars=""
+  for _v in TELEGRAM_CHAT_ID TELEGRAM_BOT_URGENT_TOKEN TELEGRAM_BOT_ROUTINE_TOKEN TELEGRAM_BOT_TOKEN; do
+    if [[ -n "${!_v+set}" ]]; then
+      printf -v "_saved_${_v}" '%s' "${!_v}"
+      _saved_vars="${_saved_vars} ${_v}"
+    fi
+  done
   # shellcheck disable=SC1090
   source "${BASE_DIR}/sentinel/.env"
+  for _v in ${_saved_vars}; do
+    _tmp="_saved_${_v}"
+    printf -v "${_v}" '%s' "${!_tmp}"
+  done
+  unset _v _tmp _saved_vars _saved_TELEGRAM_CHAT_ID _saved_TELEGRAM_BOT_URGENT_TOKEN _saved_TELEGRAM_BOT_ROUTINE_TOKEN _saved_TELEGRAM_BOT_TOKEN
 fi
 
 RAM_ALERT_THRESHOLD="${RAM_ALERT_THRESHOLD:-85}"
