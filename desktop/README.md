@@ -47,6 +47,7 @@ This script:
    - **Auto-wake on connect**: When you open your browser (`https://vnc.yourdomain.com`), Systemd immediately spins up KasmVNC + XFCE.
    - **Auto-shutdown**: When you log out or disconnect for >5 minutes, KasmVNC shuts down and releases all RAM.
 6. Configures UFW firewall (allows Docker bridge to access KasmVNC port, blocks public XRDP).
+7. Installs **cua-driver** (computer-use agent binary) for the desktop user — the executor behind the `desktop-gui-control` skill on `DISPLAY=:1`. Skipped if already present; on network failure the desktop still installs and the skill stays disabled until installed manually.
 
 ---
 
