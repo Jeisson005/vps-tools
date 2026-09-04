@@ -74,6 +74,7 @@ start_one() {
   echo "[+] Starting bridge '${name}' (${BRIDGE_HOST}:${port}) for account '${id}'"
   docker run -d --name "$name" \
     --restart unless-stopped \
+    --log-opt max-size=10m --log-opt max-file=3 \
     --network "$MCP_NETWORK" \
     --network-alias "$name" \
     -p "${port}:${port}" \

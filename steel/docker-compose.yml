@@ -3,6 +3,11 @@ services:
     image: ghcr.io/steel-dev/steel-browser:latest
     container_name: steel-browser-1
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "127.0.0.1:3001:3000"
       - "127.0.0.1:9221:9223"
@@ -32,6 +37,11 @@ services:
     image: ghcr.io/steel-dev/steel-browser:latest
     container_name: steel-browser-2
     restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "127.0.0.1:3002:3000"
       - "127.0.0.1:9222:9223"
@@ -61,6 +71,11 @@ services:
     image: ghcr.io/steel-dev/steel-browser:latest
     container_name: steel-browser-3
     restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "127.0.0.1:3003:3000"
       - "127.0.0.1:9224:9223"
@@ -91,6 +106,11 @@ services:
       context: ./router
     container_name: steel-browser
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "127.0.0.1:3000:3000"
       - "127.0.0.1:9223:3000"

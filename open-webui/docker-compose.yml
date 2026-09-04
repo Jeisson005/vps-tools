@@ -3,6 +3,11 @@ services:
     image: ${OPEN_WEBUI_IMAGE:-ghcr.io/open-webui/open-webui:main}
     container_name: open-webui
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "127.0.0.1:${OPEN_WEBUI_PORT:-8080}:8080"
     volumes:
