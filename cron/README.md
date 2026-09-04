@@ -7,6 +7,9 @@ This folder contains `cron` configuration examples to automate maintenance tasks
 - `crontab.example`: Example crontab configurations for database backups (Postgres, Redis, MongoDB), Nginx certbot renewals, and log cleanup.
 - `cron_test.sh`: Script to verify that cron is working correctly.
 - `cleanup_logs.sh`: Script to delete old log files (default: older than 30 days).
+- `check_ram.sh`: RAM & Swap health check with Telegram alerts (companion to `sentinel/scripts/check_disk.sh`). Reuses `sentinel/.env` credentials; thresholds via `cron/.env`.
+- `nightly_refresh.sh`: Nightly restart of `opencode-web`, `open-webui`, `rustdesk-web` + light cleanup (docker builder cache, /tmp leftovers, journal vacuum). Never touches `steel-*`, `wa-*`, `hermes-*`, `sentinel`, `nginx`, `headscale`.
+- `.env.example`: Optional overrides for the above (copy to `.env`, gitignored).
 - `logrotate.example`: Configuration template for the system's `logrotate` service (recommended for production).
 
 ## Configuration
