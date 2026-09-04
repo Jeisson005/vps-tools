@@ -14,6 +14,15 @@ BASELINE_DIR="${1:?baseline dir required}"
 OUT_FILE="${2:?output file required}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ALLOW_FILE="${BASELINE_DIR}/ports.allow"
+LOCAL_ALLOW="${BASELINE_DIR}/local/ports.allow"
+
+# Combined baseline: committed + local overrides (gitignored, see local-ports.example)
+COMBINED_ALLOW="$(mktemp)"
+grep -vE '^\s*(#|$)' "${ALLOW_FILE}" > "${COMBINED_ALLOW}"
+if [[ -f "${LOCAL_ALLOW}" ]]; then
+  grep -vE '^\s*(#|$)' "${LOCAL_ALLOW}" >> "${COMBINED_ALLOW}"
+fi
+trap 'rm -f "${COMBINED_ALLOW}"' EXIT
 
 SS="$(sudo -n ss -tlnp 2>/dev/null || ss -tln 2>/dev/null)"
 SSU="$(sudo -n ss -ulnp 2>/dev/null || ss -uln 2>/dev/null)"
@@ -57,7 +66,7 @@ scope_of() { # $1=port -> scope or "none"
       # '*' port only matches local scope (127.0.0.1:*); handled by caller
       if [[ "${p}" == "${port}" ]]; then echo "${scope}"; return; fi
     fi
-  done < <(grep -vE '^\s*(#|$)' "${ALLOW_FILE}" | awk '{print $1, $2, $3}')
+  done < <(cat "${COMBINED_ALLOW}" | awk '{print $1, $2, $3}')
   echo "none"
 }
 

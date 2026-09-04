@@ -22,8 +22,23 @@ Two-layer monthly security audit (runs day 1, 3:00 AM):
 - `agent/run_audit.sh [YYYY-MM]`: layer 2 runner.
 - `baseline/ports.allow`: expected listening sockets (public/local/review).
 - `baseline/accepted-risks.md`: known trade-offs (not failures).
+- `baseline/*.example`: templates for LOCAL overrides (see below).
 - `reports/`: monthly artifacts (gitignored, `.gitkeep` only).
 - `.env.example`: `AUDIT_MODEL` (must track MCP principal), timeouts.
+
+## Local overrides (gitignored, never committed)
+
+`baseline/local/` holds operator-specific tweaks. Copy the `.example`
+templates there:
+
+| File | Effect |
+|---|---|
+| `local/.trivyignore` | CVE suppressions, passed as trivy `--ignorefile` |
+| `local/agent-notes.local.md` | Appended to the agent prompt (wins on conflict) |
+| `local/ports.allow` | Extra allow entries for the exposure diff |
+
+Use for: confirmed false positives, temp ports, personal context the repo
+must not contain.
 
 ## Manual run
 
