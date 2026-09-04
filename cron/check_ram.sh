@@ -2,8 +2,8 @@
 # ==============================================================================
 # Cron - VPS RAM & Swap Health Monitor
 # Checks memory usage against configurable thresholds and sends Telegram alerts.
-# Companion to sentinel/scripts/check_disk.sh (disk) but lives in cron/ and
-# reuses the Sentinel .env for Telegram credentials (no secrets stored here).
+# Companion to cron/check_disk.sh. Reuses sentinel/.env for Telegram
+# credentials (no secrets stored here).
 # ==============================================================================
 
 set -euo pipefail
@@ -26,6 +26,7 @@ fi
 RAM_ALERT_THRESHOLD="${RAM_ALERT_THRESHOLD:-85}"
 SWAP_ALERT_THRESHOLD="${SWAP_ALERT_THRESHOLD:-70}"
 NOTIFY_ON_HEALTHY="${NOTIFY_ON_HEALTHY:-false}"
+ALERT_COOLDOWN_HOURS="${ALERT_COOLDOWN_HOURS:-6}"
 TELEGRAM_TOKEN="${TELEGRAM_BOT_URGENT_TOKEN:-${TELEGRAM_BOT_TOKEN:-}}"
 
 send_telegram() {
@@ -38,9 +39,21 @@ send_telegram() {
   fi
 }
 
+# Anti-spam: at most one alert per cooldown window (state file is gitignored)
+COOLDOWN_FILE="${SCRIPT_DIR}/logs/.check_ram.last_alert"
+cooldown_active() {
+  local last=0 now
+  if [[ -f "${COOLDOWN_FILE}" ]]; then
+    last="$(cat "${COOLDOWN_FILE}" 2>/dev/null || echo 0)"
+    [[ "${last}" =~ ^[0-9]+$ ]] || last=0
+  fi
+  now="$(date +%s)"
+  (( now - last < ALERT_COOLDOWN_HOURS * 3600 ))
+}
+
 echo "================================================================="
 echo "🧠 RAM Health Check: $(date -R)"
-echo "⚙️  Thresholds: RAM >= ${RAM_ALERT_THRESHOLD}% | Swap >= ${SWAP_ALERT_THRESHOLD}%"
+echo "⚙️  Thresholds: RAM >= ${RAM_ALERT_THRESHOLD}% | Swap >= ${SWAP_ALERT_THRESHOLD}% (cooldown: ${ALERT_COOLDOWN_HOURS}h)"
 echo "================================================================="
 
 # --- RAM ---
@@ -83,8 +96,13 @@ if [[ "${SWAP_TOTAL}" -gt 0 && "${SWAP_PCT}" -ge "${SWAP_ALERT_THRESHOLD}" ]]; t
 fi
 
 if [[ "${ALERT_TRIGGERED}" == "true" ]]; then
-  MSG="🚨 *ALERTA: Memoria Alta* 🚨%0A%0A🖥️ *Host:* \`$(hostname)\`%0A📊 *Causa:* ${ALERT_REASON}%0A🧠 *RAM:* \`${RAM_PCT}% usado\` (${MEM_USED}/${MEM_TOTAL} MB, disp: ${MEM_AVAIL} MB)%0A💾 *Swap:* \`${SWAP_PCT}% usado\` (${SWAP_USED}/${SWAP_TOTAL} MB)%0A%0A🔝 *Top procesos:*%0A${TOP_PROCS}%0A%0A💡 *Acciones sugeridas:*%0A• \`cron/nightly_refresh.sh\` (reinicio nocturno)%0A• \`docker stats --no-stream\`%0A• Revisar Steel/Chromium si hay automatizaciones colgadas"
-  send_telegram "${MSG}"
+  if cooldown_active; then
+    echo "  [i] Cooldown activo (última alerta hace < ${ALERT_COOLDOWN_HOURS}h). Omitiendo Telegram."
+  else
+    MSG="🚨 *ALERTA: Memoria Alta* 🚨%0A%0A🖥️ *Host:* \`$(hostname)\`%0A📊 *Causa:* ${ALERT_REASON}%0A🧠 *RAM:* \`${RAM_PCT}% usado\` (${MEM_USED}/${MEM_TOTAL} MB, disp: ${MEM_AVAIL} MB)%0A💾 *Swap:* \`${SWAP_PCT}% usado\` (${SWAP_USED}/${SWAP_TOTAL} MB)%0A%0A🔝 *Top procesos:*%0A${TOP_PROCS}%0A%0A💡 *Acciones sugeridas:*%0A• \`cron/nightly_refresh.sh\` (reinicio nocturno)%0A• \`docker stats --no-stream\`%0A• Revisar Steel/Chromium si hay automatizaciones colgadas"
+    send_telegram "${MSG}"
+    date +%s > "${COOLDOWN_FILE}"
+  fi
 else
   echo "[+] ✓ Memoria saludable (RAM ${RAM_PCT}% < ${RAM_ALERT_THRESHOLD}%, Swap ${SWAP_PCT}% < ${SWAP_ALERT_THRESHOLD}%)."
   if [[ "${NOTIFY_ON_HEALTHY}" == "true" ]]; then
