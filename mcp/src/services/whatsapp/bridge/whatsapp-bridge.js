@@ -101,20 +101,26 @@ function mergeDeleted(entries) {
 
 function readDeleted(jid, limit) {
   try {
-    const live = (socketStore.deleted[jid] || []).map(e => ({ ...e }));
     const f = historyFile(jid);
-    const tombs = [];
+    const byId = {};
     if (fs.existsSync(f)) {
       const lines = fs.readFileSync(f, 'utf8').split('\n').filter(Boolean);
-      const byId = {};
       const raw = lines.map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
-      for (const e of raw) { if (e && e.id && !e.deleted) { if (!byId[e.id]) byId[e.id] = { ...e }; } }
+      for (const e of raw) { if (e && e.id && !e.deleted && !byId[e.id]) byId[e.id] = { ...e }; }
       for (const e of raw) { if (e && e.deleted && e.id && byId[e.id]) byId[e.id] = { ...byId[e.id], deleted: true, deletedAt: e.ts }; }
-      for (const obj of Object.values(byId)) { if (obj.deleted) tombs.push(obj); }
     }
-    const seen = new Set();
-    const out = [];
-    for (const e of [...live, ...tombs]) { if (e && e.id && !seen.has(e.id)) { seen.add(e.id); out.push(e); } }
+    // Overlay live tombstones, enriching them with content from the disk
+    // scan or the live message buffer — a bare in-memory tombstone must
+    // never shadow an entry that carries the message content.
+    const liveMsgs = {};
+    for (const m of (socketStore.messages[jid] || [])) { if (m && m.id && !liveMsgs[m.id]) liveMsgs[m.id] = m; }
+    for (const t of (socketStore.deleted[jid] || [])) {
+      if (!t || !t.id) continue;
+      const base = byId[t.id] || liveMsgs[t.id] || {};
+      byId[t.id] = { ...base, id: t.id, deleted: true, deletedAt: t.deletedAt || t.ts || base.deletedAt };
+      if (byId[t.id].ts === undefined) byId[t.id].ts = base.ts;
+    }
+    const out = Object.values(byId).filter(e => e && e.deleted);
     out.sort((a, b) => (b.deletedAt || b.ts || 0) - (a.deletedAt || a.ts || 0));
     return out.slice(0, limit);
   } catch (e) { return []; }
@@ -142,10 +148,17 @@ async function markDeleted(key) {
   const jid = key?.remoteJid;
   if (!id || !jid) return;
   const now = Date.now();
-  const tomb = { id, deleted: true, ts: now };
+  const tomb = { id, deleted: true, ts: now, deletedAt: now };
   if (socketStore.messages[jid]) {
     const e = socketStore.messages[jid].find(x => x.id === id);
-    if (e) { e.deleted = true; e.deletedAt = now; }
+    if (e) {
+      e.deleted = true; e.deletedAt = now;
+      // Carry content on the tombstone so /deleted returns full entries
+      // even before (or without) the disk merge.
+      for (const f of ['text', 'sender', 'media', 'mediaFile', 'fromMe']) {
+        if (e[f] !== undefined) tomb[f] = e[f];
+      }
+    }
   }
   appendDeleted(jid, tomb);
 }
@@ -261,6 +274,12 @@ function attach(s) {
 async function ingestMessage(m) {
   const jid = m.key?.remoteJid || 'unknown';
   const id = m.key?.id;
+  // Skip protocol/control messages (e.g. REVOKE for "delete for everyone"):
+  // they carry no user content and would otherwise be stored as empty
+  // entries that agents misread as "empty messages". The actual deletion is
+  // still marked via the messages.delete handler.
+  const rawContent = m.message || {};
+  if (rawContent.protocolMessage || unwrapMessage(rawContent).protocolMessage) return;
   if (id && socketStore.byId[id]) return; // already ingested
   if (id) socketStore.byId[id] = m;
   if (jid.indexOf('@g.us') >= 0) refreshGroupName(jid).catch(() => {});
