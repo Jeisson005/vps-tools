@@ -184,7 +184,8 @@ en la misma red Docker que el gateway, con **persistencia total** en su volumen 
   su caption, pero **NO se persiste la media** (WhatsApp no permite re-descargarla tras verla una vez;
   el bridge falla limpiamente en `whatsapp_get_media`).
 - **Borrados** → cuando el remitente elimina un mensaje ("eliminar para todos"), se **marca**
-  (`deleted: true`) pero **nunca se borra** del historial. `whatsapp_get_deleted` los trae.
+  (`deleted: true`) pero **nunca se borra** del historial. `whatsapp_get_deleted` los trae con su contenido.
+  - El propio mensaje de protocolo REVOKE **no se guarda** como mensaje (antes aparecía como "mensaje vacío").
   - Limitaciones honestas: solo se marcan mensajes **ya guardados** al momento del borrado; el borrado "solo para mí" del remitente es invisible.
 - **Ediciones** → no se procesan (queda la versión original).
 
