@@ -31,8 +31,10 @@ if [[ ! -f "${REPORT_DIR}/report.md" ]]; then
   exit 1
 fi
 
-# Render prompt (+ local operator notes, gitignored, take precedence)
-RENDERED="$(mktemp)"
+# Render prompt to a .md file (+ local operator notes, gitignored, take precedence).
+# NOTE: the full prompt goes via -f attachment, NOT as CLI arg: opencode run
+# resolves message args containing "/" as file paths ("File not found").
+RENDERED="$(mktemp -t audit-prompt-XXXXXX.md)"
 sed -e "s|{{PERIOD}}|${PERIOD}|g" -e "s|{{REPORT_DIR}}|${REPORT_DIR}|g" \
   "${SCRIPT_DIR}/PROMPT.md" > "${RENDERED}"
 LOCAL_NOTES="${SEC_DIR}/baseline/local/agent-notes.local.md"
@@ -42,14 +44,18 @@ if [[ -f "${LOCAL_NOTES}" ]]; then
   cat "${LOCAL_NOTES}" >> "${RENDERED}"
 fi
 
+# NOTE: the message goes via STDIN, never as CLI arg: opencode run resolves
+# message args as file paths when -f is used ("File not found"). Keep the
+# message free of file-like tokens; full instructions live in ${RENDERED}.
 log "Running opencode (model=${MODEL}, timeout=${TIMEOUT_MIN}min, --auto, read-only prompt)..."
-if timeout "$((TIMEOUT_MIN * 60))" opencode run --auto \
+if printf '%s' "You are the monthly security auditor. First read the attached audit procedure file, then the attached layer-1 report files. Execute the procedure end to end: verify findings, judge exposure, send exactly one Telegram verdict yourself, save your verdict file in the dated report folder, and reply with the verdict text." \
+  | timeout "$((TIMEOUT_MIN * 60))" opencode run --auto \
     -m "${MODEL}" \
     --dir "${REPO_ROOT}" \
+    -f "${RENDERED}" \
     -f "${REPORT_DIR}/report.md" \
     -f "${REPORT_DIR}/summary.json" \
-    -f "${REPORT_DIR}/exposure.txt" \
-    "$(cat "${RENDERED}")" 2>&1; then
+    -f "${REPORT_DIR}/exposure.txt" 2>&1; then
   log "Agent audit finished."
   rm -f "${RENDERED}"
   exit 0
