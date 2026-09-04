@@ -428,8 +428,13 @@
 
   <div id="toast" class="toast">Notificación</div>
 
+  <script src="config.js"></script>
   <script>
-    const API_KEY = "***REMOVED***";
+    // API key injected at deploy via web/config.js (gitignored, never committed).
+    // Fresh clone without config.js -> ask once and remember in this browser.
+    const API_KEY = window.__HEADSCALE_API_KEY__
+      || localStorage.getItem("headscale_api_key")
+      || (() => { const k = prompt("Headscale API key:"); if (k) localStorage.setItem("headscale_api_key", k); return k || ""; })();
     const API_BASE = window.location.origin;
 
     function showToast(msg) {
