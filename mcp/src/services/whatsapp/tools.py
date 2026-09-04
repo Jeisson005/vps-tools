@@ -39,6 +39,15 @@ WHATSAPP_TOOLS = [
         },
     },
     {
+        "name": "whatsapp_get_deleted",
+        "description": "Get the deleted messages of a chat. Only works for messages the bridge already stored AND the sender revoked ('delete for everyone'); senders deleting only for themselves is invisible. Kept deliberately, never erased.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"chat_id": {"type": "string"}, "limit": {"type": "integer", "description": "Max messages (default 50)."}, "account": _ACCOUNT},
+            "required": ["chat_id"],
+        },
+    },
+    {
         "name": "whatsapp_get_group_info",
         "description": "Get a WhatsApp group's subject and participants (with admin flags) by group jid (…@g.us).",
         "inputSchema": {

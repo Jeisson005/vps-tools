@@ -158,7 +158,9 @@ en la misma red Docker que el gateway, con **persistencia total** en su volumen 
 - `whatsapp_list_chats` → lista **todos** los chats con datos (union del buffer en vivo + historial en disco).
 - `whatsapp_get_messages(chat_id, limit)` → mensajes recientes (cae al historial si el chat no está en memoria).
 - `whatsapp_get_history(chat_id, limit)` → **historial real desde disco** (`history/<jid>.jsonl`), sobrevive reinicios.
-- `whatsapp_status`, `whatsapp_list_accounts`.
+- `whatsapp_get_deleted(chat_id, limit)` → **solo los mensajes borrados** del chat, con su contenido
+  (`deleted: true`). Solo funciona con mensajes que ya estaban guardados **antes** de ser borrados.
+- `whatsapp_status`, `whatsapp_list_accounts`, `whatsapp_get_group_info`.
 
 #### Media (leer, enviar, transcribir)
 - `whatsapp_get_media(message_id)` → devuelve `{size, mimetype, url}` y `base64` **solo si ≤ 4 MB**.
@@ -181,8 +183,10 @@ en la misma red Docker que el gateway, con **persistencia total** en su volumen 
 - **Mensajes / fotos de "ver una vez" (view-once) y temporales (ephemeral)** → se **detectan** el tipo y se muestra
   su caption, pero **NO se persiste la media** (WhatsApp no permite re-descargarla tras verla una vez;
   el bridge falla limpiamente en `whatsapp_get_media`).
-- **Borrados / ediciones** → **no se procesan**: los mensajes borrados **quedan guardados** en el historial
-  (comportamiento deliberado).
+- **Borrados** → cuando el remitente elimina un mensaje ("eliminar para todos"), se **marca**
+  (`deleted: true`) pero **nunca se borra** del historial. `whatsapp_get_deleted` los trae.
+  - Limitaciones honestas: solo se marcan mensajes **ya guardados** al momento del borrado; el borrado "solo para mí" del remitente es invisible.
+- **Ediciones** → no se procesan (queda la versión original).
 
 ### 4d. Capacidades de Telegram / Google / Outlook
 - **Telegram**: `telegram_get_media`, `telegram_send_media` (foto/video/audio/voz/video-note/archivo),
