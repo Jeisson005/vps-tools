@@ -46,6 +46,10 @@ services:
     volumes:
       - ./web/index.html:/usr/share/nginx/html/index.html:ro
       - ./web/index.html:/usr/share/nginx/html/web/index.html:ro
+      # config.js holds the live API key (gitignored). Render with scripts/deploy_ui.sh
+      # before (re)deploy; an empty placeholder keeps compose mounts valid.
+      - ./web/config.js:/usr/share/nginx/html/config.js:ro
+      - ./web/config.js:/usr/share/nginx/html/web/config.js:ro
       - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "127.0.0.1:8086:8080"

@@ -31,6 +31,9 @@ security/baseline/local/
 **/headscale-node/state/
 **/*.sqlite*
 **/*_private.key
+# Headscale UI live API key (rendered at deploy, never commit)
+/headscale/web/config.js
+**/headscale/web/config.js
 
 # Filebrowser runtime data (user files, db, settings)
 **/filebrowser/data/
