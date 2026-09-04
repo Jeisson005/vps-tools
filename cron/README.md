@@ -9,6 +9,7 @@ This folder contains `cron` configuration examples to automate maintenance tasks
 - `cleanup_logs.sh`: Script to delete old log files (default: older than 30 days).
 - `check_ram.sh`: RAM & Swap health check with Telegram alerts (hourly). Companion to `check_disk.sh`. Reuses `sentinel/.env` credentials; thresholds + anti-spam cooldown via `cron/.env`.
 - `check_disk.sh`: Disk space health check with Telegram alerts (daily). Reuses `sentinel/.env` credentials; thresholds + anti-spam cooldown via `cron/.env`.
+- `check_cpu.sh`: CPU load, hypervisor steal & iowait check with Telegram alerts (hourly). Saturation → urgent bot, steal-only → routine bot. `cpu.log` serves as overselling evidence.
 - `nightly_refresh.sh`: Nightly restart of `opencode-web`, `open-webui`, `rustdesk-web` + light cleanup (docker builder cache, /tmp leftovers, journal vacuum). Never touches `steel-*`, `wa-*`, `hermes-*`, `sentinel`, `nginx`, `headscale`.
 - `.env.example`: Optional overrides for the above (copy to `.env`, gitignored).
 - `logrotate.example`: Configuration template for the system's `logrotate` service (recommended for production).
