@@ -16,6 +16,7 @@ Environment="LOGNAME={{HERMES_USER}}"
 Environment="PATH=/usr/bin:{{HERMES_HOME}}/.hermes/hermes-agent/venv/bin:{{HERMES_HOME}}/.hermes/hermes-agent/node_modules/.bin:{{HERMES_HOME}}/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="VIRTUAL_ENV={{HERMES_HOME}}/.hermes/hermes-agent/venv"
 Environment="HERMES_HOME={{HERMES_HOME}}/.hermes"
+Environment="API_SERVER_MODEL_NAME={{HERMES_MODEL_NAME}}"
 Environment="TZ=America/Bogota"
 Restart=always
 RestartSec=5

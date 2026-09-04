@@ -46,6 +46,10 @@ HERMES_DASHBOARD_HOST="0.0.0.0"
 HERMES_DASHBOARD_USERNAME="${HERMES_USER}"
 HERMES_DASHBOARD_PASSWORD=""
 HERMES_GATEWAY_ENABLED="true"
+# Optional advertised model id for the gateway api_server (/v1/models).
+# Empty = upstream default ("hermes-agent"). Set e.g. HERMES_MODEL_NAME=sofia
+# on a server to advertise a custom name (server-local config, never committed).
+HERMES_MODEL_NAME="${HERMES_MODEL_NAME:-}"
 TELEGRAM_BOT_TOKEN=""
 TELEGRAM_ALLOWED_USERS=""
 
@@ -263,6 +267,7 @@ fi
 if [[ "${HERMES_GATEWAY_ENABLED}" == "true" ]]; then
   sed -e "s|{{HERMES_USER}}|${HERMES_USER}|g" \
       -e "s|{{HERMES_HOME}}|${USER_HOME}|g" \
+      -e "s|{{HERMES_MODEL_NAME}}|${HERMES_MODEL_NAME}|g" \
       "${HERMES_DIR}/templates/hermes-gateway.service" > /etc/systemd/system/hermes-gateway.service
 
   systemctl daemon-reload
