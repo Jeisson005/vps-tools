@@ -1,7 +1,7 @@
 ---
 name: scheduled-tasks
 description: "Schedule, create, and manage self-healing background tasks and cron jobs on the VPS using Sentinel MCP/CLI. Supports Python, Bash, and Node.js with git versioning, .env secrets, Docker isolation, and Steel Browser Human-in-the-Loop."
-version: 2.6.0
+version: 2.7.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -20,7 +20,7 @@ Teaches OpenCode how to create, inspect, and manage autonomous scheduled tasks o
 
 When connected to the Sentinel MCP server (`http://127.0.0.1:8006/sse`):
 
-* **`sentinel_create_task(name, schedule_cron, language, script_code, env_vars, requires_browser)`**:
+* **`sentinel_create_task(name, description, schedule_cron, language, script_code, env_vars, requires_browser)`**:
   Registers and schedules a new polyglot task in Sentinel. Automatically initializes a dedicated git repo in `sentinel/tasks/<task_id>/` and updates the isolated crontab.
 * **`sentinel_list_tasks()`**:
   Lists all active scheduled tasks, schedules, runtimes, and git versions.
@@ -40,6 +40,7 @@ When connected to the Sentinel MCP server (`http://127.0.0.1:8006/sse`):
 Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincronizar periódicamente"* or *"automatizar un script diario/semanal"*:
 
 1. **Do NOT write raw crontab lines via bash pipes.** Always use the MCP tool `sentinel_create_task` or the CLI `sentinel-ctl add`.
+2. **`description` es obligatoria:** deriva 1-3 frases del pedido original del usuario (qué debe hacer, para qué sirve, criterio de éxito). Se guarda en `task.json` + `TASK.md` y se inyecta al clasificador IA y al prompt de auto-heal para no romper la intención. Si el usuario solo dice "avísame cuando X", el criterio de éxito es notificar solo en match, etc.
 2. **Secrets & Environment Variables:** Pass sensitive API keys or credentials in the `env_vars` parameter so Sentinel isolates them in a `chmod 600 .env` file inside the task folder.
 3. **Docker & Dependencies Isolation Rule:**
    - If a script requires heavy or specialized system dependencies (e.g. `ffmpeg`, `pandas`, custom browser drivers, external database clients, or microservices), **use Docker or Docker Compose by default** inside the task directory (e.g. `docker run --rm -v $(pwd):/app ...` or a local `docker-compose.yml`).
@@ -87,10 +88,22 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
 
 ---
 
+## 🔍 Hybrid error classification v2.7 (how failures are routed)
+
+`core/classifier.py` is Tier 0 regex + exit-codes (offline, zero-cost), Tier 1 AI referee (env-gated, only ambiguous cases):
+
+* `transient` → routine bot, retry next cycle (timeouts, 502/503/504, 429, DNS). Selector timeouts NEVER count here (guard).
+* `hitl_required` → urgent bot with HITL helper hint, NO code repair. Scripts must `sys.exit(2)` on HITL timeout = clean pause (no heal, no spam; Bot 4 already notified).
+* `human_required` → urgent bot (401/403, invalid/expired token, suspended, billing). Update Passbolt/`.env`.
+* `infra` (new) → urgent bot with runbook (`df -h`, `free -h`, `docker ps`), NO code repair (disk full, OOM 137, docker down, 127 command not found).
+* `repairable` → OpenCode headless auto-repair with rich prompt (language, requires_browser, classification, fix_hint), git commit on success / rollback on fail, rate-limited (`MAX_REPAIR_ATTEMPTS`, reminder 12-24h).
+* Exit codes: `0`=ok, `2`=HITL pause, `124`=timeout→transient, `137`=OOM→infra, `126/127`→infra.
+* AI referee: reutiliza la IA del panel MCP (`principal` deepseek) vía gateway local `127.0.0.1:8005` sin pedir keys ni duplicarlas (`SENTINEL_AI_*` solo es fallback si el MCP cae; `SENTINEL_AI_ENABLED=false` lo desactiva). Incluye `description`/objetivo en el contexto. Secrets are redacted before the call, 20s timeout, invalid JSON falls back to regex. Never use AI for deterministic Tier 0 hits.
+
 ## 🩺 Protocol for OpenCode When Invoked by AutoHeal
 
 When OpenCode is invoked in headless mode (`opencode run --auto-approve`) to auto-repair a broken task:
-1. **Analyze Root Cause:** Read the error context provided (STDOUT/STDERR) and inspect the files in the current task directory.
-2. **Apply Minimal, Robust Fix:** Fix the code (e.g. adjust DOM selector, handle null value, fix type casting).
+1. **Analyze Root Cause:** Read the error context provided (STDOUT/STDERR) plus classification (`repairable`, reason, fix_hint), task language, `requires_browser`, and file list. Inspect the files in the current task directory.
+2. **Apply Minimal, Robust Fix:** Fix the code (e.g. adjust DOM selector with explicit waits, handle null value, fix type casting). Never touch `.env`, never print secrets, keep script executable. If a heavy dep is missing use Docker inside the task dir. If you find 2FA/Captcha, wire `sentinel_hitl.wait_for_user` + `sys.exit(2)` instead of masking it.
 3. **Provide Plain-Language Summary:** In your final response, include a line starting with:
    `EXPLICACION_RESUMIDA: <Explicación sencilla y no técnica de lo que se solucionó>`
