@@ -42,6 +42,16 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # 11. Sentinel Resource & Disk Space Health Check (Daily at 9:00 AM UTC / 4:00 AM UTC-5)
 0 9 * * * /path/to/vps-tools/sentinel/scripts/check_disk.sh >> /path/to/vps-tools/cron/logs/sentinel.log 2>&1
 
+# 12. RAM & Swap Health Check (Daily at 9:05 AM UTC / 4:05 AM UTC-5)
+# Alerts via Telegram (reuses sentinel/.env credentials). Thresholds in cron/.env.
+5 9 * * * /path/to/vps-tools/cron/check_ram.sh >> /path/to/vps-tools/cron/logs/ram.log 2>&1
+
+# 13. Nightly Refresh (Daily at 7:30 AM UTC / 2:30 AM UTC-5)
+# Restarts opencode-web, open-webui, rustdesk-web + light cleanup.
+# NEVER touches steel-*, wa-*, hermes-*, sentinel, nginx, headscale.
+# Flags in cron/.env (all default true). Requires passwordless sudo for systemctl.
+30 7 * * * /path/to/vps-tools/cron/nightly_refresh.sh >> /path/to/vps-tools/cron/logs/refresh.log 2>&1
+
 
 # ==============================================================================
 # EXAMPLE 2: SPECIFIC CONFIGURATION (ROOT-BASED EXECUTION & DATE-BASED LOGS)
