@@ -41,12 +41,13 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # 11. Disk Space Health Check (Daily at 9:00 AM UTC / 4:00 AM UTC-5)
 # Thresholds in cron/.env. Alerts via Telegram with 6h anti-spam cooldown.
-0 9 * * * /path/to/vps-tools/cron/check_disk.sh >> /path/to/vps-tools/cron/logs/disk.log 2>&1
+# Monthly log files + entry 16 (cleanup) keep disk bounded.
+0 9 * * * /path/to/vps-tools/cron/check_disk.sh >> /path/to/vps-tools/cron/logs/disk_$(date +\%Y\%m).log 2>&1
 
 # 12. RAM & Swap Health Check (Hourly at minute 5)
 # Hourly because RAM spikes in minutes (disk moves slowly, daily is enough).
 # Only notifies on breach; cooldown avoids Telegram spam on sustained alerts.
-5 * * * * /path/to/vps-tools/cron/check_ram.sh >> /path/to/vps-tools/cron/logs/ram.log 2>&1
+5 * * * * /path/to/vps-tools/cron/check_ram.sh >> /path/to/vps-tools/cron/logs/ram_$(date +\%Y\%m).log 2>&1
 
 # 13. Nightly Refresh (Daily at 7:30 AM UTC / 2:30 AM UTC-5)
 # Restarts opencode-web, open-webui, rustdesk-web + light cleanup.
@@ -57,13 +58,18 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # 14. CPU, Steal & IOWait Health Check (Hourly at minute 15)
 # Load saturation alerts via urgent bot; steal-only via routine bot.
 # cpu.log doubles as evidence for provider overselling disputes.
-15 * * * * /path/to/vps-tools/cron/check_cpu.sh >> /path/to/vps-tools/cron/logs/cpu.log 2>&1
+15 * * * * /path/to/vps-tools/cron/check_cpu.sh >> /path/to/vps-tools/cron/logs/cpu_$(date +\%Y\%m).log 2>&1
 
 # 15. Monthly Security Audit (Day 1 at 8:00 AM UTC / 3:00 AM UTC-5)
 # Layer 1: programmatic scan -> security/reports/YYYY-MM/. Layer 2: opencode
 # agent reviews + verdicts via Telegram (routine one-liner if all clear,
 # urgent if something is exposed). The agent sends the report itself.
 0 8 1 * * /path/to/vps-tools/security/scripts/monthly_audit.sh >> /path/to/vps-tools/cron/logs/security_$(date +\%Y\%m).log 2>&1
+
+# 16. Repo Log Cleanup (Daily at 6:30 AM UTC / 1:30 AM UTC-5)
+# Prunes rotated monthly logs (*.log) older than LOG_RETENTION_DAYS (30).
+# This is what keeps the monthly files above bounded on disk.
+30 6 * * * /path/to/vps-tools/cron/cleanup_logs.sh >> /path/to/vps-tools/cron/logs/cleanup_$(date +\%Y\%m).log 2>&1
 
 
 # ==============================================================================
