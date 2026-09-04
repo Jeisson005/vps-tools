@@ -140,17 +140,42 @@ class TaskRunner:
             }
 
         # ---------------------------------------------------------------------
-        # 2. FAILURE PATH -> ERROR CLASSIFICATION
+        # 1b. HITL CLEAN PAUSE (exit 2): script used sentinel_hitl and timed out
+        # or is waiting. Never heal, never alert as failure — HITL manager
+        # already updated Bot 4 with retry/reschedule buttons.
+        # ---------------------------------------------------------------------
+        if exit_code == 2:
+            logger.info(f"Task '{task_name}' paused cleanly for HITL (exit 2).")
+            return {
+                "success": True,
+                "paused": True,
+                "category": "hitl_required",
+                "exit_code": 2,
+                "duration": duration,
+                "stdout": stdout,
+            }
+
+        # ---------------------------------------------------------------------
+        # 2. FAILURE PATH -> HYBRID ERROR CLASSIFICATION (regex + optional AI)
         # ---------------------------------------------------------------------
         logger.warning(f"Task '{task_name}' failed with exit code {exit_code}.")
-        classification = ErrorClassifier.classify(exit_code, stdout, stderr)
+        task_context = {
+            "task_name": task_name,
+            "description": meta.get("description", ""),
+            "language": meta.get("language", ""),
+            "requires_browser": bool(meta.get("requires_browser", False)),
+        }
+        classification = ErrorClassifier.classify(exit_code, stdout, stderr, task_context)
         category = classification["category"]
+        source = classification.get("source", "regex")
+        confidence = classification.get("confidence", "medium")
+        src_note = f" (fuente: {source}, confianza: {confidence})" if source == "ai" else ""
 
         # Case A: Transient Network / External Service Glitch
         if category == ErrorCategory.TRANSIENT:
             Healer.record_failure(task_id, is_transient=True)
             notice = (
-                f"⚠️ *Fallo Temporal Detectado*\n\n"
+                f"⚠️ *Fallo Temporal Detectado*{src_note}\n\n"
                 f"📋 *Tarea:* `{task_name}`\n"
                 f"🌐 *Diagnóstico:* {classification['reason']}\n"
                 f"💡 *Sugerencia:* {classification['suggestion']}"
@@ -159,6 +184,39 @@ class TaskRunner:
             btn = [TelegramHub.make_hermes_button("⏰ Ajustar horario con Hermes", reschedule_prompt)]
             TelegramHub.send_routine(notice, btn)
             return {"success": False, "category": category, "transient": True}
+
+        # Case A2: HITL checkpoint detected in text (script did NOT use
+        # sentinel_hitl helper). Do NOT auto-repair code — ask human to add it.
+        if category == ErrorCategory.HITL_REQUIRED:
+            Healer.record_failure(task_id, is_transient=True)
+            urgent = (
+                f"🟢 *Verificación Humana Detectada*{src_note}\n\n"
+                f"📋 *Tarea:* `{task_name}`\n"
+                f"🔐 *Problema:* {classification['reason']}\n"
+                f"👉 *Acción:* {classification.get('fix_hint') or 'Usa sentinel_hitl.wait_for_user y sal con codigo 2 si expira.'}\n\n"
+                f"El codigo NO se auto-reparo para no romper el flujo."
+            )
+            fix_prompt = f"Hermes, la tarea '{task_name}' necesita el helper HITL (sentinel_hitl.wait_for_user con exit 2). Muestrame como agregarlo."
+            btn = [TelegramHub.make_hermes_button("🟢 Agregar HITL con Hermes", fix_prompt)]
+            TelegramHub.send_urgent(urgent, btn)
+            return {"success": False, "category": category, "hitl_required": True}
+
+        # Case A3: Host INFRA (disk / memory / docker / missing binary).
+        # Never rewrite code — send runbook hint instead.
+        if category == ErrorCategory.INFRA:
+            Healer.record_failure(task_id)
+            fix_hint = classification.get("fix_hint") or "Revisar host y dependencias."
+            urgent = (
+                f"🚨 *Problema de Infraestructura*{src_note}\n\n"
+                f"📋 *Tarea:* `{task_name}`\n"
+                f"🖥️ *Diagnóstico:* {classification['reason']}\n"
+                f"🔧 *Runbook:* {fix_hint}\n"
+                f"• `df -h` (disco) • `free -h` (RAM) • `docker ps` (daemon)\n\n"
+                f"El codigo NO se auto-reparo: es del host, no del script."
+            )
+            btn = [TelegramHub.make_hermes_button("🛠️ Diagnosticar con Hermes", f"Hermes, revisa la infraestructura del VPS para la tarea '{task_name}': disco, RAM y Docker.")]
+            TelegramHub.send_urgent(urgent, btn)
+            return {"success": False, "category": category, "infra": True}
 
         # Case B: Human Action Required (Irrecoverable without human / credentials)
         if category == ErrorCategory.HUMAN_REQUIRED:
@@ -174,7 +232,7 @@ class TaskRunner:
             TelegramHub.send_urgent(urgent, btn)
             return {"success": False, "category": category, "human_required": True}
 
-        # Case C: Auto-Repairable by OpenCode
+        # Case C: Auto-Repairable by OpenCode (with rich classification context)
         repair_result = Healer.attempt_autorepair(
             task_id=task_id,
             task_name=task_name,
@@ -182,7 +240,9 @@ class TaskRunner:
             script_path=script_path,
             stdout=stdout,
             stderr=stderr,
-            exit_code=exit_code
+            exit_code=exit_code,
+            classification=classification,
+            task_meta=meta,
         )
         return {
             "success": repair_result.get("repaired", False),

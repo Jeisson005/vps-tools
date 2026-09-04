@@ -42,13 +42,14 @@ MCP_TOOLS = [
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Descriptive human-readable name of the task (e.g. 'Sync S3 Uploads' or 'Monthly Utility Invoicing')"},
+                "description": {"type": "string", "description": "OBLIGATORIO: 1-3 frases con el objetivo de la tarea segun la peticion original del usuario: que debe hacer, para que sirve y criterio de exito. Se guarda en task.json + TASK.md y se inyecta al auto-heal/clasificador para no romper la intencion."},
                 "schedule_cron": {"type": "string", "description": "Standard 5-field cron expression (e.g. '0 3 * * *' for 3 AM daily or '*/30 * * * *' for every 30m)"},
                 "language": {"type": "string", "enum": ["python", "bash", "nodejs"], "description": "Programming language / runtime for the script"},
                 "script_code": {"type": "string", "description": "The full source code of the script to execute"},
                 "env_vars": {"type": "object", "description": "Optional dictionary of secret environment variables stored securely in the task's private .env file"},
                 "requires_browser": {"type": "boolean", "description": "Set to true if this task uses Steel Browser for web automation / 2FA checkpoints"}
             },
-            "required": ["name", "schedule_cron", "language", "script_code"]
+            "required": ["name", "schedule_cron", "language", "script_code", "description"]
         }
     },
     {
@@ -72,12 +73,13 @@ MCP_TOOLS = [
     },
     {
         "name": "sentinel_update_task",
-        "description": "Update the schedule, source code, or environment secrets of an existing task.",
+        "description": "Update the schedule, source code, description/goal, or environment secrets of an existing task.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "task_id": {"type": "string", "description": "ID of the task to update"},
                 "name": {"type": "string", "description": "Optional new name"},
+                "description": {"type": "string", "description": "Optional new goal description (1-3 frases: que hace, para que, criterio de exito)"},
                 "schedule_cron": {"type": "string", "description": "Optional new cron expression"},
                 "script_code": {"type": "string", "description": "Optional updated script code"},
                 "env_vars": {"type": "object", "description": "Optional updated environment secrets"}
@@ -122,6 +124,15 @@ def handle_mcp_tool_call(name: str, args: dict) -> dict:
         code = args.get("script_code", "")
         env_vars = args.get("env_vars", {})
         requires_browser = args.get("requires_browser", False)
+        description = (args.get("description", "") or "").strip()
+        if not description:
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": "❌ Falta 'description': escribe 1-3 frases con el objetivo segun la peticion del usuario (que hace, para que, criterio de exito)."
+                }],
+                "isError": True,
+            }
         
         task_id = task_name.lower().replace(" ", "_").replace("-", "_")
         task_id = "".join(c for c in task_id if c.isalnum() or c == "_")[:32]
@@ -144,6 +155,7 @@ def handle_mcp_tool_call(name: str, args: dict) -> dict:
         meta = {
             "id": task_id,
             "name": task_name,
+            "description": description,
             "language": lang,
             "script_file": script_file,
             "schedule_cron": cron_expr,
@@ -151,6 +163,12 @@ def handle_mcp_tool_call(name: str, args: dict) -> dict:
             "created_at": asyncio.get_event_loop().time()
         }
         TaskRunner.save_task_meta(task_id, meta)
+        # TASK.md: proposito legible para humanos y auto-heal (no secretos).
+        (task_dir / "TASK.md").write_text(
+            f"# {task_name}\n\n## Objetivo\n{description}\n\n"
+            f"- Horario: `{cron_expr}`\n- Lenguaje: `{lang}`\n- Browser: `{requires_browser}`\n",
+            encoding="utf-8",
+        )
         GitManager.init_task_repo(task_dir, f"Initial task commit: {task_name}")
         
         cmd = f"/usr/local/bin/sentinel-run --id {task_id}"
@@ -174,6 +192,7 @@ def handle_mcp_tool_call(name: str, args: dict) -> dict:
                     tasks.append({
                         "id": d.name,
                         "name": meta.get("name", d.name),
+                        "description": meta.get("description", ""),
                         "schedule": meta.get("schedule_cron", "manual"),
                         "language": meta.get("language", "unknown"),
                         "git_version": last_commit
@@ -210,6 +229,38 @@ def handle_mcp_tool_call(name: str, args: dict) -> dict:
                 "text": f"--- RECENT LOGS ---\n{content}\n\n--- GIT HISTORY ---\n{json.dumps(history, indent=2)}"
             }]
         }
+
+    elif normalized_name == "sentinel_update_task":
+        task_id = args.get("task_id")
+        task_dir = TASKS_DIR / task_id
+        meta = TaskRunner.load_task_meta(task_id) or {}
+        if not task_dir.is_dir() or not meta:
+            return {"content": [{"type": "text", "text": f"❌ Tarea '{task_id}' no encontrada."}], "isError": True}
+        if args.get("name"):
+            meta["name"] = args["name"]
+        if args.get("description"):
+            meta["description"] = args["description"].strip()
+        if args.get("schedule_cron"):
+            meta["schedule_cron"] = args["schedule_cron"]
+        if args.get("script_code"):
+            script_file = meta.get("script_file", "main.py")
+            (task_dir / script_file).write_text(args["script_code"], encoding="utf-8")
+            os.chmod(task_dir / script_file, 0o755)
+        if args.get("env_vars") is not None:
+            env_lines = [f"{k}={v}" for k, v in (args.get("env_vars") or {}).items()]
+            (task_dir / ".env").write_text("\n".join(env_lines) + "\n", encoding="utf-8")
+            os.chmod(task_dir / ".env", 0o600)
+        TaskRunner.save_task_meta(task_id, meta)
+        if meta.get("description"):
+            (task_dir / "TASK.md").write_text(
+                f"# {meta.get('name', task_id)}\n\n## Objetivo\n{meta['description']}\n\n"
+                f"- Horario: `{meta.get('schedule_cron', '')}`\n- Lenguaje: `{meta.get('language', '')}`\n"
+                f"- Browser: `{meta.get('requires_browser', False)}`\n",
+                encoding="utf-8",
+            )
+        cmd = f"/usr/local/bin/sentinel-run --id {task_id}"
+        CronManager.add_or_update_task(task_id, meta.get("name", task_id), meta.get("schedule_cron", "0 5 * * *"), cmd)
+        return {"content": [{"type": "text", "text": f"✅ Tarea '{task_id}' actualizada (incl. TASK.md)."}]}
 
     elif normalized_name == "sentinel_delete_task":
         task_id = args.get("task_id")

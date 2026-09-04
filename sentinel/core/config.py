@@ -68,5 +68,13 @@ class Settings:
     STEEL_DOMAIN: str = os.getenv("STEEL_DOMAIN", _env_vars.get("STEEL_DOMAIN", "browser.localhost"))
     OPENCODE_BIN: str = os.getenv("OPENCODE_BIN", _env_vars.get("OPENCODE_BIN", "/usr/local/bin/opencode"))
 
+    # Hybrid classifier — Tier 1 AI referee (opt-in, env-gated, stdlib only)
+    AI_ENABLED: bool = (os.getenv("SENTINEL_AI_ENABLED", _env_vars.get("SENTINEL_AI_ENABLED", "false")).strip().lower() in ("1", "true", "yes", "on"))
+    AI_BASE_URL: str = os.getenv("SENTINEL_AI_BASE_URL", _env_vars.get("SENTINEL_AI_BASE_URL", ""))
+    AI_API_KEY: str = os.getenv("SENTINEL_AI_API_KEY", _env_vars.get("SENTINEL_AI_API_KEY", ""))
+    AI_MODEL: str = os.getenv("SENTINEL_AI_MODEL", _env_vars.get("SENTINEL_AI_MODEL", ""))
+    AI_TIMEOUT: float = float(os.getenv("SENTINEL_AI_TIMEOUT", _env_vars.get("SENTINEL_AI_TIMEOUT", "15")))
+    AI_MAX_TOKENS: int = int(os.getenv("SENTINEL_AI_MAX_TOKENS", _env_vars.get("SENTINEL_AI_MAX_TOKENS", "300")))
+
 
 settings = Settings()

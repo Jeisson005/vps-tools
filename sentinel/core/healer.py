@@ -93,7 +93,9 @@ class Healer:
         script_path: Path,
         stdout: str,
         stderr: str,
-        exit_code: int
+        exit_code: int,
+        classification: Optional[Dict[str, Any]] = None,
+        task_meta: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Executes OpenCode headless auto-repair loop:
@@ -119,18 +121,44 @@ class Healer:
 
         logger.info(f"Initiating OpenCode auto-repair for task '{task_name}' (ID: {task_id})...")
         GitManager.init_task_repo(task_dir)
-        
+
+        # Rich context from hybrid classifier + task meta (backwards compatible).
+        classification = classification or {}
+        task_meta = task_meta or {}
+        cls_reason = str(classification.get("reason", "Error en la logica del script."))
+        cls_suggest = str(classification.get("suggestion", ""))
+        fix_hint = str(classification.get("fix_hint", "") or "")
+        cls_source = str(classification.get("source", "regex"))
+        cls_conf = str(classification.get("confidence", ""))
+        language = str(task_meta.get("language", "") or "")
+        requires_browser = bool(task_meta.get("requires_browser", False))
+        goal = str(task_meta.get("description", "") or "")[:800]
+        try:
+            files = ", ".join(sorted(p.name for p in task_dir.iterdir() if p.is_file())[:15])
+        except Exception:
+            files = script_path.name
+
         # Prepare context prompt for OpenCode
         error_context = f"STDOUT:\n{stdout[-1500:]}\n\nSTDERR:\n{stderr[-2000:]}"
         prompt = (
-            f"Corrige el error en el script '{script_path.name}' de la tarea '{task_name}'.\n\n"
+            f"Corrige el error en el script '{script_path.name}' de la tarea '{task_name}' (id: {task_id}).\n\n"
+            f"TAREA: lenguaje={language or 'desconocido'}, requires_browser={requires_browser}, archivos=[{files}].\n"
+            f"OBJETIVO (no romper): {goal or 'sin descripcion registrada'}.\n"
+            f"CLASIFICACION: categoria=repairable, motivo={cls_reason} Sugerencia={cls_suggest} "
+            f"Pista={fix_hint or 'ninguna'} (fuente={cls_source}, confianza={cls_conf}). Exit code={exit_code}.\n\n"
             f"CONTEXTO DEL ERROR:\n{error_context}\n\n"
             f"INSTRUCCIONES OBLIGATORIAS:\n"
-            f"1. Analiza y repara el código del script o dependencias dentro de este directorio.\n"
-            f"2. Asegúrate de que el script sea ejecutable y no falle.\n"
-            f"3. En tu respuesta final, DEBES incluir una línea que empiece por 'EXPLICACION_RESUMIDA: ' "
-            f"con una explicación corta, sencilla y NO TÉCNICA orientada al usuario sobre lo que se corrigió "
-            f"(ej. 'Se ajustó el selector de la fecha en la página de pagos para adaptarlo al nuevo diseño')."
+            f"1. Analiza y repara SOLO el codigo o dependencias dentro de este directorio. NO toques /home fuera del task dir.\n"
+            f"1b. Respeta el OBJETIVO: el fix debe preservar lo descrito arriba; si el objetivo cambio, adapta el codigo al objetivo, no al reves.\n"
+            f"2. NUNCA imprimas, registres ni commitees secretos (.env, tokens, API keys). El .env esta en .gitignore.\n"
+            f"3. Asegurate de que el script sea ejecutable (chmod +x) y maneje nulos/timeouts con reintentos.\n"
+            f"4. Si es browser (requires_browser=true): actualiza selectores Playwright con esperas explicitas; "
+            f"si hay 2FA/Captcha usa 'from sentinel_hitl import wait_for_user' y 'sys.exit(2)' al expirar, NO lo maquilles.\n"
+            f"5. Si falta un binario o lib pesada (ffmpeg, pandas, drivers), usa Docker dentro del task dir, no el host.\n"
+            f"6. Verifica con una ejecucion en seco si es posible antes de terminar.\n"
+            f"7. En tu respuesta final, DEBES incluir una linea que empiece por 'EXPLICACION_RESUMIDA: ' "
+            f"con una explicacion corta, sencilla y NO TECNICA orientada al usuario sobre lo que se corrigio "
+            f"(ej. 'Se ajusto el selector de la fecha en la pagina de pagos para adaptarlo al nuevo diseno')."
         )
         
         opencode_bin = settings.OPENCODE_BIN if Path(settings.OPENCODE_BIN).exists() else "opencode"
