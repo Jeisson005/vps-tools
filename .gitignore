@@ -12,6 +12,10 @@
 !**/logs/.gitkeep
 **/*.log
 
+# Security monthly reports (generated artifacts, may list versions)
+**/security/reports/*
+!**/security/reports/.gitkeep
+
 # RustDesk runtime data and keys
 **/rustdesk/data/
 **/rustdesk/web-config/
@@ -24,6 +28,9 @@
 **/headscale-node/state/
 **/*.sqlite*
 **/*_private.key
+
+# Filebrowser runtime data (user files, db, settings)
+**/filebrowser/data/
 
 # Backups / dumps
 **/backups/

@@ -1,0 +1,41 @@
+# ports.allow - Expected listening sockets on this VPS.
+# Format per line: <proto> <addr:port-or-range> <scope> # comment
+#   scope: public     = must be internet-reachable (UFW ALLOW Anywhere or docker-published)
+#          firewalled = bound to 0.0.0.0 but MUST stay UFW-restricted (host processes)
+#          local      = 127.0.0.1 / tailscale / docker-internal only
+#          review     = agent judges every audit (reachable + sensitive?)
+# A reachable socket NOT listed here, or a 'firewalled' one found reachable,
+# FAILS the exposure check.
+
+# --- Public by design ---
+tcp 0.0.0.0:22        public  # SSH (fail2ban protected)
+tcp 0.0.0.0:80        public  # nginx HTTP (redirect + ACME)
+tcp 0.0.0.0:443       public  # nginx HTTPS (sole public app entry)
+tcp 0.0.0.0:21115-21119 public # RustDesk hbbs/hbbr (protocol ports)
+udp 0.0.0.0:21116     public  # RustDesk hbbs discovery
+
+# --- Bound publicly but MUST stay firewalled (UFW restricted, host processes) ---
+tcp 0.0.0.0:3389      firewalled # xrdp (UFW DENY Anywhere; desktop via KasmVNC/tailscale)
+tcp 0.0.0.0:1         firewalled # xrdp stack (default-deny, no ALLOW rule)
+tcp 0.0.0.0:12501     firewalled # xrdp stack (default-deny, no ALLOW rule)
+tcp 0.0.0.0:24673     firewalled # xrdp stack (default-deny, no ALLOW rule)
+tcp 0.0.0.0:127       firewalled # xrdp stack (default-deny, no ALLOW rule)
+tcp 0.0.0.0:4096      firewalled # opencode-web (UFW: docker-nets only)
+tcp 0.0.0.0:8006      firewalled # sentinel API (UFW: docker-nets only)
+tcp 0.0.0.0:8444      firewalled # KasmVNC (UFW: docker-nets only)
+tcp 0.0.0.0:8642      firewalled # hermes API (UFW: docker-nets only)
+tcp 0.0.0.0:9119      firewalled # hermes dashboard (UFW: docker-nets only)
+udp 0.0.0.0:5353      firewalled # avahi mDNS (link-local, default-deny)
+udp 0.0.0.0:41641     firewalled # tailscale WireGuard (outbound-established, default-deny)
+udp 0.0.0.0:8444      firewalled # kasmvnc (default-deny, no ALLOW rule)
+
+# --- Needs agent judgement every audit (internet-reachable by design gap) ---
+# NOTE: DOCKER-USER chain is EMPTY, so docker-published 0.0.0.0 ports BYPASS
+# UFW. These two ARE internet-reachable: agent must verify auth on each audit.
+tcp 0.0.0.0:3159      review  # wa-jeisson WhatsApp bridge (docker-published!)
+tcp 0.0.0.0:30101     review  # excel-sanitizer (docker-published!)
+tcp 0.0.0.0:1080      review  # tailscale SOCKS5 (host, default-deny, confirm no-auth exposure)
+
+# --- Local only ---
+tcp 127.0.0.1:*       local   # steel, open-webui, headscale, mcp, filebrowser, CDP ports
+tcp 100.64.0.4:*      local   # tailscale interface
