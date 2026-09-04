@@ -143,6 +143,8 @@ class WhatsAppService(BaseMcpService):
             return await client.get_messages(args.get("chat_id", ""), limit=int(args.get("limit") or 20))
         if tool_name == "whatsapp_get_history":
             return await client.get_history(args.get("chat_id", ""), limit=int(args.get("limit") or 50))
+        if tool_name == "whatsapp_get_deleted":
+            return await client.get_deleted(args.get("chat_id", ""), limit=int(args.get("limit") or 50))
         if tool_name == "whatsapp_get_group_info":
             return await client.get_group_info(args.get("jid", ""))
         if tool_name == "whatsapp_send_message":

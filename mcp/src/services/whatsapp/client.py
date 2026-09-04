@@ -75,7 +75,13 @@ class WhatsAppClient:
 
     async def get_history(self, chat_id: str, limit: int = 50) -> list:
         # Real, restart-proof history from disk (up to WHATSAPP_HISTORY_LIMIT).
+        # Entries may carry deleted:true flags (tombstone-merged).
         data = await self._get(f"/history?chatId={chat_id}&limit={limit}")
+        return data.get("messages", [])
+
+    async def get_deleted(self, chat_id: str, limit: int = 50) -> list:
+        # Only messages the sender revoked ("delete for everyone"), marked deleted:true.
+        data = await self._get(f"/deleted?chatId={chat_id}&limit={limit}")
         return data.get("messages", [])
 
     async def get_group_info(self, jid: str) -> dict:
