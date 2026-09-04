@@ -32,10 +32,23 @@ DOCKER_BUILDER_PRUNE="${DOCKER_BUILDER_PRUNE:-true}"
 CLEAN_TMP="${CLEAN_TMP:-true}"
 JOURNAL_VACUUM_SIZE="${JOURNAL_VACUUM_SIZE:-500M}"
 
-# Telegram opcional (reutiliza sentinel/.env, igual que check_ram.sh)
-if [[ -z "${TELEGRAM_CHAT_ID:-}" && -f "${BASE_DIR}/sentinel/.env" ]]; then
+# Telegram opcional: reutiliza sentinel/.env solo para vars NO fijadas
+# explícitamente (igual que check_ram.sh / check_disk.sh).
+if [[ -f "${BASE_DIR}/sentinel/.env" ]]; then
+  _saved_vars=""
+  for _v in TELEGRAM_CHAT_ID TELEGRAM_BOT_URGENT_TOKEN TELEGRAM_BOT_ROUTINE_TOKEN TELEGRAM_BOT_TOKEN; do
+    if [[ -n "${!_v+set}" ]]; then
+      printf -v "_saved_${_v}" '%s' "${!_v}"
+      _saved_vars="${_saved_vars} ${_v}"
+    fi
+  done
   # shellcheck disable=SC1090
   source "${BASE_DIR}/sentinel/.env"
+  for _v in ${_saved_vars}; do
+    _tmp="_saved_${_v}"
+    printf -v "${_v}" '%s' "${!_tmp}"
+  done
+  unset _v _tmp _saved_vars _saved_TELEGRAM_CHAT_ID _saved_TELEGRAM_BOT_URGENT_TOKEN _saved_TELEGRAM_BOT_ROUTINE_TOKEN _saved_TELEGRAM_BOT_TOKEN
 fi
 TELEGRAM_TOKEN="${TELEGRAM_BOT_ROUTINE_TOKEN:-${TELEGRAM_BOT_TOKEN:-}}"
 NOTIFY_ON_REFRESH="${NOTIFY_ON_REFRESH:-false}"
