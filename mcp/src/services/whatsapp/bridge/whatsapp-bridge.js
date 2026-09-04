@@ -86,7 +86,37 @@ function readHistory(jid, limit) {
     const f = historyFile(jid);
     if (!fs.existsSync(f)) return [];
     const lines = fs.readFileSync(f, 'utf8').split('\n').filter(Boolean);
-    return lines.slice(Math.max(0, lines.length - limit)).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
+    return mergeDeleted(lines.slice(Math.max(0, lines.length - limit)).map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean));
+  } catch (e) { return []; }
+}
+
+function mergeDeleted(entries) {
+  // Apply tombstones (deleted:true lines) as flags on message copies; the
+  // tombstone lines themselves are excluded. Same order as input.
+  const byId = {};
+  for (const e of entries) { if (e && e.id && !e.deleted) byId[e.id] = { ...e }; }
+  for (const e of entries) { if (e && e.deleted && e.id && byId[e.id]) { byId[e.id].deleted = true; byId[e.id].deletedAt = e.ts; } }
+  return entries.filter(e => e && e.id && !e.deleted).map(e => byId[e.id]);
+}
+
+function readDeleted(jid, limit) {
+  try {
+    const live = (socketStore.deleted[jid] || []).map(e => ({ ...e }));
+    const f = historyFile(jid);
+    const tombs = [];
+    if (fs.existsSync(f)) {
+      const lines = fs.readFileSync(f, 'utf8').split('\n').filter(Boolean);
+      const byId = {};
+      const raw = lines.map(l => { try { return JSON.parse(l); } catch (e) { return null; } }).filter(Boolean);
+      for (const e of raw) { if (e && e.id && !e.deleted) { if (!byId[e.id]) byId[e.id] = { ...e }; } }
+      for (const e of raw) { if (e && e.deleted && e.id && byId[e.id]) byId[e.id] = { ...byId[e.id], deleted: true, deletedAt: e.ts }; }
+      for (const obj of Object.values(byId)) { if (obj.deleted) tombs.push(obj); }
+    }
+    const seen = new Set();
+    const out = [];
+    for (const e of [...live, ...tombs]) { if (e && e.id && !seen.has(e.id)) { seen.add(e.id); out.push(e); } }
+    out.sort((a, b) => (b.deletedAt || b.ts || 0) - (a.deletedAt || a.ts || 0));
+    return out.slice(0, limit);
   } catch (e) { return []; }
 }
 
@@ -96,7 +126,29 @@ let qr = '';
 let loggedIn = false;
 let makeSocket = null;
 let saveCreds = null;
-const socketStore = { chats: [], messages: {}, byId: {}, names: {}, lidJid: {} };
+const socketStore = { chats: [], messages: {}, byId: {}, names: {}, lidJid: {}, deleted: {} };
+
+function appendDeleted(jid, tomb) {
+  if (!socketStore.deleted[jid]) socketStore.deleted[jid] = [];
+  if (!socketStore.deleted[jid].some(x => x.id === tomb.id)) {
+    socketStore.deleted[jid].unshift(tomb);
+    if (socketStore.deleted[jid].length > MESSAGE_LIMIT) socketStore.deleted[jid].pop();
+  }
+  appendHistory(jid, tomb);
+}
+
+async function markDeleted(key) {
+  const id = key?.id;
+  const jid = key?.remoteJid;
+  if (!id || !jid) return;
+  const now = Date.now();
+  const tomb = { id, deleted: true, ts: now };
+  if (socketStore.messages[jid]) {
+    const e = socketStore.messages[jid].find(x => x.id === id);
+    if (e) { e.deleted = true; e.deletedAt = now; }
+  }
+  appendDeleted(jid, tomb);
+}
 
 function contactName(jid) {
   return socketStore.names[jid] || '';
@@ -180,6 +232,29 @@ function attach(s) {
 
   s.ev.on('messages.upsert', async ({ messages }) => {
     for (const m of messages || []) await ingestMessage(m);
+  });
+
+  // WhatsApp revokes ("delete for everyone") surface via messages.delete with
+  // message keys, plus (defensively) messages.update carrying a REVOKE marker.
+  s.ev.on('messages.delete', async (payload) => {
+    try {
+      const keys = payload && Array.isArray(payload.keys) ? payload.keys : (Array.isArray(payload) ? payload : []);
+      for (const key of keys || []) await markDeleted(key);
+    } catch (e) { /* ignore */ }
+  });
+  s.ev.on('messages.update', async (updates) => {
+    try {
+      for (const item of updates || []) {
+        const key = item?.key;
+        const u = item?.update;
+        if (!key || !u) continue;
+        const stub = u.messageStubType;
+        const status = u.status;
+        if (stub === 1 || stub === 'REVOKE' || status === 7 || status === 'deleted') {
+          await markDeleted(key);
+        }
+      }
+    } catch (e) { /* ignore */ }
   });
 }
 
@@ -388,6 +463,11 @@ const server = http.createServer(async (req, res) => {
       const chatId = url.searchParams.get('chatId');
       const limit = parseInt(url.searchParams.get('limit') || '50', 10) || 50;
       return json({ messages: readHistory(chatId, Math.min(limit, HISTORY_LIMIT)) });
+    }
+    if (url.pathname === '/deleted') {
+      const chatId = url.searchParams.get('chatId');
+      const limit = parseInt(url.searchParams.get('limit') || '50', 10) || 50;
+      return json({ messages: readDeleted(chatId, Math.min(limit, 500)) });
     }
     if (url.pathname === '/group') {
       const id = url.searchParams.get('id');
