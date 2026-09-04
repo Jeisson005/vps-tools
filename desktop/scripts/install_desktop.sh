@@ -219,6 +219,24 @@ if command -v ufw &>/dev/null && ufw status | grep -qw "active"; then
   ufw deny 3389/tcp comment "Block public XRDP" >/dev/null || true
 fi
 
+# 7. cua-driver (computer-use agent binary executed by the desktop-gui-control skill)
+echo "--> [7/7] Installing cua-driver (computer-use) for user ${DESKTOP_USER}..."
+CUA_BIN="${USER_HOME}/.local/bin/cua-driver"
+if [[ -x "${CUA_BIN}" ]]; then
+  echo "--> cua-driver already installed at ${CUA_BIN}, skipping."
+else
+  if sudo -u "${DESKTOP_USER}" env HOME="${USER_HOME}" \
+      bash -c 'curl -fsSL https://github.com/trycua/cua/releases/latest/download/cua.sh | sh' >/tmp/cua-install.log 2>&1 \
+      && [[ -x "${CUA_BIN}" ]]; then
+    echo "--> cua-driver installed at ${CUA_BIN}."
+  else
+    echo "--> WARNING: automatic cua-driver install failed (desktop itself is functional)." >&2
+    echo "    Details: /tmp/cua-install.log" >&2
+    echo "    Install manually as ${DESKTOP_USER}: curl -fsSL https://github.com/trycua/cua/releases/latest/download/cua.sh | sh" >&2
+    echo "    Until installed, the desktop-gui-control skill stays disabled in sync_skills.sh." >&2
+  fi
+fi
+
 echo ""
 echo "========================================================================"
 echo "  REMOTE DESKTOP (XFCE4 + KASMVNC + XRDP) INSTALLED SUCCESSFULLY"
