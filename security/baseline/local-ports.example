@@ -1,0 +1,5 @@
+# Extra local allow entries — EXAMPLE. Copy to baseline/local/ports.allow (gitignored).
+# Same format as baseline/ports.allow, appended to it at audit time. Use for
+# temporary needs without touching the committed baseline.
+# Example:
+# tcp 0.0.0.0:9999  firewalled  # temp contractor debug, remove after 2026-10-01

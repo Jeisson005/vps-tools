@@ -31,10 +31,16 @@ if [[ ! -f "${REPORT_DIR}/report.md" ]]; then
   exit 1
 fi
 
-# Render prompt
+# Render prompt (+ local operator notes, gitignored, take precedence)
 RENDERED="$(mktemp)"
 sed -e "s|{{PERIOD}}|${PERIOD}|g" -e "s|{{REPORT_DIR}}|${REPORT_DIR}|g" \
   "${SCRIPT_DIR}/PROMPT.md" > "${RENDERED}"
+LOCAL_NOTES="${SEC_DIR}/baseline/local/agent-notes.local.md"
+if [[ -f "${LOCAL_NOTES}" ]]; then
+  log "appending local agent notes"
+  printf '\n\n## Local operator notes (uncommitted, take precedence on conflicts)\n' >> "${RENDERED}"
+  cat "${LOCAL_NOTES}" >> "${RENDERED}"
+fi
 
 log "Running opencode (model=${MODEL}, timeout=${TIMEOUT_MIN}min, --auto, read-only prompt)..."
 if timeout "$((TIMEOUT_MIN * 60))" opencode run --auto \

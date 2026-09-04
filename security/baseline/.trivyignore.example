@@ -1,0 +1,7 @@
+# Local CVE suppressions — EXAMPLE. Copy to baseline/local/.trivyignore (gitignored).
+# Passed to trivy as --ignorefile for image + fs scans.
+# One entry per line: CVE-ID + reason. ONLY suppress wontfix/false-positives
+# confirmed by a previous audit. Suppressed CVEs still count in the report
+# header so the agent can second-guess you.
+# Example:
+# CVE-2024-12345 # wontfix upstream in alpine:3.19, component is localhost-only
