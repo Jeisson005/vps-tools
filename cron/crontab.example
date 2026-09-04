@@ -59,6 +59,12 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 # cpu.log doubles as evidence for provider overselling disputes.
 15 * * * * /path/to/vps-tools/cron/check_cpu.sh >> /path/to/vps-tools/cron/logs/cpu.log 2>&1
 
+# 15. Monthly Security Audit (Day 1 at 8:00 AM UTC / 3:00 AM UTC-5)
+# Layer 1: programmatic scan -> security/reports/YYYY-MM/. Layer 2: opencode
+# agent reviews + verdicts via Telegram (routine one-liner if all clear,
+# urgent if something is exposed). The agent sends the report itself.
+0 8 1 * * /path/to/vps-tools/security/scripts/monthly_audit.sh >> /path/to/vps-tools/cron/logs/security_$(date +\%Y\%m).log 2>&1
+
 
 # ==============================================================================
 # EXAMPLE 2: SPECIFIC CONFIGURATION (ROOT-BASED EXECUTION & DATE-BASED LOGS)
