@@ -1,7 +1,7 @@
 ---
 name: scheduled-tasks
 description: "Schedule, create, and manage self-healing background tasks and cron jobs on the VPS using Sentinel MCP/CLI. Supports Python, Bash, and Node.js with git versioning, .env secrets, Docker isolation, and Steel Browser Human-in-the-Loop."
-version: 2.6.0
+version: 2.7.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -33,6 +33,7 @@ Hermes can manage Sentinel tasks via MCP or CLI commands:
 Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincronizar periódicamente"* or *"automatizar un script diario/semanal"*:
 
 1. **Do NOT write raw crontab lines via bash pipes.** Always use Sentinel tooling.
+2. **`description` obligatoria:** 1-3 frases del pedido original (qué hace, para qué, criterio de éxito). Vive en `task.json` + `TASK.md` y guía al auto-heal.
 2. **Secrets & Environment Variables:** Pass sensitive API keys or credentials in `.env` files with `chmod 600`.
 3. **Docker & Dependencies Isolation Rule:**
    - If a script requires heavy or specialized system dependencies (e.g. `ffmpeg`, `pandas`, custom browser drivers, external database clients, or microservices), **use Docker or Docker Compose by default** inside the task directory (e.g. `docker run --rm -v $(pwd):/app ...` or a local `docker-compose.yml`).
@@ -73,4 +74,8 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
      1. **Recommended:** include them in `env_vars` when creating the task (`TELEGRAM_BOT_ROUTINE_TOKEN` — and HITL only for checkpoints — plus `TELEGRAM_CHAT_ID`); they arrive as `chmod 600` `.env` inside the task folder.
      2. If the script runs inside the Sentinel tree, you may import `sentinel/core/telegram_hub.py` (`TelegramHub.send_routine`, with automatic fallback between bots).
    - Direct send (if not using the hub): `POST https://api.telegram.org/bot<TOKEN>/sendMessage` with `chat_id` + `text` (+ `parse_mode`).
-   - **Never print or log tokens** in logs, answers, or commits — not even the routine one.
+    - **Never print or log tokens** in logs, answers, or commits — not even the routine one.
+
+## 🔍 Hybrid error classification v2.7
+
+Failures route to 5 categories: `transient` (retry), `hitl_required` (exit 2 clean pause, no repair), `human_required` (Passbolt/`.env`), `infra` (host runbook `df -h`/`free -h`/`docker ps`, no code repair), `repairable` (OpenCode auto-repair, git commit/rollback, rate-limited). AI referee reutiliza la IA del panel MCP sin keys extra (opt-out `SENTINEL_AI_ENABLED=false`) y recibe el objetivo de la tarea.
