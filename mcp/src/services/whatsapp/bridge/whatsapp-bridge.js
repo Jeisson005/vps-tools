@@ -411,7 +411,7 @@ async function sendMedia(chatId, mediaType, base64, caption, filename) {
   else if (mediaType === 'audio') { content.audio = buf; content.ptt = false; }
   else if (mediaType === 'voice') { content.audio = buf; content.ptt = true; }
   else if (mediaType === 'sticker') content.sticker = buf;
-  else { content.document = buf; content.mimetype = MIME_BY_TYPE.document; if (filename) content.fileName = filename; }
+  else { content.document = buf; const fext = String(filename || '').toLowerCase().split('.').pop(); content.mimetype = fext ? mimetypeForExt(fext) : MIME_BY_TYPE.document; if (filename) content.fileName = filename; }
   const sent = await sock.sendMessage(chatId, content);
   return { status: 'sent', chatId, mediaType, id: sent?.key?.id };
 }
