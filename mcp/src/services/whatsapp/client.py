@@ -90,8 +90,8 @@ class WhatsAppClient:
         except Exception as e:
             return {"ok": False, "message": str(e)}
 
-    async def send_message(self, chat_id: str, text: str) -> dict:
-        return await self._post("/send", {"chatId": chat_id, "text": text})
+    async def send_message(self, chat_id: str, text: str, reply_to: str = "") -> dict:
+        return await self._post("/send", {"chatId": chat_id, "text": text, "replyTo": reply_to or ""})
 
     async def get_media(self, message_id: str) -> dict:
         return await self._get(f"/media?id={message_id}")
@@ -103,10 +103,10 @@ class WhatsAppClient:
                 raise RuntimeError(f"Descarga de media falló ({r.status_code})")
             return r.content
 
-    async def send_media(self, chat_id: str, media_type: str, base64: str, caption: str = "", filename: str = "") -> dict:
+    async def send_media(self, chat_id: str, media_type: str, base64: str, caption: str = "", filename: str = "", reply_to: str = "") -> dict:
         return await self._post("/send-media", {
             "chatId": chat_id, "mediaType": media_type, "base64": base64,
-            "caption": caption, "filename": filename,
+            "caption": caption, "filename": filename, "replyTo": reply_to or "",
         })
 
     async def transcribe_media(self, message_id: str, language: str = "") -> dict:

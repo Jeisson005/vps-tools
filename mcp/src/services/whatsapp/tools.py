@@ -64,6 +64,7 @@ WHATSAPP_TOOLS = [
             "properties": {
                 "chat_id": {"type": "string", "description": "JID, e.g. '57300...@s.whatsapp.net' or '@g.us' for groups."},
                 "message": {"type": "string"},
+                "reply_to": {"type": "string", "description": "Optional message id to quote as a reply (from whatsapp_get_messages). Must still be in the live buffer."},
                 "account": _ACCOUNT,
             },
             "required": ["chat_id", "message"],
@@ -80,6 +81,7 @@ WHATSAPP_TOOLS = [
                 "base64": {"type": "string", "description": "File content encoded in base64."},
                 "caption": {"type": "string", "description": "Optional caption."},
                 "filename": {"type": "string", "description": "Optional file name (for document)."},
+                "reply_to": {"type": "string", "description": "Optional message id to quote as a reply (from whatsapp_get_messages). Must still be in the live buffer."},
                 "account": _ACCOUNT,
             },
             "required": ["chat_id", "media_type", "base64"],

@@ -148,11 +148,11 @@ class WhatsAppService(BaseMcpService):
         if tool_name == "whatsapp_get_group_info":
             return await client.get_group_info(args.get("jid", ""))
         if tool_name == "whatsapp_send_message":
-            return await client.send_message(args.get("chat_id", ""), args.get("message", ""))
+            return await client.send_message(args.get("chat_id", ""), args.get("message", ""), args.get("reply_to", "") or "")
         if tool_name == "whatsapp_send_media":
             return await client.send_media(
                 args.get("chat_id", ""), args.get("media_type", ""), args.get("base64", ""),
-                args.get("caption", ""), args.get("filename", ""),
+                args.get("caption", ""), args.get("filename", ""), args.get("reply_to", "") or "",
             )
         if tool_name == "whatsapp_get_media":
             account_id = account or self.default_account_id

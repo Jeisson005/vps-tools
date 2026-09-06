@@ -402,7 +402,14 @@ const MIME_BY_TYPE = {
   document: 'application/octet-stream',
 };
 
-async function sendMedia(chatId, mediaType, base64, caption, filename) {
+function findQuoted(replyTo) {
+  if (!replyTo) return null;
+  const q = socketStore.byId[replyTo];
+  if (!q || !q.key || !q.message) throw new Error('mensaje a citar no encontrado en buffer; usa un id reciente de /messages');
+  return q;
+}
+
+async function sendMedia(chatId, mediaType, base64, caption, filename, replyTo) {
   if (!sock) throw new Error('not connected');
   const buf = Buffer.from(base64, 'base64');
   const content = { caption: caption || '' };
@@ -412,8 +419,11 @@ async function sendMedia(chatId, mediaType, base64, caption, filename) {
   else if (mediaType === 'voice') { content.audio = buf; content.ptt = true; }
   else if (mediaType === 'sticker') content.sticker = buf;
   else { content.document = buf; const fext = String(filename || '').toLowerCase().split('.').pop(); content.mimetype = fext ? mimetypeForExt(fext) : MIME_BY_TYPE.document; if (filename) content.fileName = filename; }
-  const sent = await sock.sendMessage(chatId, content);
-  return { status: 'sent', chatId, mediaType, id: sent?.key?.id };
+  const opts = {};
+  const quoted = findQuoted(replyTo);
+  if (quoted) opts.quoted = quoted;
+  const sent = await sock.sendMessage(chatId, content, opts);
+  return { status: 'sent', chatId, mediaType, id: sent?.key?.id, replyTo: replyTo || null };
 }
 
 async function start() {
@@ -433,10 +443,13 @@ async function start() {
   attach(sock);
 }
 
-async function send(chatId, text) {
+async function send(chatId, text, replyTo) {
   if (!sock) throw new Error('not connected');
-  await sock.sendMessage(chatId, { text });
-  return { status: 'sent', chatId, text };
+  const opts = {};
+  const quoted = findQuoted(replyTo);
+  if (quoted) opts.quoted = quoted;
+  await sock.sendMessage(chatId, { text }, opts);
+  return { status: 'sent', chatId, text, replyTo: replyTo || null };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -504,14 +517,14 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/send' && req.method === 'POST') {
       let body = '';
       for await (const chunk of req) body += chunk;
-      const { chatId, text } = JSON.parse(body || '{}');
-      return json(await send(chatId, text));
+      const { chatId, text, replyTo } = JSON.parse(body || '{}');
+      return json(await send(chatId, text, replyTo));
     }
     if (url.pathname === '/send-media' && req.method === 'POST') {
       let body = '';
       for await (const chunk of req) body += chunk;
-      const { chatId, mediaType, base64, caption, filename } = JSON.parse(body || '{}');
-      return json(await sendMedia(chatId, mediaType, base64, caption, filename));
+      const { chatId, mediaType, base64, caption, filename, replyTo } = JSON.parse(body || '{}');
+      return json(await sendMedia(chatId, mediaType, base64, caption, filename, replyTo));
     }
     const serveMedia = async (id) => {
       const existing = findMediaFile(id);

@@ -1,7 +1,7 @@
 ---
 name: messaging-platforms
 description: "Enviar y leer mensajes del usuario o del agente (WhatsApp, Telegram, Gmail, Outlook); elige el canal correcto y el tono adecuado."
-version: 1.2.0
+version: 1.3.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -60,6 +60,7 @@ con mensajes que ya estaban guardados cuando se borraron).
 ### 3. Usa la tool correspondiente
 
 - Enviar/responder → `*_send_message` (WhatsApp/Telegram) o `*_mail_send` (Gmail/Outlook).
+- Para **responder citando un mensaje específico** en WhatsApp usa el parámetro `reply_to` de `whatsapp_send_message` / `whatsapp_send_media` con el `id` del mensaje (de `whatsapp_get_messages`). Solo funciona con mensajes recientes que aún estén en el búfer en vivo; si el id ya no está, el envío falla con error en vez de salir sin cita.
 - Leer/buscar → `*_get_messages`, `*_gmail_list`, `*_mail_list`, `*_list_chats`.
 - No inventes ni improvises llamadas fuera de lo que expone cada plataforma.
 
