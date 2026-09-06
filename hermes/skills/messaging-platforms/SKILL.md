@@ -1,7 +1,7 @@
 ---
 name: messaging-platforms
-description: "Enviar y leer mensajes de las cuentas del usuario (WhatsApp, Telegram, Gmail, Outlook) vía MCP; revisa antes de enviar y mantén el tono del historial."
-version: 1.1.1
+description: "Enviar y leer mensajes del usuario o del agente (WhatsApp, Telegram, Gmail, Outlook); elige el canal correcto y el tono adecuado."
+version: 1.2.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -13,9 +13,18 @@ metadata:
 
 # Messaging Platforms (WhatsApp, Telegram, Gmail, Outlook)
 
-El modelo puede tener acceso a **cuentas de comunicación del usuario** a través del MCP Gateway:
+El modelo puede comunicarse por dos vías distintas. **No las mezcles.** Elegir el canal equivocado hace que un mensaje salga desde la identidad equivocada o que el destinatario nunca lo vea.
 
-| Plataforma | Servidor MCP | Tools principales |
+## 📡 Los dos canales
+
+1. **Cuentas del usuario vía MCP Gateway.** Una o varias cuentas personales del usuario (WhatsApp, Telegram, Gmail, Outlook), expuestas como servidores MCP (`whatsapp`, `telegram`, `google`, `microsoft`).
+   - Todo lo que sale por aquí aparece **como si lo hubiera enviado el propio usuario** desde su número / correo.
+   - Puede haber **múltiples cuentas** por plataforma. Descúbrelas con `*_list_accounts()` y selecciona con el parámetro `account` (si se omite, se usa la principal).
+2. **Canal propio del agente.** La identidad del bot en cada plataforma (su propio WhatsApp/Telegram/correo de agente, según lo que tenga configurado el gateway local).
+   - Todo lo que sale por aquí aparece **como el agente**, no como el usuario.
+   - Sirve para responder en el chat donde el usuario te está hablando, o para envíos donde el destinatario espera al agente.
+
+| Plataforma | Servidor MCP (cuentas del usuario) | Tools principales |
 | :--- | :--- | :--- |
 | WhatsApp | `whatsapp` | `whatsapp_list_chats`, `whatsapp_get_messages`, `whatsapp_get_history`, `whatsapp_get_deleted`, `whatsapp_get_media`, `whatsapp_send_message`, `whatsapp_send_media`, `whatsapp_transcribe_media`, `whatsapp_get_group_info`, `whatsapp_status` |
 | Telegram | `telegram` | `telegram_list_chats`, `telegram_get_messages`, `telegram_get_media`, `telegram_send_message`, `telegram_send_media`, `telegram_transcribe_media`, `telegram_status` |
@@ -28,35 +37,43 @@ El modelo puede tener acceso a **cuentas de comunicación del usuario** a travé
 pero **nunca se borran** del historial. Usa **`whatsapp_get_deleted`** para traerlos de un chat (solo funciona
 con mensajes que ya estaban guardados cuando se borraron).
 
-Cada plataforma tiene **varias cuentas** posibles. Descubre y elige con la tool `*_list_accounts()` de cada una,
-y pasa `account` para seleccionar la bóveda/cuenta (si se omite, se usa la cuenta principal).
-
 ---
 
 ## 🧭 Reglas de uso
 
-1. **Usa el MCP correspondiente.** Si el usuario pide enviar, leer, buscar o consultar algo de una de estas cuentas,
-   **usa la tool de esa plataforma**. No inventes ni improvises llamadas a lo que no haya en la plataforma.
-   - Enviar/responder → `*_send_message` (WhatsApp/Telegram) o `*_mail_send` (Gmail/Outlook).
-   - Leer/buscar → `*_get_messages`, `*_gmail_list`, `*_mail_list`, `*_list_chats`.
-   - Solo datos de un chat/hilo → lee primero el contexto (`*_get_messages`) antes de responder.
+### 1. Elige el canal correcto (lo más importante)
 
-2. **Confirma antes de enviar (muy importante).** El envío es una acción sensible porque se hace **por cuenta del usuario**.
-   - Si el usuario pide *"envía X a Y"* → puedes proceder, pero **muestra en el chat el mensaje exacto** que vas a enviar
-     (destinatario + texto) y espera confirmación si hay ambigüedad o si el destinatario/mensaje no está claro.
-   - Si el usuario dice *"quiero revisarlo/mirarlo antes"* → **NO envíes todavía**. Pégale el contenido propuesto en el
-     chat para que lo revise, y usa **borradores** si la plataforma los expone (Gmail/Outlook: `drafts`), enviando solo
-     cuando lo confirme.
+- **Si es respuesta dentro de una conversación activa** (el usuario te habla por un chat y te pide responder ahí o hacer algo en ese mismo hilo): usa **el mismo canal por el que llegó el mensaje**, salvo que el usuario pida explícitamente otro.
+- **Si es un envío nuevo sin contexto de conversación** (p. ej. *"envíale X a Y"*, *"escríbele a Z"*): el usuario **debe especificar** si va por su cuenta o por la del agente. Si no lo dice, **pregunta antes de enviar**: *"¿Lo envío desde tu cuenta o desde la mía (agente)?"*. Nunca asumas.
+- **Pista rápida:** *"envíalo por mi WhatsApp / mi correo"* = vía MCP con su cuenta. *"respóndeme por aquí / avísale como agente"* = canal del agente.
 
-3. **Mantén el tono y el contexto.** Para un mensaje **medio o largo** (o cuando el hilo ya tiene historial), antes de
-   escribir:
-   - Lee los mensajes recientes del chat (`*_get_messages`, `*_gmail_get`, `*_mail_get`) para entender el tema, el tono
-     y el estilo que usa la persona.
-   - Redacta con un estilo **similar** (formal/informal, emojis, longitud) y respetando el contexto de la conversación.
-   - No repitas información que ya está en el hilo.
+### 2. Cómo escribir según el canal
 
-4. **Prefiere claridad y seguridad.** No reveles secretos ni expongas contenido sensible de otras cuentas sin necesidad.
-   Respeta los límites de cada API (longitud, formatos).
+- **Por cuenta del usuario (vía MCP):** estás suplantando legítimamente al usuario con su autorización.
+  - Si hay historial disponible (`*_get_messages`, `*_gmail_get`, `*_mail_get`), **revísalo primero** y adapta tono, longitud, formalidad y muletillas al estilo previo del usuario en ese hilo.
+  - **Escribe como si fueras el propio usuario.** No firmes como agente, no menciones al agente, no añadas aclaraciones tipo *"te escribe el asistente de..."*. El destinatario no debe notar que lo redactó un agente.
+  - No repitas información que ya está en el hilo.
+- **Por el canal del agente:** escribe con naturalidad como agente.
+  - **No necesitas** revisar el historial previo del usuario con ese destinatario ni imitar su estilo.
+  - **No te hagas pasar por el usuario.** Si hace falta, identifica brevemente que eres el agente.
+
+### 3. Usa la tool correspondiente
+
+- Enviar/responder → `*_send_message` (WhatsApp/Telegram) o `*_mail_send` (Gmail/Outlook).
+- Leer/buscar → `*_get_messages`, `*_gmail_list`, `*_mail_list`, `*_list_chats`.
+- No inventes ni improvises llamadas fuera de lo que expone cada plataforma.
+
+### 4. Confirma antes de enviar
+
+El envío es una acción sensible.
+
+- Si el usuario pide *"envía X a Y"* y el canal + destinatario + contenido están claros → puedes proceder, pero **muestra el mensaje exacto** (canal, cuenta, destinatario, texto/adjunto) en tu respuesta.
+- Si hay ambigüedad (canal, cuenta, destinatario o contenido) → **pregunta y espera confirmación**.
+- Si el usuario dice *"quiero revisarlo antes"* → **NO envíes todavía**. Muestra el borrador en el chat y usa **borradores** si la plataforma los expone (Gmail/Outlook: `drafts`), enviando solo cuando lo confirme.
+
+### 5. Claridad y seguridad
+
+No reveles secretos ni expongas contenido sensible de otras cuentas sin necesidad. Respeta los límites de cada API (longitud, formatos).
 
 ---
 
@@ -79,6 +96,6 @@ y pasa `account` para seleccionar la bóveda/cuenta (si se omite, se usa la cuen
 | 🔍 Listar / leer mensajes y correos | ✅ Autónomo |
 | 🗑️ Leer mensajes eliminados (`whatsapp_get_deleted`, ya guardados) | ✅ Autónomo |
 | 📅 Consultar calendario | ✅ Autónomo |
-| ✉️ Enviar mensaje / correo | ⚠️ Enseñar el contenido y confirmar; enviar por cuenta del usuario |
+| ✉️ Enviar mensaje / correo (cualquier canal) | ⚠️ Canal claro + contenido visible; si hay ambigüedad, confirmar |
 | 📝 Usar borradores (si existe) | ✅ Al revisar antes de enviar |
-| 🔐 Elegir cuenta | Pasar `account`; por defecto la principal |
+| 🔐 Elegir cuenta MCP | Pasar `account`; por defecto la principal |
