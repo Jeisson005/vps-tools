@@ -1,5 +1,6 @@
 *.htpasswd
 .htpasswd
+*.htpasswd*
 *.key
 *.secret
 !.gitkeep
