@@ -38,6 +38,9 @@ security/baseline/local/
 # Filebrowser runtime data (user files, db, settings)
 **/filebrowser/data/
 
+# Hermes runtime memories (local-only, may contain personal data, never commit)
+hermes/memories/
+
 # Backups / dumps
 **/backups/
 **/*.sql

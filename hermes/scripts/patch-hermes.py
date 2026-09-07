@@ -4,8 +4,11 @@ Patch Manager for Hermes Agent in vps-tools.
 
 Applies necessary custom patches to upstream hermes-agent:
 1. api_server.py: Routes intermediate tool execution narration to OpenAI-compatible
-   `reasoning_content` so Open WebUI cleanly nests it in the "Thinking" dropdown.
-2. browser_tool.py: Preserves custom CDP port when discovering remote Steel browser WebSocket URLs.
+    `reasoning_content` so Open WebUI cleanly nests it in the "Thinking" dropdown.
+    (OBSOLETE since upstream ~0.21, which natively projects reasoning_content —
+    the manager detects this and skips.)
+2. browser_tool_cdp.py (formerly tools/browser_tool.py): Preserves custom CDP
+    ports when discovering remote Steel browser endpoints.
 
 Validates target signatures before applying and issues explicit warnings if upstream
 code has changed.
@@ -25,6 +28,13 @@ def patch_api_server(base_dir: str) -> bool:
 
     if "_pending_iteration_text" in code and "__thought__" in code:
         print("[+] [api_server] Patch already applied.")
+        return True
+
+    # Upstream >= ~0.21 natively projects reasoning_content in message
+    # responses (refactored streaming, no _on_delta hook left). The old
+    # SSE __thought__ patch is obsolete — nothing to apply.
+    if "reasoning_content" in code:
+        print("[+] [api_server] Upstream natively supports reasoning_content; custom patch obsolete, skipping.")
         return True
 
     # Backup original
@@ -120,7 +130,14 @@ def patch_api_server(base_dir: str) -> bool:
     return True
 
 def patch_browser_tool(base_dir: str) -> bool:
-    path = os.path.join(base_dir, "tools/browser_tool.py")
+    # Upstream split CDP discovery out of tools/browser_tool.py into
+    # tools/browser_tool_cdp.py. Patch whichever file holds the
+    # webSocketDebuggerUrl discovery block.
+    candidates = [
+        os.path.join(base_dir, "tools/browser_tool_cdp.py"),
+        os.path.join(base_dir, "tools/browser_tool.py"),
+    ]
+    path = next((p for p in candidates if os.path.isfile(p)), candidates[0])
     if not os.path.isfile(path):
         print(f"[-] [browser_tool] File not found: {path}")
         return False
@@ -128,32 +145,32 @@ def patch_browser_tool(base_dir: str) -> bool:
     with open(path, "r", encoding="utf-8") as f:
         code = f.read()
 
-    if "p_raw.netloc and p_ws.netloc" in code:
-        print("[+] [browser_tool] CDP port preservation patch already applied.")
+    if "_cdp_port_preserved" in code or "p_raw.netloc and p_ws.netloc" in code:
+        print(f"[+] [browser_tool] CDP port preservation patch already applied ({os.path.basename(path)}).")
         return True
 
-    target = """    ws_url = str(payload.get("webSocketDebuggerUrl") or "").strip()
-    if ws_url:
-        logger.info("""
+    target = 'ws_url = str(payload.get("webSocketDebuggerUrl") or "").strip()'
 
-    replacement = """    ws_url = str(payload.get("webSocketDebuggerUrl") or "").strip()
+    replacement = '''ws_url = str(payload.get("webSocketDebuggerUrl") or "").strip()
     if ws_url:
-        from urllib.parse import urlparse
-        p_raw = urlparse(discovery_url)
-        p_ws = urlparse(ws_url)
-        if p_raw.netloc and p_ws.netloc and ":" in p_raw.netloc and ":" not in p_ws.netloc:
-            ws_url = ws_url.replace(f"://{p_ws.netloc}/", f"://{p_raw.netloc}/", 1)
-        logger.info("""
+        try:
+            from urllib.parse import urlparse as _cdp_up
+            _cdp_raw, _cdp_ws = _cdp_up(discovery_url), _cdp_up(ws_url)
+            if _cdp_raw.netloc and _cdp_ws.netloc and ":" in _cdp_raw.netloc and ":" not in _cdp_ws.netloc:
+                ws_url = ws_url.replace(f"://{_cdp_ws.netloc}/", f"://{_cdp_raw.netloc}/", 1)
+        except Exception:
+            pass
+    _cdp_port_preserved = True'''
 
     if target not in code:
-        print("[!] [WARNING] [browser_tool] Upstream CDP signature changed in browser_tool.py.")
+        print(f"[!] [WARNING] [browser_tool] Upstream CDP signature changed in {os.path.basename(path)}.")
         return False
 
     new_code = code.replace(target, replacement, 1)
     with open(path, "w", encoding="utf-8") as f:
         f.write(new_code)
 
-    print("[+] [browser_tool] CDP port preservation patch applied successfully.")
+    print(f"[+] [browser_tool] CDP port preservation patch applied successfully ({os.path.basename(path)}).")
     return True
 
 def main():
