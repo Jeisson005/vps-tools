@@ -19,6 +19,7 @@ Controls web browsing, page navigation, form interactions, authenticated user se
 ## 🧭 Steel Browser Architecture: Persistent & Multi-Session
 
 All web automation through Steel Browser uses **dynamic, isolated sessions with persistent profile support**:
+* **Endpoint (this VPS):** Steel API on port `3000` (`browser.jeisson.top`). All sessions are dynamic with unique UUIDs — never use a shared static port.
 * **Every task or chat creates its own session:** Each call to `steel-session create` generates a unique `sessionId` (UUID) in Steel. Multiple conversations or parallel tasks run in separate browser processes without collisions.
 * **Persistent by Default:** Sessions automatically preload saved cookies, logins, and local storage from `~/.config/steel/profiles/persistent/context.json`.
 * **State Syncing:** When a session finishes or the user finishes logging in via the live viewer, running `steel-session sync <sessionId>` or `steel-session release <sessionId>` automatically saves any new cookies and tokens back to disk for future use.

@@ -14,6 +14,8 @@ metadata:
 
 Controls web browsing, page testing, DOM inspection, scraping, and interactive live viewing inside the sandboxed **Steel Browser** container.
 
+> **Endpoint (this VPS):** Steel API on port `3000` (`browser.jeisson.top`). Sessions are dynamic with unique UUIDs — never use a shared static port. OpenCode drives them via `steel-mcp --isolated` (ephemeral) or persistent profile (`~/.config/steel/profiles/persistent`).
+
 ---
 
 ## 🧭 1. Autonomous Browser Mode Selection
