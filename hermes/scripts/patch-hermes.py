@@ -9,6 +9,12 @@ Applies necessary custom patches to upstream hermes-agent:
     the manager detects this and skips.)
 2. browser_tool_cdp.py (formerly tools/browser_tool.py): Preserves custom CDP
     ports when discovering remote Steel browser endpoints.
+3. scripts/whatsapp-bridge/bridge.js: Sets markOnlineOnConnect=true so Baileys
+    reports presence 'available' on connect. Without it Baileys marks every
+    inbound with an 'inactive' delivery receipt and WhatsApp never shows the
+    sender the 2nd grey tick (nor timely blue ticks). Requires the bot account
+    to have a push name set (else Baileys skips presence with 'no name
+    present' and receipts stay inactive).
 
 Validates target signatures before applying and issues explicit warnings if upstream
 code has changed.
@@ -173,12 +179,60 @@ def patch_browser_tool(base_dir: str) -> bool:
     print(f"[+] [browser_tool] CDP port preservation patch applied successfully ({os.path.basename(path)}).")
     return True
 
+def patch_whatsapp_presence(base_dir: str) -> bool:
+    path = os.path.join(base_dir, "scripts/whatsapp-bridge/bridge.js")
+    if not os.path.isfile(path):
+        print(f"[-] [whatsapp-presence] File not found: {path}")
+        return False
+
+    with open(path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    if "markOnlineOnConnect: true" in code:
+        print("[+] [whatsapp-presence] markOnlineOnConnect already enabled.")
+        return True
+
+    target = "markOnlineOnConnect: false,"
+
+    replacement = ("markOnlineOnConnect: true, // vps-tools: presence 'available' "
+                   "required for active delivery/read receipts (ticks)")
+
+    if target not in code:
+        print("[!] [WARNING] [whatsapp-presence] Upstream socket options changed; patch NOT applied.")
+        return False
+
+    backup_path = path + ".orig"
+    if not os.path.exists(backup_path):
+        shutil.copyfile(path, backup_path)
+
+    new_code = code.replace(target, replacement, 1)
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_code)
+
+    # Fail-closed syntax validation (JS equivalent of AST check): if the
+    # edited file no longer parses, restore the backup and report failure.
+    import hashlib
+    import subprocess
+    try:
+        subprocess.run(["node", "--check", path], check=True,
+                       capture_output=True, timeout=30)
+    except Exception as exc:
+        shutil.copyfile(backup_path, path)
+        print(f"[!] [WARNING] [whatsapp-presence] node --check failed ({exc}); restored backup, patch NOT applied.")
+        return False
+
+    digest = hashlib.sha256(new_code.encode("utf-8")).hexdigest()[:16]
+    print(f"[+] [whatsapp-presence] markOnlineOnConnect enabled for delivery/read receipts (sha256:{digest}).")
+    return True
+
 def main():
     target_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/.hermes/hermes-agent")
     print(f"[*] Checking and applying custom Hermes patches on: {target_dir}")
     ok1 = patch_api_server(target_dir)
     ok2 = patch_browser_tool(target_dir)
-    if ok1 and ok2:
+    ok3 = patch_whatsapp_presence(target_dir)
+    if ok1 and ok2 and ok3:
         print("[+] All custom patches verified and active.")
     else:
         print("[!] Note: One or more patches could not be auto-applied due to upstream changes.")
