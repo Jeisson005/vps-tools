@@ -142,8 +142,10 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 > ```
 > El timer ejecuta el `provision.sh reconcile` cada 60s: al añadir una cuenta levanta su contenedor
 > `wa-<cuenta>`, al quitarla lo elimina, y autorrepara si alguno se cae. Manual: `... provision.sh {build|list|stop-all}`.
-> Luego vincula cada teléfono escaneando el QR (visible en `whatsapp_status`). Para otro host, setea
-> `WHATSAPP_BRIDGE_HOST`.
+> El puerto del bridge se publica **solo en `127.0.0.1`** (variable `WHATSAPP_BRIDGE_HOST`,
+> por defecto `127.0.0.1`): el gateway lo consume por la red Docker (nombre `wa-<slug>`), los
+> agentes del host por `http://127.0.0.1:<puerto>`, y **nunca** queda accesible desde Internet.
+> Para otro host, setea `WHATSAPP_BRIDGE_HOST`.
 > **Telegram:** en el panel pon `api_id`/`api_hash` (de my.telegram.org) y el teléfono; luego llama
 > `telegram_request_code` → `telegram_sign_in(code)` para guardar la sesión.
 
