@@ -20,6 +20,34 @@ Modular suite to provision, secure, and optimize a brand new Linux VPS (Ubuntu/D
 | **`10_sysctl_bbr.sh`** | Enables Google BBR TCP congestion control and optimizes kernel file descriptor / connection limits. |
 | **`11_docker_install.sh`** | Installs official Docker Engine and Docker Compose v2 plugin and adds user to the `docker` group. |
 | **`12_passwordless_sudo.sh`** | Configures passwordless sudo for a specified administrative user with syntax validation via `visudo`. |
+| **`13_docker_ufw.sh`** | Hardens **Docker ↔ UFW**: installs a `DOCKER-USER` allowlist (deny-by-default for published ports) plus a `docker-ufw.service` that re-applies it after Docker on every boot. |
+
+### Docker ↔ UFW (why this matters)
+
+Docker inserts its own `iptables` rules that are evaluated **before** UFW, so any
+container published as `0.0.0.0:PORT` is reachable from the Internet even with
+UFW `default deny` (this is how an exposed MariaDB on `:3306` was dropped in the
+2026-09 incident). `13_docker_ufw.sh` closes that gap by putting an allowlist in
+the `DOCKER-USER` chain:
+
+- replies of established connections and internal traffic (Docker networks, LAN,
+  Tailscale CGNAT) are allowed;
+- only the configured **public container ports** pass (`DOCKER_PUBLIC_TCP_PORTS`,
+  `DOCKER_PUBLIC_UDP_PORTS`);
+- everything else published by Docker is dropped.
+
+Apply/refresh it anytime (names refer to **container** ports, not host-mapped):
+
+```bash
+sudo bash scripts/13_docker_ufw.sh            # install + apply
+sudo bash scripts/13_docker_ufw.sh status     # inspect DOCKER-USER
+sudo bash scripts/13_docker_ufw.sh uninstall  # revert
+# after editing /etc/default/docker-ufw:
+sudo systemctl reload docker-ufw.service
+```
+
+> Prefer keeping every service bound to `127.0.0.1` (or behind nginx) in its
+> compose file. This module is the safety net for the ones that publish `0.0.0.0`.
 
 ---
 
