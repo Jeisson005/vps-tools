@@ -51,6 +51,7 @@ run_all() {
   bash "$SCRIPTS_DIR/09_clean_motd.sh"
   bash "$SCRIPTS_DIR/10_sysctl_bbr.sh"
   bash "$SCRIPTS_DIR/11_docker_install.sh"
+  bash "$SCRIPTS_DIR/13_docker_ufw.sh"
 
   echo ""
   echo -e "${BOLD}${GREEN}==============================================================================${RESET}"
@@ -87,9 +88,10 @@ show_menu() {
   echo -e "  ${BOLD}10)${RESET} [09] Clean MOTD (Disable ads & install custom status dashboard)"
   echo -e "  ${BOLD}11)${RESET} [10] TCP BBR & Kernel network optimizations"
   echo -e "  ${BOLD}12)${RESET} [11] Install Docker Engine & Docker Compose plugin"
+  echo -e "  ${BOLD}13)${RESET} [13] Harden Docker <-> UFW (DOCKER-USER allowlist)"
   echo -e "  ${BOLD}0)${RESET}  Exit"
   echo -e "${BOLD}${CYAN}==============================================================================${RESET}"
-  read -rp "Select an option [0-12]: " opt
+  read -rp "Select an option [0-13]: " opt
   echo ""
 
   case "$opt" in
@@ -105,6 +107,7 @@ show_menu() {
     10) bash "$SCRIPTS_DIR/09_clean_motd.sh" ;;
     11) bash "$SCRIPTS_DIR/10_sysctl_bbr.sh" ;;
     12) bash "$SCRIPTS_DIR/11_docker_install.sh" ;;
+    13) bash "$SCRIPTS_DIR/13_docker_ufw.sh" ;;
     0) echo "Exiting."; exit 0 ;;
     *) echo -e "${RED}Invalid option.${RESET}" ;;
   esac
