@@ -77,7 +77,7 @@ start_one() {
     --log-opt max-size=10m --log-opt max-file=3 \
     --network "$MCP_NETWORK" \
     --network-alias "$name" \
-    -p "${port}:${port}" \
+    -p "${BRIDGE_HOST}:${port}:${port}" \
     -v "${vol}:/app/sessions" \
     "${IMAGE}" --port "$port" --session-dir /app/sessions \
     >/dev/null
