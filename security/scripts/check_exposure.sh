@@ -36,6 +36,30 @@ else
   DOCKER_BYPASS="yes"
 fi
 
+# When DOCKER-USER is restricted, the ports allowed through are the ones matched
+# by conntrack --ctorigdstport in that chain (published host ports).
+DOCKER_ALLOW_TCP=""
+DOCKER_ALLOW_UDP=""
+if [[ "${DOCKER_BYPASS}" == "restricted" ]]; then
+  DU="$(sudo -n iptables -L DOCKER-USER -n 2>/dev/null | grep ctorigdstport || true)"
+  DOCKER_ALLOW_TCP="$(echo "${DU}" | awk '$2=="tcp"{for(i=1;i<=NF;i++) if($i=="ctorigdstport") print $(i+1)}' | tr '\n' ' ')"
+  DOCKER_ALLOW_UDP="$(echo "${DU}" | awk '$2=="udp"{for(i=1;i<=NF;i++) if($i=="ctorigdstport") print $(i+1)}' | tr '\n' ' ')"
+fi
+
+docker_allow_has() { # $1=port $2=proto -> 0 if that published port is allowed
+  local port="$1" proto="$2" list p lo hi
+  [[ "${proto}" == "udp" ]] && list="${DOCKER_ALLOW_UDP}" || list="${DOCKER_ALLOW_TCP}"
+  for p in ${list}; do
+    if [[ "${p}" == *:* ]]; then
+      lo="${p%%:*}"; hi="${p##*:}"
+      (( port >= lo && port <= hi )) && return 0
+    else
+      [[ "${port}" == "${p}" ]] && return 0
+    fi
+  done
+  return 1
+}
+
 # UFW ports explicitly open to the world (ALLOW IN Anywhere, with ranges)
 UFW_WORLD=""
 while read -r line; do
@@ -73,7 +97,7 @@ scope_of() { # $1=port -> scope or "none"
 {
 echo "## Exposure audit: $(date -R) on $(hostname)"
 echo ""
-echo "Docker bypasses UFW (empty DOCKER-USER): ${DOCKER_BYPASS}"
+echo "Docker/UFW mode (DOCKER-USER): ${DOCKER_BYPASS} (yes=bypassed, restricted=allowlist)"
 echo "UFW world-open: $(echo "${UFW_WORLD}" | tr ' ' '\n' | grep -c . || echo 0) rules"
 echo ""
 echo "### Per-listener verdicts (public binds only)"
@@ -88,7 +112,13 @@ while read -r laddr proc; do
   # Reachability
   reach="FIREWALLED"
   if [[ "${proc}" == *"docker-proxy"* ]]; then
-    [[ "${DOCKER_BYPASS}" == "yes" ]] && reach="INTERNET (docker-published, bypasses UFW)"
+    if [[ "${DOCKER_BYPASS}" == "yes" ]]; then
+      reach="INTERNET (docker-published, bypasses UFW)"
+    elif docker_allow_has "${port}" tcp; then
+      reach="INTERNET (docker-published, allowed by DOCKER-USER)"
+    else
+      reach="FIREWALLED (docker-published, blocked by DOCKER-USER)"
+    fi
   elif [[ " ${UFW_WORLD} " == *" tcp/${port} "* ]]; then
     reach="INTERNET (UFW ALLOW Anywhere)"
   fi
