@@ -1,0 +1,12 @@
+{
+  "id": "saludo_1105",
+  "name": "Saludo Claude+Gemini 11:05",
+  "language": "bash",
+  "script_file": "main.sh",
+  "schedule_cron": "5 11 * * 1-5",
+  "requires_browser": false,
+  "timeout_seconds": 600,
+  "created_at": 1788522892.3034658,
+  "migrated_from": "hermes-cron greet_claude_gemini.sh",
+  "description": "Saludo media ma\u00f1ana Lun-Vie 11:05 via Claude Sonnet + Gemini 3.8 Flash: cartelera de cine concisa en espa\u00f1ol y aviso temporal por Telegram. \u00c9xito = ambos CLIs responden exit 0."
+}
