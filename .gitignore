@@ -38,6 +38,15 @@ security/baseline/local/
 # Filebrowser runtime data (user files, db, settings)
 **/filebrowser/data/
 
+# Open WebUI runtime (webui.db, uploads, vector_db, HF embedding cache ~1GB)
+**/open-webui/data/
+
+# Sentinel runtime (nested git repos per task, isolated crontab, venv, logs)
+sentinel/tasks/
+sentinel/cron/sentinel.tab
+sentinel/venv/
+sentinel/logs/
+
 # Hermes runtime memories (local-only, may contain personal data, never commit)
 hermes/memories/
 
@@ -46,11 +55,24 @@ hermes/memories/
 **/*.sql
 **/*.dump
 **/*.bak
+**/*.bak*
+**/.bak*/
+**/*~
+**/*.orig
+**/*.rej
 !**/scripts/*.sql
 
 # Python
 **/__pycache__/
 **/*.py[cod]
+**/venv/
+**/.venv/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# Node
+**/node_modules/
 
 # OS / editor
 .DS_Store

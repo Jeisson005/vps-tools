@@ -51,6 +51,9 @@ services:
     # via host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - sorteos_artic-network
 
   certbot:
     image: certbot/certbot:v5.2.2
@@ -63,3 +66,8 @@ services:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
       - ./certbot/logs:/var/log/letsencrypt
+
+networks:
+  default: {}
+  sorteos_artic-network:
+    external: true
