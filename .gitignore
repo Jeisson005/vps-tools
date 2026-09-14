@@ -41,8 +41,10 @@ security/baseline/local/
 # Open WebUI runtime (webui.db, uploads, vector_db, HF embedding cache ~1GB)
 **/open-webui/data/
 
-# Sentinel runtime (nested git repos per task, isolated crontab, venv, logs)
-sentinel/tasks/
+# Sentinel runtime (aislado: crontab, venv, logs; tasks versionadas salvo smoke test)
+sentinel/tasks/verificacion_diaria/
+sentinel/tasks/*/.env
+sentinel/tasks/*/*.log
 sentinel/cron/sentinel.tab
 sentinel/venv/
 sentinel/logs/
