@@ -1,0 +1,68 @@
+# ==============================================================================
+# FILEBROWSER NGINX REVERSE PROXY TEMPLATE
+# ==============================================================================
+# Template variables:
+#   {{FILEBROWSER_DOMAIN}} -> Full domain (e.g., files.yourdomain.com)
+#   {{CERT_DOMAIN}}        -> Certificate folder name under Let's Encrypt
+# Reference only: real vhosts live in nginx/conf.d/ (managed by
+# nginx/scripts/site_add.sh + auth_basic.sh + certbot_init.sh + enable_https.sh).
+# Upstream is the docker DNS name on the shared nginx_default network.
+# Single login layer: Filebrowser native users (no HTTP Basic Auth by design;
+# re-add auth_basic + /etc/nginx/auth/.htpasswd here if you ever want double lock).
+# ==============================================================================
+
+# HTTP to HTTPS redirect
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{FILEBROWSER_DOMAIN}};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS Main Server Block
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {{FILEBROWSER_DOMAIN}};
+
+    ssl_certificate /etc/letsencrypt/live/{{CERT_DOMAIN}}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{CERT_DOMAIN}}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # File manager needs large uploads/downloads
+    client_max_body_size 2048M;
+
+    # Security Headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+
+    location / {
+        proxy_pass http://filebrowser:80;
+        proxy_http_version 1.1;
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_buffering off;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}

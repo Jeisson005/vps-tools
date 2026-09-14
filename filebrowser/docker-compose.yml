@@ -1,0 +1,49 @@
+services:
+  filebrowser:
+    image: ${FILEBROWSER_IMAGE:-filebrowser/filebrowser:s6}
+    container_name: filebrowser
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "${FILEBROWSER_CPUS_LIMIT:-0.50}"
+          memory: "${FILEBROWSER_MEM_LIMIT:-256M}"
+        reservations:
+          cpus: "${FILEBROWSER_CPUS_RESERVE:-0.10}"
+          memory: "${FILEBROWSER_MEM_RESERVE:-64M}"
+    ports:
+      - "127.0.0.1:${FILEBROWSER_PORT:-8095}:80"
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-America/Bogota}
+    volumes:
+      # Root folder exposed as "My files". Defaults to local ./data/srv;
+      # override with FILEBROWSER_FILES_DIR to serve real host files
+      # (e.g. FILEBROWSER_FILES_DIR=/home/jeisson).
+      - ${FILEBROWSER_FILES_DIR:-./data/srv}:/srv
+      - ./data/database:/database
+      - ./data/config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "filebrowser_{{.Name}}"
+    networks:
+      - default
+      - nginx-network
+
+networks:
+  default:
+  nginx-network:
+    name: ${NGINX_NETWORK:-nginx_default}
+    external: true
