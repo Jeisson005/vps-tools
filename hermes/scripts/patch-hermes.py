@@ -15,6 +15,12 @@ Applies necessary custom patches to upstream hermes-agent:
     sender the 2nd grey tick (nor timely blue ticks). Requires the bot account
     to have a push name set (else Baileys skips presence with 'no name
     present' and receipts stay inactive).
+4. scripts/whatsapp-bridge/bridge.js (/read endpoint): Dual-sends read
+    receipts to the resolved PN JID. Since WhatsApp's LID migration, inbound
+    DMs arrive as 123@lid and the server silently ignores LID-addressed
+    read receipts (no blue ticks, no error). The patch resolves the PN via
+    the session lid-mapping file (fallback: signalRepository.lidMapping)
+    and appends a PN key alongside the original LID key.
 
 Validates target signatures before applying and issues explicit warnings if upstream
 code has changed.
@@ -232,10 +238,79 @@ def main():
     ok1 = patch_api_server(target_dir)
     ok2 = patch_browser_tool(target_dir)
     ok3 = patch_whatsapp_presence(target_dir)
-    if ok1 and ok2 and ok3:
+    ok4 = patch_whatsapp_read_lid_pn(target_dir)
+    if ok1 and ok2 and ok3 and ok4:
         print("[+] All custom patches verified and active.")
     else:
         print("[!] Note: One or more patches could not be auto-applied due to upstream changes.")
+
+
+def patch_whatsapp_read_lid_pn(base_dir: str) -> bool:
+    path = os.path.join(base_dir, "scripts/whatsapp-bridge/bridge.js")
+    if not os.path.isfile(path):
+        print(f"[-] [whatsapp-read-lid] File not found: {path}")
+        return False
+
+    with open(path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    if "lid-mapping-${_m[1]}_reverse.json" in code:
+        print("[+] [whatsapp-read-lid] LID->PN dual-send already applied.")
+        return True
+
+    target = """  try {
+    await sock.readMessages(receiptKeys);
+    return res.json({ success: true, marked: true });"""
+
+    replacement = """  try {
+    // vps-tools: WhatsApp server silently ignores LID-addressed read receipts
+    // (no blue ticks, no error). Dual-send: original LID key + resolved PN key.
+    try {
+      const _lid = String(req.body?.key?.remoteJid || '');
+      const _m = _lid.match(/^(\\d+)@lid$/);
+      if (_m) {
+        let _pn = null;
+        try {
+          const _f = path.join(SESSION_DIR, `lid-mapping-${_m[1]}_reverse.json`);
+          if (existsSync(_f)) _pn = JSON.parse(readFileSync(_f, 'utf8'));
+        } catch {}
+        if (!_pn) {
+          try { _pn = await sock.signalRepository?.lidMapping?.getPNForLID?.(_lid); } catch {}
+        }
+        if (_pn && !String(_pn).includes('@')) _pn = `${String(_pn).replace(/\\D/g, '')}@s.whatsapp.net`;
+        if (_pn && String(_pn).includes('@')) {
+          for (const _k of receiptKeys.slice()) {
+            receiptKeys.push({ id: _k.id, remoteJid: String(_pn), participant: undefined, fromMe: false });
+          }
+        }
+      }
+    } catch {}
+    await sock.readMessages(receiptKeys);
+    return res.json({ success: true, marked: true });"""
+
+    if target not in code:
+        print("[!] [WARNING] [whatsapp-read-lid] Upstream /read block changed; patch NOT applied.")
+        return False
+
+    new_code = code.replace(target, replacement, 1)
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_code)
+
+    import hashlib
+    import subprocess
+    try:
+        subprocess.run(["node", "--check", path], check=True,
+                       capture_output=True, timeout=30)
+    except Exception as exc:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(code)
+        print(f"[!] [WARNING] [whatsapp-read-lid] node --check failed ({exc}); reverted, patch NOT applied.")
+        return False
+
+    digest = hashlib.sha256(new_code.encode("utf-8")).hexdigest()[:16]
+    print(f"[+] [whatsapp-read-lid] LID->PN dual-send applied (sha256:{digest}).")
+    return True
 
 if __name__ == "__main__":
     main()
