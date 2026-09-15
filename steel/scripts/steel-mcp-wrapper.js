@@ -40,7 +40,6 @@ let steelApiKey = process.env.STEEL_API_KEY || '';
 let steelDomain = process.env.STEEL_DOMAIN || '';
 let useSsl = process.env.USE_SSL === 'false' ? false : true;
 const STEEL_PORT = process.env.STEEL_PORT || '3000';
-let steelTimeoutMs = process.env.STEEL_TIMEOUT_MS ? parseInt(process.env.STEEL_TIMEOUT_MS, 10) : 86400000; // 24h max session lifetime
 
 // Allow requiring modules installed alongside OpenCode's own MCP servers
 // (e.g. @modelcontextprotocol/sdk, which ships as a dependency of @playwright/mcp).
@@ -65,13 +64,6 @@ for (const envPath of possibleEnvPaths) {
     if (!steelDomain) {
       const matchDomain = envContent.match(/^STEEL_DOMAIN=(.*)$/m);
       if (matchDomain) steelDomain = matchDomain[1].trim().replace(/^["']|["']$/g, '');
-    }
-    if (!process.env.STEEL_TIMEOUT_MS) {
-      const matchTimeout = envContent.match(/^STEEL_TIMEOUT_MS=(.*)$/m);
-      if (matchTimeout) {
-        const parsed = parseInt(matchTimeout[1].trim(), 10);
-        if (!Number.isNaN(parsed) && parsed > 0) steelTimeoutMs = parsed;
-      }
     }
     const matchSsl = envContent.match(/^USE_SSL=(.*)$/m);
     if (matchSsl) {
@@ -182,8 +174,7 @@ async function createSteelSession() {
 
   try {
     const createPayload = {
-      useProxy: false,
-      timeout: steelTimeoutMs // max session lifetime (default 24h, from STEEL_TIMEOUT_MS)
+      useProxy: false
     };
 
     if (isPersistent) {
