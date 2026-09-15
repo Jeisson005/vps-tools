@@ -23,8 +23,9 @@ bash scripts/install.sh
 ## 2. Ports & Architecture
 
 - **Port `3000` (HTTP & WebSocket)**: Steel REST API, session management, and Live Interactive UI (`/v1/sessions`, `/ui`).
-- **Port `9223` (WebSocket)**: Chrome DevTools Protocol (CDP) router endpoint.
-- **Resource Limits**: 2.5 GB RAM limit, `shm_size: 2gb`, `cap_add: [SYS_ADMIN]`.
+- **Session CDP**: cada sesión expone su WS de CDP vía el router en el puerto `3000` (`ws://127.0.0.1:3000/?sessionId=<id>&apiKey=<key>`).
+- **Worker CDP ports `9221`-`9224`** (loopback): CDP por worker, uso interno del router.
+- **Resource Limits**: 2 GB RAM por worker, `shm_size: 1gb`, `cap_add: [SYS_ADMIN]`.
 
 ---
 
@@ -48,8 +49,8 @@ curl -X POST http://127.0.0.1:3000/v1/sessions \
 from playwright.sync_api import sync_playwright
 
 with sync_playwright() as p:
-    # Connect directly to Steel Browser CDP
-    browser = p.chromium.connect_over_cdp("ws://127.0.0.1:9223?apiKey=YOUR_STEEL_API_KEY")
+    # cdp_ws_url = ws://127.0.0.1:3000/?sessionId=<id>&apiKey=<key> (from the session response)
+    browser = p.chromium.connect_over_cdp(cdp_ws_url)
     page = browser.new_page()
     page.goto("https://example.com")
     print(page.title())
@@ -82,5 +83,6 @@ bash scripts/update.sh
 ## 5. Security & Network Isolation
 
 * **Perimeter Protection**: Public access to domains `steel.<domain>` and `browser.<domain>` is strictly guarded by HTTP Basic Authentication at the Nginx reverse proxy level.
-* **Internal Network Isolation**: Ports `3000` and `9223` are bound exclusively to loopback (`127.0.0.1`), blocking any direct public access to Docker container ports.
-* **Local Agents**: Agents running locally on the VPS (Hermes, OpenCode, CLI tools) connect directly via internal loopback (`http://127.0.0.1:3000` and `ws://127.0.0.1:9223`) with zero exposure to external traffic.
+* **Internal Network Isolation**: Ports `3000` (API) and `9221`-`9224` (worker CDP) are bound exclusively to loopback (`127.0.0.1`), blocking any direct public access to Docker container ports.
+* **Local Agents**: Agents running locally on the VPS (Hermes, OpenCode, CLI tools) connect via loopback (`http://127.0.0.1:3000`). Session CDP goes through the same port (`ws://127.0.0.1:3000/?sessionId=...`).
+* **Session lifetime**: Steel no expira sesiones; `scripts/cleanup_sessions.sh` libera las `live/idle` mayores a `STEEL_SESSION_MAX_AGE_SEC` (24h por defecto), vía cron nocturno.

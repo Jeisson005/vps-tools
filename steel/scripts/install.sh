@@ -63,12 +63,11 @@ fi
 if command -v ufw &>/dev/null && sudo ufw status 2>/dev/null | grep -qw "active"; then
   echo "--> Allowing Docker bridge subnets (172.16.0.0/12) to Steel ports..."
   sudo ufw allow from 172.16.0.0/12 to any port 3000 proto tcp comment "Docker to Steel Browser API" >/dev/null || true
-  sudo ufw allow from 172.16.0.0/12 to any port 9223 proto tcp comment "Docker to Steel CDP" >/dev/null || true
 fi
 
 echo ""
 echo "========================================================================"
 echo "  STEEL BROWSER INSTALLED SUCCESSFULLY"
 echo "  REST API & Live UI: http://127.0.0.1:3000"
-echo "  CDP WebSocket Port: 9223"
+echo "  Session CDP: per-session WS via port 3000 (see session response)"
 echo "========================================================================"

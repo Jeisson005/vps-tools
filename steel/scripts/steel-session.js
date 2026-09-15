@@ -28,7 +28,6 @@ if (fs.existsSync(opencodeModules) && !module.paths.includes(opencodeModules)) {
 let steelApiKey = process.env.STEEL_API_KEY || '';
 let steelDomain = process.env.STEEL_DOMAIN || '';
 let useSsl = process.env.USE_SSL === 'false' ? false : true;
-let steelTimeoutMs = process.env.STEEL_TIMEOUT_MS ? parseInt(process.env.STEEL_TIMEOUT_MS, 10) : 1800000;
 const STEEL_PORT = process.env.STEEL_PORT || '3000';
 
 const possibleEnvPaths = [
@@ -51,11 +50,6 @@ for (const envPath of possibleEnvPaths) {
     const matchSsl = envContent.match(/^USE_SSL=(.*)$/m);
     if (matchSsl) {
       useSsl = matchSsl[1].trim().toLowerCase() !== 'false';
-    }
-    const matchTimeout = envContent.match(/^STEEL_TIMEOUT_MS=(.*)$/m);
-    if (matchTimeout) {
-      const parsed = parseInt(matchTimeout[1].trim().replace(/^["']|["']$/g, ''), 10);
-      if (!isNaN(parsed) && parsed > 0) steelTimeoutMs = parsed;
     }
   }
 }
@@ -122,8 +116,7 @@ async function createSession(targetUrl, options = {}) {
   const isPersistent = !isIsolated;
 
   const createPayload = {
-    useProxy: false,
-    timeout: steelTimeoutMs
+    useProxy: false
   };
 
   if (isPersistent) {

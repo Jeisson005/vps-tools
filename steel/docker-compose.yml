@@ -21,7 +21,6 @@ services:
       - DOMAIN=${STEEL_DOMAIN:-browser.localhost}
       - NODE_ENV=production
       - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
-      - TIMEOUT_MS=${STEEL_TIMEOUT_MS:-3600000}
       - CONCURRENCY=8
     shm_size: 1gb
     cap_add:
@@ -55,7 +54,6 @@ services:
       - DOMAIN=${STEEL_DOMAIN:-browser.localhost}
       - NODE_ENV=production
       - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
-      - TIMEOUT_MS=${STEEL_TIMEOUT_MS:-3600000}
       - CONCURRENCY=8
     shm_size: 1gb
     cap_add:
@@ -89,7 +87,6 @@ services:
       - DOMAIN=${STEEL_DOMAIN:-browser.localhost}
       - NODE_ENV=production
       - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
-      - TIMEOUT_MS=${STEEL_TIMEOUT_MS:-3600000}
       - CONCURRENCY=8
     shm_size: 1gb
     cap_add:
@@ -113,7 +110,6 @@ services:
         max-file: "3"
     ports:
       - "127.0.0.1:3000:3000"
-      - "127.0.0.1:9223:3000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
