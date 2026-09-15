@@ -364,7 +364,7 @@ async def admin_tester_call(payload: TesterCallPayload, auth: bool = Depends(ver
 @app.get("/api/admin/gateway-info")
 async def get_gateway_info(auth: bool = Depends(verify_admin_token)):
     return {
-        "api_key": MCP_API_KEY or "***REMOVED***",
+        "api_key": MCP_API_KEY or "",
         "unified_endpoint": "/unified",
         "services": registry.list_services_status()
     }
