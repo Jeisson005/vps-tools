@@ -52,6 +52,9 @@ sentinel/logs/
 # Hermes runtime memories (local-only, may contain personal data, never commit)
 hermes/memories/
 
+# Hermes SOUL (personal identity, local-only — never commit)
+hermes/templates/SOUL.md
+
 # Backups / dumps
 **/backups/
 **/*.sql

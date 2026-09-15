@@ -53,7 +53,8 @@ echo "[+] Upstream updated: ${CURRENT_COMMIT} -> ${NEW_COMMIT}"
 echo "[*] Applying and validating custom patches..."
 python3 "${HERMES_DIR}/scripts/patch-hermes.py" "${HERMES_AGENT_PATH}"
 
-# 4. Sync SOUL.md and skills
+# 4. Sync skills (SOUL.md es identidad personal: local-only, NO versionado; solo se
+#    sincroniza si existe un template local. Se respalda en el backup nocturno cifrado.)
 if [[ -f "${HERMES_DIR}/templates/SOUL.md" ]]; then
   echo "[*] Synchronizing SOUL.md system identity..."
   cp "${HERMES_DIR}/templates/SOUL.md" "${USER_HOME}/.hermes/SOUL.md"
