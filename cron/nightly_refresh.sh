@@ -10,6 +10,8 @@
 #
 # NUNCA toca (pueden tener automatizaciones o mensajes en vuelo):
 #   - steel-browser* , sentinel , nginx , headscale
+#     (las sesiones Steel >24h SÍ se liberan vía API, sin reiniciar contenedores;
+#      desactivable con CLEAN_STEEL_SESSIONS=false en cron/.env)
 #
 # REFRESCADOS con health-check (opt-out vía cron/.env):
 #   - wa-* (MCP WhatsApp personal): 'docker restart' + GET /status
@@ -42,6 +44,7 @@ HERMES_WHATSAPP_BRIDGE_PORT="${HERMES_WHATSAPP_BRIDGE_PORT:-3005}"
 DOCKER_BUILDER_PRUNE="${DOCKER_BUILDER_PRUNE:-true}"
 CLEAN_TMP="${CLEAN_TMP:-true}"
 JOURNAL_VACUUM_SIZE="${JOURNAL_VACUUM_SIZE:-500M}"
+CLEAN_STEEL_SESSIONS="${CLEAN_STEEL_SESSIONS:-true}"
 
 # Telegram opcional: reutiliza sentinel/.env solo para vars NO fijadas
 # explícitamente (igual que check_ram.sh / check_disk.sh).
@@ -204,7 +207,19 @@ if [[ "${CLEAN_TMP}" == "true" ]]; then
   log "[+] /tmp liviano OK"
 fi
 
-# --- 8. Journal vacuum (evita que /var/log crezca sin control) ---
+# --- 8. Steel sessions: liberar >24h vía API (NO reinicia contenedores) ---
+if [[ "${CLEAN_STEEL_SESSIONS}" == "true" ]]; then
+  log "--- steel session cleanup ---"
+  _steel_cleanup="${BASE_DIR}/steel/scripts/cleanup_sessions.sh"
+  if [[ -x "${_steel_cleanup}" ]]; then
+    _out="$("${_steel_cleanup}" 2>&1)"
+    log "$(printf '%s' "${_out}" | tail -n 1)"
+  else
+    log "[!] no se encontró ${_steel_cleanup}"
+  fi
+fi
+
+# --- 9. Journal vacuum (evita que /var/log crezca sin control) ---
 if [[ -n "${JOURNAL_VACUUM_SIZE}" && "${JOURNAL_VACUUM_SIZE}" != "0" ]]; then
   log "--- journal vacuum (${JOURNAL_VACUUM_SIZE}) ---"
   sudo -n journalctl --vacuum-size="${JOURNAL_VACUUM_SIZE}" 2>&1 | tail -1 || log "[!] journal vacuum falló"
