@@ -17,6 +17,7 @@ Session model: **two separate workspaces**. KasmVNC owns `DISPLAY=:1` (web acces
 > [!IMPORTANT]
 > - **Security**: XRDP (`3389`) listens **only on `127.0.0.1` + your Tailscale IP** (auto-detected, overridable via `XRDP_EXTRA_BIND`). No socket on the public interface. KasmVNC web goes through **Nginx + HTTPS/WSS**.
 > - **xrdp ≥0.10 syntax**: the bind must be `port=tcp://127.0.0.1:3389` — bare `127.0.0.1:3389` is misparsed as a port list and exposes RDP publicly.
+> - **Session hygiene (24h)**: RDP sessions idle 24h without input are auto-disconnected; disconnected sessions are killed 24h later (`IdleTimeLimit` / `KillDisconnected` / `DisconnectedTimeLimit` in `sesman.ini`). Active sessions are never touched. Inspect with `xrdp-sesadmin -c=list`, kill manually with `loginctl terminate-session <id>`.
 > - **Agent + RDP**: the agent defaults to `DISPLAY=:1`. To make it work in your RDP session, point it at your display (see `skills/desktop-gui-control/` session discovery) — or open the KasmVNC web client to co-work on `:1`.
 
 ---
