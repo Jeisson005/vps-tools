@@ -13,7 +13,6 @@ STEEL_DOMAIN=""
 FEATURE_PASSBOLT="auto"
 FEATURE_STEEL="auto"
 FEATURE_DESKTOP="auto"
-FEATURE_WEBUI="auto"
 
 usage() {
   cat << EOF
@@ -28,7 +27,6 @@ Options:
   --with-passbolt / --without-passbolt
   --with-steel / --without-steel
   --with-desktop / --without-desktop
-  --with-webui / --without-webui
   --help                           Show this help message
 EOF
   exit 0
@@ -70,14 +68,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --without-desktop)
       FEATURE_DESKTOP="false"
-      shift
-      ;;
-    --with-webui)
-      FEATURE_WEBUI="true"
-      shift
-      ;;
-    --without-webui)
-      FEATURE_WEBUI="false"
       shift
       ;;
     --help|-h)
@@ -133,15 +123,6 @@ if [[ "$FEATURE_DESKTOP" == "auto" ]]; then
   fi
 fi
 
-# 4. Open WebUI
-if [[ "$FEATURE_WEBUI" == "auto" ]]; then
-  if [[ -d "${VPS_TOOLS_DIR}/open-webui" && -f "${VPS_TOOLS_DIR}/open-webui/docker-compose.yml" ]]; then
-    FEATURE_WEBUI="true"
-  else
-    FEATURE_WEBUI="false"
-  fi
-fi
-
 echo "========================================================================"
 echo "  SYNCHRONIZING CURATED AGENT SKILLS"
 echo "  Target:   ${TARGET}"
@@ -149,7 +130,6 @@ echo "  User:     ${TARGET_USER} (${USER_HOME})"
 echo "  Passbolt: ${FEATURE_PASSBOLT}"
 echo "  Steel:    ${FEATURE_STEEL} (domain: ${STEEL_DOMAIN})"
 echo "  Desktop:  ${FEATURE_DESKTOP}"
-echo "  WebUI:    ${FEATURE_WEBUI}"
 echo "========================================================================"
 
 # -----------------------------------------------------------------------------
@@ -165,6 +145,9 @@ sync_opencode() {
          "${opencode_skills}/desktop-gui-control" \
          "${opencode_skills}/browser-automation" \
          "${opencode_skills}/centinela-tasks" \
+         "${opencode_skills}/clickup-tasks" \
+         "${opencode_skills}/task-management" \
+         "${opencode_skills}/user-task-management" \
          "${opencode_skills}/scheduled-tasks" 2>/dev/null || true
 
   # 1. Passbolt Skill (only if Passbolt is enabled)
@@ -205,6 +188,11 @@ sync_opencode() {
   cp "${SKILLS_DIR}/messaging-platforms/SKILL.md" "${opencode_skills}/messaging-platforms/SKILL.md"
   echo "  [+] OpenCode: messaging-platforms skill enabled"
 
+  # 6. ClickUp Task Management Skill
+  mkdir -p "${opencode_skills}/user-task-management"
+  cp "${SKILLS_DIR}/user-task-management/SKILL.md" "${opencode_skills}/user-task-management/SKILL.md"
+  echo "  [+] OpenCode: user-task-management skill enabled"
+
   chown -R "${TARGET_USER}:${TARGET_USER}" "${USER_HOME}/.config/opencode" 2>/dev/null || true
 }
 
@@ -222,6 +210,9 @@ sync_hermes() {
          "${hermes_skills}/tools/webui-workspace" \
          "${hermes_skills}/automation/centinela-tasks" \
          "${hermes_skills}/automation/scheduled-tasks" \
+         "${hermes_skills}/productivity/clickup-tasks" \
+         "${hermes_skills}/productivity/task-management" \
+         "${hermes_skills}/productivity/user-task-management" \
          "${hermes_skills}/browser/steel-browser" \
          "${hermes_skills}/computer-use/visual-session-control" 2>/dev/null || true
 
@@ -253,16 +244,7 @@ sync_hermes() {
     echo "  [-] Hermes: browser-automation skill skipped (Steel Browser not detected/disabled)"
   fi
 
-  # 4. WebUI Workspace Skill
-  if [[ "$FEATURE_WEBUI" == "true" ]]; then
-    mkdir -p "${hermes_skills}/tools/webui-workspace"
-    cp "${SKILLS_DIR}/webui-workspace/SKILL.md" "${hermes_skills}/tools/webui-workspace/SKILL.md"
-    echo "  [+] Hermes: webui-workspace skill enabled"
-  else
-    echo "  [-] Hermes: webui-workspace skill skipped (Open WebUI not detected/disabled)"
-  fi
-
-  # 5. Scheduled Tasks Skill
+  # 4. Scheduled Tasks Skill
   mkdir -p "${hermes_skills}/automation/scheduled-tasks"
   cp "${SKILLS_DIR}/scheduled-tasks/hermes.md" "${hermes_skills}/automation/scheduled-tasks/SKILL.md"
   echo "  [+] Hermes: scheduled-tasks skill enabled"
@@ -271,6 +253,11 @@ sync_hermes() {
   mkdir -p "${hermes_skills}/communications/messaging-platforms"
   cp "${SKILLS_DIR}/messaging-platforms/SKILL.md" "${hermes_skills}/communications/messaging-platforms/SKILL.md"
   echo "  [+] Hermes: messaging-platforms skill enabled"
+
+  # 7. ClickUp Task Management Skill
+  mkdir -p "${hermes_skills}/productivity/user-task-management"
+  cp "${SKILLS_DIR}/user-task-management/SKILL.md" "${hermes_skills}/productivity/user-task-management/SKILL.md"
+  echo "  [+] Hermes: user-task-management skill enabled"
 
   chown -R "${TARGET_USER}:${TARGET_USER}" "${USER_HOME}/.hermes/skills" 2>/dev/null || true
 }

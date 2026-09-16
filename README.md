@@ -9,15 +9,14 @@ Contains:
 - [headscale-node/](headscale-node/) — Automated Tailscale node client connector with Exit Node routing support
 - [backup/](backup/) — Automated system-wide GPG-encrypted backups to Google Drive via Rclone & Telegram alerts
 - [opencode/](opencode/) — OpenCode AI coding assistant (CLI & Systemd Web service)
-- [hermes/](hermes/) — Hermes autonomous AI agent by Nous Research (CLI, Telegram & WhatsApp Gateway, Web Dashboard)
+- [hermes/](hermes/) — Hermes autonomous AI agent by Nous Research (CLI, Telegram & WhatsApp Gateway, Web Dashboard — the VPS chat UI)
 - [skills/](skills/) — Unified AI Agent skills catalog and synchronization manager for OpenCode and Hermes
 - [nginx/](nginx/) — Nginx reverse proxy, TLS (Certbot), and API Key/Basic Auth protection
 - [steel/](steel/) — Steel Browser Sandbox (isolated headless Chromium with Live Session Viewer & MCP)
 - [bash-mcp/](bash-mcp/) — Host-native Model Context Protocol server for VPS administration
 - [mcp/](mcp/) — Modular MCP Gateway & Admin Panel (isolated subroutes, schema sanitizer, starting with Passbolt)
-- [rustdesk/](rustdesk/) — RustDesk Self-Hosted Remote Desktop Server & Web Client (hbbs, hbbr, Web UI)
+- [rustdesk/](rustdesk/) — RustDesk Self-Hosted Server (hbbs, hbbr) + host client
 - [sentinel/](sentinel/) — Autonomous self-healing scheduled tasks & multi-bot Telegram routing
-- [open-webui/](open-webui/) — Open WebUI ChatGPT/Claude-like interface with multi-user auth and RAG
 - [postgres/](postgres/) — Postgres database + PgBouncer connection pooler
 - [redis/](redis/) — Redis in-memory cache and key-value store
 - [mongodb/](mongodb/) — MongoDB document database

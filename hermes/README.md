@@ -61,8 +61,7 @@ bash scripts/update.sh
 
 ## 5. Updates & Patch Management
 
-Hermes Agent is cloned directly from upstream Nous Research. To support seamless integration with other `vps-tools` components (Steel Browser, Open WebUI), `vps-tools` maintains targeted patches:
-* **`api_server.py`**: Historically routed intermediate execution narration to OpenAI `reasoning_content` so Open WebUI renders it in the collapsible "Thinking" dropdown. **Obsolete since upstream ~0.21**, which natively projects `reasoning_content` — `patch-hermes.py` detects this and skips.
+Hermes Agent is cloned directly from upstream Nous Research. To support seamless integration with other `vps-tools` components (Steel Browser), `vps-tools` maintains targeted patches:
 * **`browser_tool_cdp.py`** (formerly `tools/browser_tool.py`): Preserves custom CDP ports when discovering remote Steel browser endpoints.
 
 > **OpenCode Go requirement:** Hermes must send the `x-opencode-session` header (upstream fix `feat(opencode): send x-opencode-session on every OpenCode request`, after v0.21.0). Older versions fail against `https://opencode.ai/zen/go/v1` with `400 MissingSessionID`. Always update past that commit — `scripts/update.sh` does it.

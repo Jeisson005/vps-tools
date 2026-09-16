@@ -36,7 +36,7 @@ udp 0.0.0.0:8444      firewalled # kasmvnc (default-deny, no ALLOW rule)
 tcp 0.0.0.0:1080      review  # tailscale SOCKS5 (host, default-deny, confirm no-auth exposure)
 
 # --- Local only ---
-tcp 127.0.0.1:*       local   # steel, open-webui, headscale, mcp, filebrowser, CDP ports
+tcp 127.0.0.1:*       local   # steel, headscale, mcp, filebrowser, CDP ports
 tcp 127.0.0.1:3159    local   # wa-jeisson WhatsApp bridge (bound to localhost)
 tcp 127.0.0.1:30101   local   # excel-sanitizer (bound to localhost)
 tcp 100.64.0.4:*      local   # tailscale interface
