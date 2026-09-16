@@ -96,7 +96,11 @@ EOF
 chown -R "${RUSTDESK_HOST_USER}:${RUSTDESK_HOST_USER}" "${USER_HOME}/.config/rustdesk"
 chmod 600 "${USER_HOME}/.config/rustdesk/RustDesk2.toml"
 
-# --- 4. Permanent password (generate once if empty, persist to .env) ---
+# --- 4. Permanent password placeholder (real value set via daemon below) ---
+# NOTE: `rustdesk --password` only works through the RUNNING daemon and
+# requires root (`is_installed() && is_root()`), otherwise it prints
+# "Installation and administrative privileges required!" and changes nothing.
+# So the password is applied in step 6, after the service is up.
 if [[ -z "${RUSTDESK_HOST_PASSWORD}" ]]; then
   RUSTDESK_HOST_PASSWORD="$(openssl rand -hex 12)"
   echo "[+] Generated host password, storing in .env ..."
@@ -107,11 +111,6 @@ if [[ -z "${RUSTDESK_HOST_PASSWORD}" ]]; then
   fi
   chmod 600 .env
 fi
-echo "[+] Setting permanent password..."
-sudo -u "${RUSTDESK_HOST_USER}" rustdesk --password "${RUSTDESK_HOST_PASSWORD}" >/dev/null 2>&1 || {
-  echo "Error: 'rustdesk --password' failed." >&2
-  exit 1
-}
 
 # --- 5. Systemd service (own unit; upstream one stays disabled) ---
 echo "[+] Registering rustdesk-host@${RUSTDESK_HOST_USER} ..."
@@ -119,7 +118,14 @@ cp templates/rustdesk-host.service /etc/systemd/system/'rustdesk-host@.service'
 systemctl disable --now rustdesk.service 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable --now "rustdesk-host@${RUSTDESK_HOST_USER}"
-sleep 3
+sleep 5
+
+# --- 6. Permanent password via running daemon (must be root, service up) ---
+echo "[+] Setting permanent password via daemon..."
+if ! rustdesk --password "${RUSTDESK_HOST_PASSWORD}" 2>&1 | grep -q "Done!"; then
+  echo "Error: daemon rejected the password (is rustdesk-host@${RUSTDESK_HOST_USER} active?)." >&2
+  exit 1
+fi
 
 # --- 6. Report numeric ID ---
 echo "[+] Waiting for ID registration..."
