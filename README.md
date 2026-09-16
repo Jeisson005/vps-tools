@@ -10,6 +10,7 @@ Contains:
 - [backup/](backup/) — Automated system-wide GPG-encrypted backups to Google Drive via Rclone & Telegram alerts
 - [opencode/](opencode/) — OpenCode AI coding assistant (CLI & Systemd Web service)
 - [hermes/](hermes/) — Hermes autonomous AI agent by Nous Research (CLI, Telegram & WhatsApp Gateway, Web Dashboard — the VPS chat UI)
+- [hermes-webui/](hermes-webui/) — Community web chat for Hermes (sessions, tools, files) at `chat.*`
 - [skills/](skills/) — Unified AI Agent skills catalog and synchronization manager for OpenCode and Hermes
 - [nginx/](nginx/) — Nginx reverse proxy, TLS (Certbot), and API Key/Basic Auth protection
 - [steel/](steel/) — Steel Browser Sandbox (isolated headless Chromium with Live Session Viewer & MCP)
