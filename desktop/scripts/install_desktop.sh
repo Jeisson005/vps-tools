@@ -40,6 +40,12 @@ KASMVNC_RESOLUTION="${KASMVNC_RESOLUTION:-1920x1080}"
 KASMVNC_DEPTH="${KASMVNC_DEPTH:-24}"
 XRDP_PORT="${XRDP_PORT:-3389}"
 XRDP_BIND="${XRDP_BIND:-127.0.0.1}"
+# Extra trusted bind for RDP (e.g. Tailscale IP so phones/laptops on the
+# tailnet reach xrdp directly). Auto-detected if empty; empty = loopback only.
+XRDP_EXTRA_BIND="${XRDP_EXTRA_BIND:-}"
+if [[ -z "$XRDP_EXTRA_BIND" ]] && command -v tailscale &>/dev/null; then
+  XRDP_EXTRA_BIND="$(tailscale ip -4 2>/dev/null | head -n1 || true)"
+fi
 
 # Verify target user exists
 if ! id "$DESKTOP_USER" &>/dev/null; then
@@ -73,14 +79,35 @@ if getent group ssl-cert >/dev/null; then
   adduser "$DESKTOP_USER" ssl-cert || true
 fi
 
-# 3. Configure XRDP (Restricted to loopback / internal)
-echo "--> [3/6] Configuring XRDP..."
+# 3. Configure XRDP (Restricted to loopback + trusted nets, standard sesman sessions)
+# Each RDP login gets its own Xorg session (:10+) with real PAM auth.
+# (KasmVNC :1 stays the agent/web workspace; see README for the model.)
+echo "--> [3/6] Configuring XRDP (standard sessions)..."
 if [[ -f /etc/xrdp/xrdp.ini ]]; then
-  # Only change the global listening port under [Globals], never session sections like [Xorg]
-  sed -i "0,/^port=/s/^port=.*/port=${XRDP_BIND}:${XRDP_PORT}/" /etc/xrdp/xrdp.ini || true
-  # Ensure Xorg and Xvnc session handlers use dynamic sesman allocation
+  # xrdp 0.10 requires tcp:// prefix, otherwise "127.0.0.1:3389" is parsed
+  # as a LIST of ports and xrdp ends up listening publicly on 0.0.0.0:3389.
+  # Endpoints are space-separated; the public interface is NEVER included.
+  XRDP_ENDPOINTS="tcp://${XRDP_BIND}:${XRDP_PORT}"
+  if [[ -n "${XRDP_EXTRA_BIND:-}" ]]; then
+    XRDP_ENDPOINTS+=" tcp://${XRDP_EXTRA_BIND}:${XRDP_PORT}"
+  fi
+  sed -i "0,/^port=/s|^port=.*|port=${XRDP_ENDPOINTS}|" /etc/xrdp/xrdp.ini || true
+  sed -i "s|^port=127.0.0.1:${XRDP_PORT}$|port=${XRDP_ENDPOINTS}|" /etc/xrdp/xrdp.ini || true
+  echo "--> XRDP listening on: ${XRDP_ENDPOINTS}"
+  # Standard Xorg session handler with dynamic sesman allocation
   sed -i "/\[Xorg\]/,/code=20/c\[Xorg]\nname=Xorg\nlib=libxup.so\nusername=ask\npassword=ask\nport=-1\ncode=20" /etc/xrdp/xrdp.ini || true
-  sed -i "/\[Xvnc\]/,/code=10/c\[Xvnc]\nname=Xvnc\nlib=libvnc.so\nusername=ask\npassword=ask\nport=-1" /etc/xrdp/xrdp.ini || true
+  # Remove legacy single-session mirror if present (non-standard, no PAM)
+  if grep -q "^\[Xvnc-shared\]" /etc/xrdp/xrdp.ini; then
+    python3 - "/etc/xrdp/xrdp.ini" <<'PYEOF'
+import re, sys
+p = sys.argv[1]
+s = open(p).read()
+s = re.sub(r'\n\[Xvnc-shared\].*?(?=\n\[|\Z)', '\n', s, count=1, flags=re.S)
+s = re.sub(r'^autorun=Xvnc-shared\s*$', 'autorun=', s, count=1, flags=re.M)
+open(p, 'w').write(s)
+print("Legacy [Xvnc-shared] mirror removed")
+PYEOF
+  fi
 fi
 
 # Configure ~/.xsession for target user

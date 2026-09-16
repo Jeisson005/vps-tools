@@ -1,6 +1,8 @@
 # Remote Desktop (XFCE4, XRDP, KasmVNC)
 
-Lightweight, high-performance remote desktop environment for Linux VPS with **XFCE4**, **KasmVNC** (HTML5 Web Desktop via WebSockets/WebP), and **XRDP** (RDP client access via WireGuard/Tunnel).
+Lightweight, high-performance remote desktop environment for Linux VPS with **XFCE4**, **KasmVNC** (HTML5 Web Desktop via WebSockets/WebP), and **XRDP** (RDP client access via SSH tunnel / Tailscale).
+
+Session model: **two separate workspaces**. KasmVNC owns `DISPLAY=:1` (web access + AI agent workspace); each RDP login gets its own Xorg session (`:10+`) with real PAM authentication. The agent can attach to any session via `DISPLAY` (see `skills/desktop-gui-control/`).
 
 ---
 
@@ -8,12 +10,14 @@ Lightweight, high-performance remote desktop environment for Linux VPS with **XF
 
 | Access Method | Protocol / Port | Transport | Best For |
 | :--- | :--- | :--- | :--- |
-| **KasmVNC (Web Browser)** | HTTPS (443) / WSS | Nginx Reverse Proxy (`vnc.yourdomain.com`, `desktop.yourdomain.com`) | Zero client install, any browser (desktop, tablet, mobile) |
-| **XRDP (RDP Client)** | RDP (3389) | Loopback / WireGuard VPN tunnel | Microsoft Remote Desktop, Remmina, native desktop clients |
+| **KasmVNC (Web Browser)** | HTTPS (443) / WSS | Nginx Reverse Proxy (`vnc.yourdomain.com`, `desktop.yourdomain.com`) | Zero client install, any browser (desktop, tablet, mobile). Session `:1`, shared with the AI agent. |
+| **XRDP (RDP Client)** | RDP (3389, loopback + trusted nets only) | Tailscale (`100.x:3389`) or SSH tunnel (`ssh -L 3389:127.0.0.1:3389`) | Microsoft Remote Desktop / Windows App (Android), Remmina. Own session per login (`:10+`). |
+| **RustDesk App (native)** | RustDesk protocol via self-hosted `hbbs/hbbr` | RustDesk app pointed at your server (see `rustdesk/`) | Any device, native performance. Lands on session `:1` (host client). |
 
 > [!IMPORTANT]
-> - **Security**: XRDP (port 3389) is **never exposed directly to the public internet**. It is bound to `127.0.0.1` and accessible only via SSH tunnel or WireGuard VPN.
-> - **Web Access**: KasmVNC web access is securely routed through **Nginx with Let's Encrypt HTTPS/WSS** and authenticated with your credentials.
+> - **Security**: XRDP (`3389`) listens **only on `127.0.0.1` + your Tailscale IP** (auto-detected, overridable via `XRDP_EXTRA_BIND`). No socket on the public interface. KasmVNC web goes through **Nginx + HTTPS/WSS**.
+> - **xrdp ≥0.10 syntax**: the bind must be `port=tcp://127.0.0.1:3389` — bare `127.0.0.1:3389` is misparsed as a port list and exposes RDP publicly.
+> - **Agent + RDP**: the agent defaults to `DISPLAY=:1`. To make it work in your RDP session, point it at your display (see `skills/desktop-gui-control/` session discovery) — or open the KasmVNC web client to co-work on `:1`.
 
 ---
 

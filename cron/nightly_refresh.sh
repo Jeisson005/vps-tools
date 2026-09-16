@@ -6,7 +6,6 @@
 # SEGURO de reiniciar (stateless, sin automatizaciones):
 #   - opencode-web (systemd): leak conocido, VSZ crece sin control
 #   - open-webui (docker): worker python ~700MB, UI de chat sin estado crítico
-#   - rustdesk-web (docker): suele quedar 'unhealthy' + CPU alto en loop
 #
 # NUNCA toca (pueden tener automatizaciones o mensajes en vuelo):
 #   - steel-browser* , sentinel , nginx , headscale
@@ -36,7 +35,6 @@ fi
 
 REFRESH_OPENCODE="${REFRESH_OPENCODE:-true}"
 REFRESH_OPEN_WEBUI="${REFRESH_OPEN_WEBUI:-true}"
-REFRESH_RUSTDESK_WEB="${REFRESH_RUSTDESK_WEB:-true}"
 REFRESH_WHATSAPP_MCP="${REFRESH_WHATSAPP_MCP:-true}"
 REFRESH_HERMES_GATEWAY="${REFRESH_HERMES_GATEWAY:-true}"
 WHATSAPP_MCP_PORT="${WHATSAPP_MCP_PORT:-3159}"
@@ -120,19 +118,6 @@ if [[ "${REFRESH_OPEN_WEBUI}" == "true" ]]; then
   fi
 else
   log "--- open-webui omitido (REFRESH_OPEN_WEBUI=false) ---"
-fi
-
-# --- 3. rustdesk-web (docker, suele quedar unhealthy) ---
-if [[ "${REFRESH_RUSTDESK_WEB}" == "true" ]]; then
-  log "--- rustdesk-web ---"
-  if docker restart rustdesk-web >/dev/null 2>&1; then
-    log "[+] rustdesk-web reiniciado"
-  else
-    log "[!] no se pudo reiniciar rustdesk-web"
-    FAILED="${FAILED} rustdesk-web"
-  fi
-else
-  log "--- rustdesk-web omitido (REFRESH_RUSTDESK_WEB=false) ---"
 fi
 
 # --- 4. wa-jeisson (MCP WhatsApp personal, docker) ---
