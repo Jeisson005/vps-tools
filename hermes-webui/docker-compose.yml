@@ -1,0 +1,38 @@
+services:
+  hermes-webui:
+    container_name: hermes-webui
+    image: ghcr.io/nesquena/hermes-webui:latest
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - WANTED_UID=${WANTED_UID:-1001}
+      - WANTED_GID=${WANTED_GID:-1001}
+      - HERMES_WEBUI_PORT=8787
+      - HERMES_WEBUI_PASSWORD=${HERMES_WEBUI_PASSWORD:-}
+      - HERMES_WEBUI_DEFAULT_WORKSPACE=/workspace
+      # State dir must be explicit (entrypoint requirement); lives in the
+      # mounted agent home so sessions persist with the agent state.
+      - HERMES_WEBUI_STATE_DIR=/home/hermeswebui/.hermes/webui
+    volumes:
+      # Agent state (config, memory, sessions) — read live, same as CLI/gateway
+      - ${HERMES_HOME_DIR:-/home/jeisson/.hermes}:/home/hermeswebui/.hermes
+      # File browser workspace
+      - ${HERMES_WORKSPACE_DIR:-/home/jeisson/workspace}:/workspace
+    ports:
+      - "127.0.0.1:${HERMES_WEBUI_PORT:-8787}:8787"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - hermes-webui-net
+      - nginx-network
+
+networks:
+  hermes-webui-net:
+    driver: bridge
+  nginx-network:
+    name: ${NGINX_NETWORK:-nginx_default}
+    external: true
