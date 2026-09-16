@@ -110,6 +110,27 @@ PYEOF
   fi
 fi
 
+# 3b. RDP session hygiene: idle-connected sessions are disconnected after 24h
+# without input; disconnected sessions are killed 24h later. Active sessions
+# are never touched. (Takes effect on next xrdp-sesman restart.)
+if [[ -f /etc/xrdp/sesman.ini ]]; then
+  python3 - "/etc/xrdp/sesman.ini" <<'PYEOF'
+import re, sys
+p = sys.argv[1]
+s = open(p).read()
+for key, val in [('IdleTimeLimit', '86400'),
+                 ('KillDisconnected', 'true'),
+                 ('DisconnectedTimeLimit', '86400')]:
+    if re.search(rf'^{key}=', s, flags=re.M):
+        s = re.sub(rf'^{key}=.*', f'{key}={val}', s, flags=re.M)
+    else:
+        s = re.sub(r'^(\[Sessions\].*?)(MaxSessions=.*\n)',
+                   rf'\1\2{key}={val}\n', s, count=1, flags=re.S)
+open(p, 'w').write(s)
+print("sesman session hygiene configured (24h)")
+PYEOF
+fi
+
 # Configure ~/.xsession for target user
 cat << 'EOF' > "${USER_HOME}/.xsession"
 unset SESSION_MANAGER
