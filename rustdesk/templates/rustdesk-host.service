@@ -1,0 +1,18 @@
+[Unit]
+Description=RustDesk host client (controlled side, captures desktop :1) for %i
+After=network.target kasmvnc@%i.service
+Wants=kasmvnc@%i.service
+
+[Service]
+Type=simple
+User=%i
+Environment=HOME=/home/%i
+Environment=DISPLAY=:1
+Environment=XAUTHORITY=/home/%i/.Xauthority
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do DISPLAY=:1 XAUTHORITY=/home/%i/.Xauthority xdpyinfo >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1'
+ExecStart=/usr/bin/rustdesk --service
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

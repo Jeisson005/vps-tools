@@ -20,8 +20,8 @@ set -a
 source .env
 set +a
 
-mkdir -p data web-config/.config/rustdesk
-chmod 755 data web-config
+mkdir -p data
+chmod 755 data
 
 # Check & configure UFW rules if UFW is installed
 if command -v ufw >/dev/null 2>&1; then
@@ -46,28 +46,14 @@ for i in {1..15}; do
 done
 
 if [[ -n "${PUB_KEY}" ]]; then
-  echo "[+] Pre-configuring web client with server key & rendezvous server..."
-  cat << EOF > web-config/.config/rustdesk/RustDesk2.toml
-[options]
-custom-rendezvous-server = "${RUSTDESK_DOMAIN:-rustdesk.jeisson.top}"
-relay-server = "${RUSTDESK_DOMAIN:-rustdesk.jeisson.top}"
-key = "${PUB_KEY}"
-allow-audio = "Y"
-allow-clipboard = "Y"
-allow-file-transfer = "Y"
-allow-keyboard-mouse = "Y"
-EOF
-  chmod -R 777 web-config/.config
+  echo "[+] Server public key ready (used by clients & host setup)."
 fi
-
-echo "[+] Starting Web Client..."
-docker compose up -d rustdesk-web
 
 echo ""
 echo "================================================================="
-echo "✅ RustDesk Server & Web Client Running Successfully!"
+echo "✅ RustDesk Server Running Successfully!"
 echo "• ID Server:      ${RUSTDESK_DOMAIN:-rustdesk.jeisson.top}:21116"
 echo "• Relay Server:   ${RUSTDESK_DOMAIN:-rustdesk.jeisson.top}:21117"
 echo "• Server Pub Key: ${PUB_KEY}"
-echo "• Web Client URL: https://${RUSTDESK_WEB_DOMAIN:-desk.jeisson.top}"
+echo "• Host control:   bash scripts/install_host_client.sh  (captures desktop :1)"
 echo "================================================================="
