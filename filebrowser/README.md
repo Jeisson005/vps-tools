@@ -111,5 +111,5 @@ bash scripts/enable_https.sh filebrowser.your-domain.com
 * Loopback bind only: `127.0.0.1:${FILEBROWSER_PORT}:80`. All external traffic goes through Nginx + TLS.
 * Large files allowed: `client_max_body_size 2048M` in the vhost.
 * To expose extra host folders later, add read-only mounts in `docker-compose.yml`, e.g.:
-  `../open-webui/data/workspace:/srv/workspace:ro`.
+  `../shared:/srv/shared:ro`.
 * Back up `./data/` (files + db + settings) before major image upgrades.

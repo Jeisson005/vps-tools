@@ -50,7 +50,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 5 * * * * /path/to/vps-tools/cron/check_ram.sh >> /path/to/vps-tools/cron/logs/ram_$(date +\%Y\%m).log 2>&1
 
 # 13. Nightly Refresh (Daily at 7:30 AM UTC / 2:30 AM UTC-5)
-# Restarts opencode-web, open-webui + light cleanup.
+# Restarts opencode-web + light cleanup.
 # NEVER touches steel-*, wa-*, hermes-*, sentinel, nginx, headscale.
 # Flags in cron/.env (all default true). Requires passwordless sudo for systemctl.
 30 7 * * * /path/to/vps-tools/cron/nightly_refresh.sh >> /path/to/vps-tools/cron/logs/refresh.log 2>&1

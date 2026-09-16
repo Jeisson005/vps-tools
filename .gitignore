@@ -38,9 +38,6 @@ security/baseline/local/
 # Filebrowser runtime data (user files, db, settings)
 **/filebrowser/data/
 
-# Open WebUI runtime (webui.db, uploads, vector_db, HF embedding cache ~1GB)
-**/open-webui/data/
-
 # Sentinel runtime (aislado: crontab, venv, logs; tasks versionadas salvo smoke test)
 sentinel/tasks/verificacion_diaria/
 sentinel/tasks/*/.env

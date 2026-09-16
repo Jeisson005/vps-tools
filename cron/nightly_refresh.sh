@@ -5,7 +5,6 @@
 #
 # SEGURO de reiniciar (stateless, sin automatizaciones):
 #   - opencode-web (systemd): leak conocido, VSZ crece sin control
-#   - open-webui (docker): worker python ~700MB, UI de chat sin estado crítico
 #
 # NUNCA toca (pueden tener automatizaciones o mensajes en vuelo):
 #   - steel-browser* , sentinel , nginx , headscale
@@ -34,7 +33,6 @@ if [[ -f "${SCRIPT_DIR}/.env" ]]; then
 fi
 
 REFRESH_OPENCODE="${REFRESH_OPENCODE:-true}"
-REFRESH_OPEN_WEBUI="${REFRESH_OPEN_WEBUI:-true}"
 REFRESH_WHATSAPP_MCP="${REFRESH_WHATSAPP_MCP:-true}"
 REFRESH_HERMES_GATEWAY="${REFRESH_HERMES_GATEWAY:-true}"
 WHATSAPP_MCP_PORT="${WHATSAPP_MCP_PORT:-3159}"
@@ -99,25 +97,6 @@ if [[ "${REFRESH_OPENCODE}" == "true" ]]; then
   fi
 else
   log "--- opencode-web omitido (REFRESH_OPENCODE=false) ---"
-fi
-
-# --- 2. open-webui (docker) ---
-if [[ "${REFRESH_OPEN_WEBUI}" == "true" ]]; then
-  log "--- open-webui ---"
-  if docker restart open-webui >/dev/null 2>&1; then
-    sleep 15
-    if [[ "$(docker inspect open-webui --format '{{.State.Status}}' 2>/dev/null)" == "running" ]]; then
-      log "[+] open-webui reiniciado y running"
-    else
-      log "[!] open-webui NO quedó running tras reinicio"
-      FAILED="${FAILED} open-webui"
-    fi
-  else
-    log "[!] no se pudo reiniciar open-webui (¿contenedor inexistente?)"
-    FAILED="${FAILED} open-webui(restart)"
-  fi
-else
-  log "--- open-webui omitido (REFRESH_OPEN_WEBUI=false) ---"
 fi
 
 # --- 4. wa-jeisson (MCP WhatsApp personal, docker) ---
