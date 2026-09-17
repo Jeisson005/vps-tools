@@ -67,8 +67,21 @@ echo "-- cuando el CLI detecte la sesión, este contenedor termina solo."
 echo
 
 set +e
-notebooklm -p "${PROFILE}" login --browser-timeout "${TIMEOUT}"
-rc=$?
+if [ "${LOGIN_DRIVER:-0}" = "1" ]; then
+  # Scripted path: the driver fills email+password itself and hands over to the human
+  # only for Google's 2FA prompt. Preferred inside a container, where nobody can type
+  # into the invisible browser window. Needs LOGIN_EMAIL and a password file
+  # (LOGIN_PW_FILE, written by the caller so the secret never rides in argv):
+  #   docker exec -i <container> sh -c 'cat > /tmp/login_pw && chmod 600 /tmp/login_pw' < <(get-password)
+  echo "-- modo driver: correo y contraseña se llenan solos; solo falta tu aprobación del 2FA"
+  LOGIN_EMAIL="${LOGIN_EMAIL:?falta LOGIN_EMAIL}" \
+  LOGIN_PW_FILE="${LOGIN_PW_FILE:-/tmp/login_pw}" \
+  python3 /app/scripts/notebooklm-login-driver.py
+  rc=$?
+else
+  notebooklm -p "${PROFILE}" login --browser-timeout "${TIMEOUT}"
+  rc=$?
+fi
 set -e
 
 if [ $rc -ne 0 ]; then
