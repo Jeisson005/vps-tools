@@ -79,6 +79,26 @@ bash scripts/site_add.sh --domain mcp.example.com --path /mcp --upstream host.do
 
 ---
 
+### 5. OAuth callbacks bajo Basic Auth (importante)
+
+Si proteges **todo** el vhost con Basic Auth (`location /`), cualquier *callback* de OAuth deja
+de funcionar: Google/Microsoft no pueden enviar credenciales en su redirect, así que reciben un
+401 y el flujo termina en un error de red en el navegador. Hay que eximir la ruta exacta:
+
+```nginx
+location = /api/admin/services/google/oauth/callback {
+  auth_basic off;
+  proxy_pass http://mcp-gateway:8000;
+  # …mismos proxy_set_header que el resto del vhost…
+}
+```
+
+Es seguro: el `code` es de un solo uso, va atado al `client_id` + `redirect_uri` del cliente y la
+aplicación valida el `state` antes de canjearlo. Caso real: `mcp.jeisson.top` (panel MCP) — sin
+este bloque, «Conectar con Google» del panel fallaba siempre con 401.
+
+---
+
 ## Directory Structure
 - `conf.d/`: Server blocks (`*.http.conf`, `*.https.conf`) and location snippets (`*.locations.*.conf`).
 - `auth/`: Hashed `.htpasswd` files and generated `.key` files (mounted into `/etc/nginx/auth:ro`).
