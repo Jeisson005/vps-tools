@@ -19,6 +19,8 @@ services:
     environment:
       - MCP_PORT=8000
       - MCP_DATA_DIR=/app/data
+      - MCP_DOMAIN=${MCP_DOMAIN:-mcp.jeisson.top}
+      - MCP_PUBLIC_BASE_URL=${MCP_PUBLIC_BASE_URL:-}
       - MCP_ADMIN_PASSWORD=${MCP_ADMIN_PASSWORD:-admin}
       - MCP_API_KEY=${MCP_API_KEY:-}
       - MCP_MASTER_KEY=${MCP_MASTER_KEY:-}
