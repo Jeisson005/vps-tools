@@ -33,6 +33,12 @@ if [ -f "${PROFILE_DIR}/storage_state.json" ]; then
   echo "-- ya existe una sesión guardada; se reemplazará si el login termina bien"
 fi
 
+# The CLI resolves the profile from NOTEBOOKLM_HOME (same as the gateway client), so the
+# session AND the browser profile land in the shared data volume instead of the throwaway
+# container's HOME. Without this the login would be written to /root/.notebooklm and lost
+# when the container exits.
+export NOTEBOOKLM_HOME="${DATA_DIR}/notebooklm"
+
 mkdir -p "${PROFILE_DIR}" "${SHOT_DIR}"
 chmod 700 "${PROFILE_DIR}" 2>/dev/null || true
 
