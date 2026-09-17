@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Stop Hermes WebUI
+# Stop Hermes WebUI Sofia (host-native systemd service)
 # ==============================================================================
 
 set -euo pipefail
 
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "${BASE_DIR}"
-
-echo "[+] Stopping Hermes WebUI..."
-docker compose down
-echo "[+] Hermes WebUI stopped."
+echo "[+] Stopping hermes-webui ..."
+sudo systemctl stop hermes-webui.service
+echo "[+] Hermes WebUI Sofia stopped."

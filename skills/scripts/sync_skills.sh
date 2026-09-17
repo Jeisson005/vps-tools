@@ -203,8 +203,9 @@ sync_hermes() {
   echo "--> Syncing skills for Hermes Agent (~/.hermes/skills)..."
   local hermes_skills="${USER_HOME}/.hermes/skills"
 
-  # Clean deprecated/residual paths
-  rm -rf "${hermes_skills}/security/passbolt" \
+  # Clean deprecated/residual paths (incl. legacy top-level passbolt superseded by security/passbolt)
+  rm -rf "${hermes_skills}/passbolt" \
+         "${hermes_skills}/security/passbolt" \
          "${hermes_skills}/computer-use/desktop-gui-control" \
          "${hermes_skills}/browser/browser-automation" \
          "${hermes_skills}/tools/webui-workspace" \
