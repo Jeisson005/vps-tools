@@ -24,6 +24,8 @@ for personal projects and prototypes.
 """
 
 import asyncio
+import contextlib
+import fcntl
 import hashlib
 import json
 import logging
@@ -32,6 +34,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("mcp.notebooklm")
@@ -40,6 +43,14 @@ BASE_SUBDIR = "notebooklm"
 DEFAULT_TIMEOUT = 120
 ASK_TIMEOUT = 180
 ADD_TIMEOUT = 180
+#: How long a CLI invocation waits for the per-profile lock before failing.
+#: notebooklm-py rotates ``__Secure-1PSIDTS`` on every request and writes the
+#: jar back: two concurrent processes presenting the same rotating cookie make
+#: Google treat the replay as a stolen session and sign the account out
+#: ("Authentication expired or invalid" minutes after a burst of parallel
+#: calls). Serialize every CLI run per profile instead of running them in
+#: parallel — the lock is held for the whole subprocess lifetime.
+LOCK_TIMEOUT = 600
 
 
 def _slugify(value: str) -> str:
@@ -67,11 +78,13 @@ class NotebookLMClient:
         email: str = "",
         language: str = "",
         profile: str = "default",
+        instance_id: str = "",
     ):
         self.auth_json = (auth_json or "").strip()
         self.email = (email or "").strip()
         self.language = (language or "").strip()
         self.profile = _slugify(profile) or "default"
+        self.instance_id = (instance_id or "").strip()
         self._binary_warned = False
 
     # -- lifecycle ------------------------------------------------------
@@ -93,8 +106,9 @@ class NotebookLMClient:
         file from the panel's stored ``auth_json`` on every call reverts that rotation,
         and Google then rejects the stale cookie with
         "Authentication expired or invalid" (orphaning a login that was fine).
-        So we only write when the panel's ``auth_json`` itself changed since our last
-        write — tracked with a sidecar hash — or when no profile file exists yet.
+        So the panel copy is only a **bootstrap**: it is written when the profile is
+        empty, or when the panel's ``auth_json`` changed while the CLI had not touched
+        the file since our last write here (sidecar hash + mtime guard).
         """
         base = _base_dir()
         prof_dir = os.path.join(base, "profiles", self.profile)
@@ -121,13 +135,30 @@ class NotebookLMClient:
         if os.path.exists(target) and incoming == last_written:
             # Auth unchanged in the panel: leave the CLI-refreshed jar alone.
             return prof_dir
-        try:
-            with open(target, "rb") as f:
-                if f.read() == new_bytes:
-                    self._write_stamp(stamp, incoming)
+        # The CLI owns this file. It rotates __Secure-1PSIDTS on every call and persists
+        # the jar, and `scripts/notebooklm-login.sh` writes it from inside the container
+        # on a fresh login. Rewriting it from the panel's snapshot would revert a live
+        # session (Google answers "Authentication expired or invalid") — so only
+        # materialise the panel copy when the file carries nothing newer than our last
+        # write here.
+        if os.path.exists(target):
+            try:
+                stamp_mtime = os.path.getmtime(stamp)
+            except OSError:
+                stamp_mtime = 0.0
+            try:
+                if os.path.getmtime(target) > stamp_mtime:
+                    logger.info(
+                        "notebooklm profile='%s': el jar del CLI es más reciente que el panel; no se reescribe",
+                        self.profile,
+                    )
                     return prof_dir
-        except FileNotFoundError:
-            pass
+                with open(target, "rb") as f:
+                    if f.read() == new_bytes:
+                        self._write_stamp(stamp, incoming)
+                        return prof_dir
+            except OSError:
+                return prof_dir
         with open(target, "wb") as f:
             f.write(new_bytes)
         try:
@@ -150,6 +181,88 @@ class NotebookLMClient:
     def _find_binary() -> Optional[str]:
         return shutil.which("notebooklm")
 
+    # -- session ownership ----------------------------------------------
+    @contextlib.contextmanager
+    def _profile_lock(self, prof_dir: str):
+        """One CLI process at a time per profile.
+
+        notebooklm-py rotates ``__Secure-1PSIDTS`` on every request and writes the
+        jar back. Two concurrent processes present the same rotating cookie, so
+        Google sees a replay, treats it as a stolen session and signs the account
+        out minutes later ("Authentication expired or invalid"). The lock covers
+        the whole subprocess lifetime, not just the spawn.
+        """
+        lock_path = os.path.join(prof_dir, "cli.lock")
+        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        deadline = time.time() + LOCK_TIMEOUT
+        waited = False
+        try:
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if not waited:
+                        logger.info("notebooklm profile='%s' esperando el lock del CLI", self.profile)
+                        waited = True
+                    if time.time() > deadline:
+                        raise RuntimeError(
+                            f"NotebookLM ocupado: otra llamada lleva más de {LOCK_TIMEOUT}s con este perfil. "
+                            "Reintenta cuando termine."
+                        )
+                    time.sleep(0.4)
+            yield
+        finally:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
+
+    def _sync_panel_snapshot(self, prof_dir: str) -> None:
+        """Mirror the CLI-rotated jar back into the panel secret (best effort).
+
+        The stored ``auth_json`` is a bootstrap snapshot: if it ever drifts from the
+        live jar, ``ensure_profile`` would rewrite the profile with the stale copy
+        and Google would reject the reverted rotation. Keeping them equal means a
+        rewrite can never revert a valid session.
+        """
+        if not self.instance_id:
+            return
+        try:
+            target = os.path.join(prof_dir, "storage_state.json")
+            with open(target, "r", encoding="utf-8") as f:
+                live = f.read().strip()
+            if not live or live == self.auth_json:
+                return
+            payload = json.loads(live)
+            if not payload.get("cookies"):
+                return
+            stamp = os.path.join(prof_dir, ".panel_auth_hash")
+            incoming = hashlib.sha256(
+                json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            ).hexdigest()
+            from ...core.registry import registry  # local import: avoid cycles
+
+            inst = next(
+                (i for i in registry.get_instances("notebooklm")
+                 if i.get("instance_id") == self.instance_id),
+                None,
+            )
+            if not inst:
+                return
+            secrets = dict(inst.get("secrets", {}))
+            secrets["auth_json"] = live
+            registry.save_instance(
+                "notebooklm", self.instance_id, inst.get("enabled", True),
+                inst.get("config", {}), secrets,
+                is_default=inst.get("is_default", False), name=inst.get("name", ""),
+            )
+            self._write_stamp(stamp, incoming)
+            self.auth_json = live
+            logger.info("notebooklm profile='%s' auth_json del panel sincronizado con el jar rotado", self.profile)
+        except Exception as e:  # never break a working call over bookkeeping
+            logger.debug("notebooklm snapshot sync omitido: %s", e)
+
     def _env(self) -> Dict[str, str]:
         env = dict(os.environ)
         env["NOTEBOOKLM_HOME"] = _base_dir()
@@ -171,20 +284,22 @@ class NotebookLMClient:
                 "El binario 'notebooklm' no está instalado en el contenedor. "
                 "Reconstruye la imagen (requirements incluye notebooklm-py) con: bash scripts/update.sh"
             )
-        self.ensure_profile()
+        prof_dir = self.ensure_profile()
         cmd = [binary, "--quiet", "-p", self.profile] + args
         logger.info(f"notebooklm profile='{self.profile}' cmd={' '.join(args[:3])}...")
-        try:
-            proc = subprocess.run(
-                cmd,
-                input=stdin_text,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                env=self._env(),
-            )
-        except subprocess.TimeoutExpired:
-            raise RuntimeError(f"NotebookLM tardó más de {timeout}s (timeouts de Google o rate-limit). Reintenta.")
+        with self._profile_lock(prof_dir):
+            try:
+                proc = subprocess.run(
+                    cmd,
+                    input=stdin_text,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    env=self._env(),
+                )
+            except subprocess.TimeoutExpired:
+                raise RuntimeError(f"NotebookLM tardó más de {timeout}s (timeouts de Google o rate-limit). Reintenta.")
+        self._sync_panel_snapshot(prof_dir)
         stdout = (proc.stdout or "").strip()
         stderr = (proc.stderr or "").strip()
         if proc.returncode != 0:

@@ -16,6 +16,11 @@ services:
     volumes:
       - ./data:/app/data
       - ./src:/app/src
+      - ./scripts:/app/scripts:ro
+    # Apply the vps-tools patch set to notebooklm-py on every start (idempotent,
+    # signature-validated). This survives image rebuilds and `pip install -U`
+    # inside the container, which would otherwise drop the patches silently.
+    command: ["sh", "-c", "python3 /app/scripts/patch-notebooklm.py; exec python3 -m uvicorn src.main:app --host 0.0.0.0 --port 8000"]
     environment:
       - MCP_PORT=8000
       - MCP_DATA_DIR=/app/data
@@ -28,13 +33,41 @@ services:
       - PASSBOLT_PASSPHRASE=${PASSBOLT_PASSPHRASE:-}
       - PASSBOLT_USER_EMAIL=${PASSBOLT_USER_EMAIL:-}
       - PASSBOLT_FINGERPRINT=${PASSBOLT_FINGERPRINT:-}
+    mem_limit: 4g
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 4g
     networks:
       - default
       - nginx_network
+
+  # On-demand login helper. It is behind the compose profile "login", so a plain
+  # `docker compose up -d` NEVER starts it (and never builds it): no browser runs in
+  # the background, and the gateway's idle RAM (~15 MB) is unaffected. Run it only
+  # when a (re)login is needed:
+  #
+  #   docker compose --profile login build notebooklm-login
+  #   docker compose --profile login run --rm notebooklm-login
+  #
+  # Chromium + Xvfb live in this throwaway image/container; the session file is
+  # written by the CLI itself into the shared data volume (no export/copy).
+  notebooklm-login:
+    build:
+      context: .
+      dockerfile: Dockerfile.login
+    image: mcp-gateway-login:latest
+    profiles: ["login"]
+    depends_on:
+      - mcp-gateway
+    volumes:
+      - ./data:/app/data
+      - ./scripts:/app/scripts:ro
+    environment:
+      - MCP_DATA_DIR=/app/data
+      - NOTEBOOKLM_PROFILE=${NOTEBOOKLM_PROFILE:-personal}
+      - NOTEBOOKLM_LOGIN_TIMEOUT=${NOTEBOOKLM_LOGIN_TIMEOUT:-600}
+    shm_size: "1gb"
 
 networks:
   default:
