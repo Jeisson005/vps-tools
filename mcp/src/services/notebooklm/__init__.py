@@ -34,6 +34,7 @@ class NotebookLMService(BaseMcpService):
             email=cfg.get("email", "") or cfg.get("user_email", ""),
             language=cfg.get("language", "") or cfg.get("hl", ""),
             profile=_profile_for(instance_id),
+            instance_id=instance_id,
         )
 
     def reload_accounts(self, instances: List[Dict[str, Any]]):

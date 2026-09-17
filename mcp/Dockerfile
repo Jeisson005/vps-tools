@@ -26,6 +26,12 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy source code and default assets
 COPY src/ /app/src/
 
+# vps-tools patch set for notebooklm-py (see scripts/patch-notebooklm.py).
+# Runs at build time so the image is correct on its own; the compose service
+# also re-runs it at every start (idempotent) to survive pip upgrades.
+COPY scripts/patch-notebooklm.py /app/scripts/patch-notebooklm.py
+RUN python3 /app/scripts/patch-notebooklm.py
+
 # Ensure data directory exists
 RUN mkdir -p /app/data
 
