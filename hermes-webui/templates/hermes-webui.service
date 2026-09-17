@@ -1,0 +1,39 @@
+[Unit]
+Description=Hermes WebUI Sofia - Community Web Chat for Hermes Agent (host-native)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User={{WEBUI_USER}}
+Group={{WEBUI_USER}}
+WorkingDirectory={{WEBUI_SRC}}
+# Server secrets/ports/names (PASSWORD, PORT, BOT_NAME). Managed by install.sh, never committed.
+EnvironmentFile={{WEBUI_ENV}}
+# Run under the Hermes agent venv: server deps (pyyaml, cryptography) plus all
+# agent deps resolve here, with zero duplication or version drift.
+ExecStart={{AGENT_VENV}}/bin/python server.py
+# Fixed host wiring (these win over EnvironmentFile):
+Environment="HOME={{WEBUI_HOME}}"
+Environment="USER={{WEBUI_USER}}"
+Environment="HERMES_HOME={{WEBUI_HOME}}/.hermes"
+Environment="HERMES_WEBUI_HOST=0.0.0.0"
+# NOTE: 0.0.0.0 is gated by UFW (default deny; 8787 allowed only from the
+# docker subnet 172.16.0.0/12 + Tailscale) — same posture as the Hermes
+# dashboard (:9119) and OpenCode web (:4096). The WebUI password still applies.
+Environment="HERMES_WEBUI_STATE_DIR={{WEBUI_HOME}}/.hermes/webui"
+Environment="HERMES_WEBUI_DEFAULT_WORKSPACE={{WEBUI_HOME}}/workspace"
+# Desktop + tooling parity with the host gateway (Telegram/WhatsApp/CLI):
+Environment="DISPLAY=:1"
+Environment="XAUTHORITY={{WEBUI_HOME}}/.Xauthority"
+Environment="TZ=America/Bogota"
+Environment="PATH={{AGENT_VENV}}/bin:{{WEBUI_HOME}}/.local/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Restart=always
+RestartSec=3
+KillMode=mixed
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
