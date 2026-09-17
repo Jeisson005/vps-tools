@@ -125,6 +125,8 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 | Service | Subroute | Tools | Credenciales por cuenta |
 | :--- | :--- | :--- | :--- |
 | `passbolt` | `/passbolt` | `passbolt_*` | clave GPG + passphrase |
+| `clickup` | `/clickup` | `clickup_*` | Personal API Token (`pk_...`) |
+| `notebooklm` | `/notebooklm` | `notebooklm_*` | Auth JSON (`storage_state.json` de notebooklm-py) |
 | `google` | `/google` | `google_gmail_*`, `google_calendar_*` | OAuth2 (client id/secret + refresh_token) |
 | `microsoft` | `/microsoft` | `outlook_mail_*`, `outlook_calendar_*` | OAuth2 (tenant/client id/secret + refresh_token) |
 | `telegram` | `/telegram` | `telegram_send_message`, `telegram_list_chats`, ... | MTProto (api_id/api_hash) + login por código |
@@ -150,6 +152,67 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 > `telegram_request_code` → `telegram_sign_in(code)` para guardar la sesión.
 
 > Los agentes los consumen todos desde el endpoint **unificado** `/unified` (o `/mcp`).
+
+## 4b-bis. ClickUp MCP Tools Catalog
+
+| Tool Name | Description | Arguments |
+| :--- | :--- | :--- |
+| `clickup_list_accounts` | Lists configured ClickUp accounts (id, default flag) WITHOUT exposing tokens. | none |
+| `clickup_list_workspaces` | Lists accessible Workspaces (teams): id, name, members. Start here to get `team_id`. | `account` (optional) |
+| `clickup_list_spaces` | Lists Spaces in a Workspace. | `team_id`, `archived` (opt), `account` (opt) |
+| `clickup_get_space` / `clickup_create_space` / `clickup_update_space` / `clickup_delete_space` | Full Space CRUD. | ids + `name`, `color`, `private`, `archived` |
+| `clickup_list_folders` / `clickup_create_folder` | Folders in a Space (each with its lists). | `space_id`, `name` |
+| `clickup_list_lists` | Lists in a Folder (`folder_id`) or folderless Lists in a Space (`space_id`). | `folder_id` or `space_id` |
+| `clickup_get_list` / `clickup_create_list` / `clickup_update_list` / `clickup_delete_list` | Full List CRUD. | ids + `name`, `content`, `status` |
+| `clickup_list_tasks` | Tasks in a List (id, name, status, assignees, due, url; 100/page). | `list_id`, `page`, `include_closed`, `subtasks` |
+| `clickup_get_task` | Full task detail (description, custom fields, subtasks, url). | `task_id` |
+| `clickup_create_task` | Create a task (`name` required; `status`, `priority` 1-4, `assignees`, `tags`, `due_date` ms, `parent` for subtasks). | `list_id`, `name`, ... |
+| `clickup_update_task` | Update a task (`name`, `description`, `status`, `priority`, `due_date`, `assignees: {add, rem}`, `archived`). | `task_id`, ... |
+| `clickup_delete_task` | Delete a task. | `task_id` |
+| `clickup_list_task_comments` / `clickup_create_task_comment` | Task comments. | `task_id`, `comment_text` |
+
+> **Multi-cuenta:** igual que los demás servicios, todas aceptan `account` opcional (alias de la cuenta;
+> `clickup_list_accounts` para descubrirlas). Cada cuenta guarda su Personal API Token (`pk_...`,
+> ClickUp → Settings → Apps → API Token) cifrado en SQLite. Aislamiento por subruta: `/clickup`.
+
+### 4b-ter. NotebookLM (Gemini Notebook) MCP Tools Catalog
+
+Basado en el proyecto recomendado **`teng-lin/notebooklm-py`** (API no oficial, la única
+opción con MCP real para NotebookLM de consumidor; Google solo ofrece API oficial para
+NotebookLM Enterprise en GCP). El gateway lo envuelve vía CLI (`notebooklm --json`) con un
+perfil aislado por cuenta (`<data>/notebooklm/profiles/<cuenta>/`), **sin navegador en el
+contenedor**: la autenticación se pega una vez en el panel.
+
+| Tool Name | Description | Arguments |
+| :--- | :--- | :--- |
+| `notebooklm_list_accounts` | Cuentas configuradas (sin exponer cookies). | none |
+| `notebooklm_auth_check` | Valida la sesión Google con test live. | `account` (opt) |
+| `notebooklm_list_notebooks` | Lista notebooks (id, título). | `limit`, `account` |
+| `notebooklm_create_notebook` / `notebooklm_rename_notebook` / `notebooklm_delete_notebook` | CRUD de notebooks. | `title` / `notebook_id`+`new_title` / `notebook_id` |
+| `notebooklm_describe_notebook` | Metadata + lista de fuentes. | `notebook_id` |
+| `notebooklm_list_sources` / `notebooklm_get_source` | Fuentes (id, título, tipo, estado). | `notebook_id`, `limit`/`status`, `source_id` |
+| `notebooklm_fulltext_source` | Texto indexado (truncado con `truncated`+`char_count`). | `notebook_id`, `source_id`, `max_chars` |
+| `notebooklm_search_sources` | Búsqueda por pasajes con ranking. | `notebook_id`, `query`, `limit` |
+| `notebooklm_add_source_url` / `notebooklm_add_source_text` | Añadir URL/YouTube o texto pegado. | `notebook_id`, `url`/`text`+`title` |
+| `notebooklm_ask` | Pregunta grounded con citas (RAG sin gastar tokens del agente). Soporta `source_ids` y `conversation_id`. | `notebook_id`, `question`, ... |
+| `notebooklm_history` / `notebooklm_suggest_prompts` | Historial Q&A y prompts sugeridos. | `notebook_id`, `limit` |
+
+> **Configuración 100% desde el panel** (Servicio → NotebookLM → Añadir cuenta):
+> `email` + `auth_json` (contenido de `storage_state.json`).
+> Cómo obtenerlo **una vez en tu PC** (no en el VPS):
+> ```
+> uv tool install "notebooklm-py[browser]"
+> notebooklm login   # o: notebooklm login --browser-cookies chrome
+> cat ~/.notebooklm/profiles/default/storage_state.json   # ← pega esto en auth_json
+> ```
+> Luego en el panel pulsa **Probar Conexión Live** (`notebooklm_auth_check`).
+> Aislamiento por subruta: `/notebooklm`. Agregado al endpoint **unificado** `/unified`.
+>
+> **Límites honestos v1:** solo lectura + Q&A + añadir URL/texto. Sin generación Studio
+> (audio/video/slides/quiz — son trabajos largos con binarios; usa el CLI local para eso),
+> sin subida de ficheros PDF (pégalo como texto o súbelo en la web y pregunta vía `ask`).
+> API no oficial: Google puede cambiar endpoints sin aviso; si `ask` falla con AUTH,
+> re-genera el `auth_json` (las cookies caducan en 2-4 semanas).
 
 ### 4c. WhatsApp MCP — capacidades
 

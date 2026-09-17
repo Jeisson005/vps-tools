@@ -5,11 +5,11 @@ from .tools import GOOGLE_TOOLS
 
 
 class GoogleService(BaseMcpService):
-    """Google workspace connector (Gmail + Calendar) supporting multiple accounts."""
+    """Google workspace connector (Gmail + Calendar + Drive + Contacts + Sheets + Docs + Photos) supporting multiple accounts."""
 
     service_id: str = "google"
-    name: str = "Google (Gmail + Calendar)"
-    description: str = "Read/send Gmail and manage Google Calendar via OAuth2, with multiple accounts."
+    name: str = "Google Workspace (Gmail + Calendar + Drive + Docs + Sheets + Contacts + Photos)"
+    description: str = "Gmail, Calendar, Drive, Docs, Sheets, Contacts and Photos via OAuth2, with multiple accounts."
     supports_instances: bool = True
 
     def __init__(self, config, secrets, enabled=True, instances=None):
@@ -63,7 +63,7 @@ class GoogleService(BaseMcpService):
     def get_account_schema(self) -> Dict[str, Any]:
         return {
             "service_id": "google",
-            "label": "Google (Gmail + Calendar)",
+            "label": "Google (Gmail + Calendar + Drive + Docs + Sheets + Contacts + Photos)",
             "config": [
                 {"key": "email", "label": "Cuenta de Google (email)", "type": "text", "required": True,
                  "placeholder": "tu@gmail.com"},
@@ -71,10 +71,10 @@ class GoogleService(BaseMcpService):
             "secrets": [
                 {"key": "client_id", "label": "OAuth 2.0 Client ID", "type": "text", "required": True},
                 {"key": "client_secret", "label": "OAuth 2.0 Client Secret", "type": "password", "required": True},
-                {"key": "refresh_token", "label": "Refresh Token (OAuth)", "type": "textarea", "required": True,
-                 "placeholder": "1//0xxxx..."},
+                {"key": "refresh_token", "label": "Refresh Token (OAuth) — o usa «Conectar con Google»", "type": "textarea", "required": False,
+                 "placeholder": "1//0xxxx... (se rellena solo al conectar)"},
                 {"key": "scope", "label": "Scopes (opcional)", "type": "text", "required": False,
-                 "placeholder": "https://www.googleapis.com/auth/gmail.modify ..."},
+                 "placeholder": "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive ..."},
             ],
         }
 
@@ -127,18 +127,23 @@ class GoogleService(BaseMcpService):
             return await client.gmail_send(
                 to=args.get("to", ""), subject=args.get("subject", ""), body=args.get("body", ""),
                 cc=args.get("cc", ""), bcc=args.get("bcc", ""), attachments=args.get("attachments"),
+                from_addr=args.get("from", "") or "",
             )
         if tool_name == "google_gmail_drafts":
             return await client.gmail_drafts()
         if tool_name == "google_gmail_draft_create":
             return await client.gmail_draft_create(
                 to=args.get("to", ""), subject=args.get("subject", ""), body=args.get("body", ""),
-                attachments=args.get("attachments"),
+                attachments=args.get("attachments"), from_addr=args.get("from", "") or "",
             )
         if tool_name == "google_gmail_draft_send":
             return await client.gmail_draft_send(args.get("draft_id", ""))
+        if tool_name == "google_gmail_draft_delete":
+            return await client.gmail_draft_delete(args.get("draft_id", ""))
         if tool_name == "google_gmail_labels":
             return await client.gmail_labels()
+        if tool_name == "google_gmail_sendas_list":
+            return await client.gmail_sendas_list()
         if tool_name == "google_gmail_set_read":
             return await client.gmail_set_read(args.get("message_id", ""), bool(args.get("read", True)))
         if tool_name == "google_gmail_thread":
@@ -157,6 +162,55 @@ class GoogleService(BaseMcpService):
                 start=args.get("start", ""), end=args.get("end", ""),
                 attendees=args.get("attendees"), calendar_id=args.get("calendar_id") or "primary",
             )
+        if tool_name == "google_calendar_delete":
+            return await client.calendar_delete(args.get("event_id", ""), calendar_id=args.get("calendar_id") or "primary")
+        if tool_name == "google_drive_list":
+            return await client.drive_list(
+                query=args.get("query", ""), page_size=int(args.get("page_size") or 20),
+                order_by=args.get("order_by") or "modifiedTime desc",
+            )
+        if tool_name == "google_drive_get":
+            return await client.drive_get(args.get("file_id", ""))
+        if tool_name == "google_drive_download":
+            return await client.drive_download(args.get("file_id", ""))
+        if tool_name == "google_drive_create_folder":
+            return await client.drive_create_folder(args.get("name", ""), parent_id=args.get("parent_id") or "")
+        if tool_name == "google_drive_upload":
+            return await client.drive_upload(
+                args.get("name", ""), data_b64=args.get("data", "") or "",
+                content_text=args.get("content_text", "") or "",
+                mime_type=args.get("mime_type", "") or "", parent_id=args.get("parent_id") or "",
+            )
+        if tool_name == "google_drive_delete":
+            return await client.drive_delete(args.get("file_id", ""))
+        if tool_name == "google_contacts_search":
+            return await client.contacts_search(args.get("query", ""), page_size=int(args.get("page_size") or 10))
+        if tool_name == "google_contacts_list":
+            return await client.contacts_list(page_size=int(args.get("page_size") or 20))
+        if tool_name == "google_sheets_info":
+            return await client.sheets_info(args.get("spreadsheet_id", ""))
+        if tool_name == "google_sheets_read":
+            return await client.sheets_read(args.get("spreadsheet_id", ""), args.get("range", ""))
+        if tool_name == "google_sheets_append":
+            return await client.sheets_append(args.get("spreadsheet_id", ""), args.get("range", ""), args.get("values") or [])
+        if tool_name == "google_sheets_update":
+            return await client.sheets_update(args.get("spreadsheet_id", ""), args.get("range", ""), args.get("values") or [])
+        if tool_name == "google_docs_get":
+            return await client.docs_get(args.get("document_id", ""))
+        if tool_name == "google_docs_append":
+            return await client.docs_append(args.get("document_id", ""), args.get("text", ""))
+        if tool_name == "google_photos_list":
+            return await client.photos_list(page_size=int(args.get("page_size") or 20))
+        if tool_name == "google_photos_get":
+            return await client.photos_get(args.get("media_item_id", ""))
+        if tool_name == "google_photos_search":
+            return await client.photos_search(
+                year=int(args.get("year") or 0), month=int(args.get("month") or 0), day=int(args.get("day") or 0),
+                content_category=args.get("content_category") or "", media_type=args.get("media_type") or "ALL_MEDIA",
+                page_size=int(args.get("page_size") or 20),
+            )
+        if tool_name == "google_photos_albums":
+            return await client.photos_albums(page_size=int(args.get("page_size") or 20))
         raise ValueError(f"Unknown Google tool: '{tool_name}'")
 
     async def test_connection(self) -> Dict[str, Any]:

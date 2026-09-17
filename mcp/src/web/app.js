@@ -432,6 +432,7 @@ async function openAccountEditor(instanceId) {
     } catch (e) { showToast("Error cargando cuenta", "error"); }
   }
   document.getElementById("passbolt-modal").classList.add("active");
+  renderGoogleOAuthBox();
 }
 
 document.getElementById("btn-close-passbolt-modal").addEventListener("click", closeAccountEditor);
@@ -522,6 +523,101 @@ document.getElementById("passbolt-form").addEventListener("submit", async (e) =>
     showToast(err.message, "error");
   }
 });
+// --- Google OAuth web flow (100% panel) ---------------------------------------
+async function renderGoogleOAuthBox() {
+  const old = document.getElementById("google-oauth-box");
+  if (old) old.remove();
+  if (currentAccountService !== "google") return;
+  const container = document.getElementById("account-form-fields");
+  if (!container) return;
+
+  const box = document.createElement("div");
+  box.id = "google-oauth-box";
+  box.innerHTML = `
+    <div class="form-section-title">Conexión OAuth con Google</div>
+    <div class="test-feedback-box" style="display:block">
+      <div><b>Paso 1:</b> guarda la cuenta con email + Client ID + Client Secret.</div>
+      <div style="margin-top:6px"><b>Paso 2:</b> pulsa <b>Conectar con Google</b>, acepta los scopes (Gmail, Calendar y Drive) y vuelve al panel.</div>
+      <div id="google-oauth-cb" class="muted" style="margin-top:6px;font-size:12px;word-break:break-all"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button type="button" id="btn-google-connect" class="btn btn-primary btn-sm">🔗 Conectar con Google</button>
+    </div>
+    <div class="input-group" style="margin-top:10px">
+      <label for="google-oauth-code">¿Cliente tipo Escritorio? Pega aquí el código o la URL de localhost</label>
+      <textarea id="google-oauth-code" rows="2" placeholder="4/0XXXX... o http://127.0.0.1:8080/?code=4/0XXXX..."></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button type="button" id="btn-google-exchange" class="btn btn-secondary btn-sm">Canjear código</button>
+    </div>
+    <div id="google-oauth-feedback" class="test-feedback-box hidden"></div>
+  `;
+  container.appendChild(box);
+
+  try {
+    const res = await apiFetch("/api/admin/services/google/oauth/info");
+    const info = await res.json();
+    const cb = document.getElementById("google-oauth-cb");
+    if (cb && info.callback_url) {
+      cb.innerHTML = `Callback web (regístrala si tu cliente OAuth es tipo <b>Web</b>):<br><code>${info.callback_url}</code>`;
+    }
+  } catch (e) { /* info opcional */ }
+
+  document.getElementById("btn-google-connect").addEventListener("click", async () => {
+    const fb = document.getElementById("google-oauth-feedback");
+    const instanceId = document.getElementById("pb-instance-id").value;
+    if (!instanceId) {
+      fb.classList.remove("hidden");
+      fb.className = "test-feedback-box error";
+      fb.innerText = "Guarda la cuenta primero (con Client ID y Secret) y reabre el editor para conectar.";
+      return;
+    }
+    fb.classList.remove("hidden");
+    fb.className = "test-feedback-box";
+    fb.innerText = "Generando URL de autorización...";
+    try {
+      const res = await apiFetch(`/api/admin/services/google/oauth/start?instance_id=${encodeURIComponent(instanceId)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "No se pudo generar la URL");
+      fb.className = "test-feedback-box success";
+      fb.innerText = "Abriendo Google en una pestaña nueva... autoriza y vuelve aquí.";
+      window.open(data.auth_url, "_blank", "noopener");
+    } catch (e) {
+      fb.className = "test-feedback-box error";
+      fb.innerText = "✗ " + e.message;
+    }
+  });
+
+  document.getElementById("btn-google-exchange").addEventListener("click", async () => {
+    const fb = document.getElementById("google-oauth-feedback");
+    const instanceId = document.getElementById("pb-instance-id").value;
+    const code = document.getElementById("google-oauth-code").value.trim();
+    if (!instanceId || !code) {
+      fb.classList.remove("hidden");
+      fb.className = "test-feedback-box error";
+      fb.innerText = "Necesitas el ID de cuenta guardada y el código de Google.";
+      return;
+    }
+    fb.classList.remove("hidden");
+    fb.className = "test-feedback-box";
+    fb.innerText = "Canjeando código...";
+    try {
+      const res = await apiFetch("/api/admin/services/google/oauth/exchange", {
+        method: "POST",
+        body: JSON.stringify({ instance_id: instanceId, code, redirect_uri: "http://127.0.0.1:8080/" })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.message || "Fallo el canje");
+      fb.className = "test-feedback-box success";
+      fb.innerText = "✓ " + (data.message || "Cuenta conectada. Pulsa «Probar Conexión Live».");
+      loadServices();
+    } catch (e) {
+      fb.className = "test-feedback-box error";
+      fb.innerText = "✗ " + e.message;
+    }
+  });
+}
+
 // --- Tab 2: Tester & Tool Inspector ---
 async function loadTesterTools() {
   const select = document.getElementById("tester-tool-select");
@@ -529,11 +625,11 @@ async function loadTesterTools() {
   select.innerHTML = "<option value=''>Cargando herramientas...</option>";
 
   try {
-    const res = await apiFetch("/api/admin/tools");
+    const res = await apiFetch(`/api/admin/tools?scope=${encodeURIComponent(scope)}`);
     const tools = await res.json();
     select.innerHTML = "";
 
-    const filtered = scope === "unified" ? tools : tools.filter(t => t.service === scope);
+    const filtered = tools;
     if (filtered.length === 0) {
       select.innerHTML = "<option value=''>No hay herramientas disponibles en este scope</option>";
       return;
@@ -569,6 +665,20 @@ function fillDefaultTemplate() {
     sample = { resource_id: "00000000-0000-0000-0000-000000000000" };
   } else if (toolName === "passbolt_list_folders") {
     sample = {};
+  } else if (toolName === "notebooklm_list_accounts") {
+    sample = {};
+  } else if (toolName === "notebooklm_auth_check") {
+    sample = {};
+  } else if (toolName === "notebooklm_list_notebooks") {
+    sample = { limit: 20 };
+  } else if (toolName === "notebooklm_ask") {
+    sample = { notebook_id: "NOTEBOOK_ID", question: "¿Cuáles son los temas clave según las fuentes?" };
+  } else if (toolName === "notebooklm_list_sources") {
+    sample = { notebook_id: "NOTEBOOK_ID", limit: 20 };
+  } else if (toolName === "notebooklm_search_sources") {
+    sample = { notebook_id: "NOTEBOOK_ID", query: "revenue growth", limit: 5 };
+  } else if (toolName.startsWith("notebooklm_") && toolName.includes("notebook")) {
+    sample = { notebook_id: "NOTEBOOK_ID" };
   }
   document.getElementById("tester-args").value = JSON.stringify(sample, null, 2);
 }
@@ -653,6 +763,12 @@ async function updateClientSnippets() {
       Authorization: "Bearer ${apiKey}"
     timeout: 180
 
+  notebooklm:
+    url: "${domain}/notebooklm"
+    headers:
+      Authorization: "Bearer ${apiKey}"
+    timeout: 180
+
   unified:
     url: "${domain}/unified"
     headers:
@@ -663,8 +779,14 @@ async function updateClientSnippets() {
     document.getElementById("code-claude").innerText = 
 `{
   "mcpServers": {
-    "passbolt": {
-      "url": "${domain}/passbolt",
+    "vps-notebooklm": {
+      "url": "${domain}/notebooklm",
+      "headers": {
+        "Authorization": "Bearer ${apiKey}"
+      }
+    },
+    "vps-unified": {
+      "url": "${domain}/unified",
       "headers": {
         "Authorization": "Bearer ${apiKey}"
       }
@@ -676,8 +798,14 @@ async function updateClientSnippets() {
     document.getElementById("code-cursor").innerText = 
 `{
   "mcpServers": {
-    "passbolt": {
-      "url": "${domain}/passbolt",
+    "vps-notebooklm": {
+      "url": "${domain}/notebooklm",
+      "headers": {
+        "Authorization": "Bearer ${apiKey}"
+      }
+    },
+    "vps-unified": {
+      "url": "${domain}/unified",
       "headers": {
         "Authorization": "Bearer ${apiKey}"
       }
