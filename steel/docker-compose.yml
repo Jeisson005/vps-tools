@@ -21,7 +21,6 @@ services:
       - DOMAIN=${STEEL_DOMAIN:-browser.localhost}
       - NODE_ENV=production
       - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
-      - CONCURRENCY=8
     shm_size: 1gb
     cap_add:
       - SYS_ADMIN
@@ -35,7 +34,7 @@ services:
   steel-2:
     image: ghcr.io/steel-dev/steel-browser:latest
     container_name: steel-browser-2
-    restart: "no"
+    restart: unless-stopped
     logging:
       driver: json-file
       options:
@@ -54,7 +53,6 @@ services:
       - DOMAIN=${STEEL_DOMAIN:-browser.localhost}
       - NODE_ENV=production
       - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
-      - CONCURRENCY=8
     shm_size: 1gb
     cap_add:
       - SYS_ADMIN
@@ -68,7 +66,7 @@ services:
   steel-3:
     image: ghcr.io/steel-dev/steel-browser:latest
     container_name: steel-browser-3
-    restart: "no"
+    restart: unless-stopped
     logging:
       driver: json-file
       options:
@@ -87,7 +85,6 @@ services:
       - DOMAIN=${STEEL_DOMAIN:-browser.localhost}
       - NODE_ENV=production
       - LOG_LEVEL=${STEEL_LOG_LEVEL:-info}
-      - CONCURRENCY=8
     shm_size: 1gb
     cap_add:
       - SYS_ADMIN
@@ -110,11 +107,8 @@ services:
         max-file: "3"
     ports:
       - "127.0.0.1:3000:3000"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - STEEL_API_KEY=${STEEL_API_KEY:-}
-      - IDLE_TIMEOUT_SEC=${STEEL_IDLE_TIMEOUT_SEC:-3600}
       - PORT=3000
     depends_on:
       - steel-1
