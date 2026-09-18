@@ -118,4 +118,142 @@ MICROSOFT_TOOLS = [
             "required": ["subject", "start", "end"],
         },
     },
+    {
+        "name": "outlook_calendar_delete",
+        "description": "Delete a calendar event by id. IMPORTANT: Ask the user for explicit confirmation before deleting.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "event_id": {"type": "string", "description": "Calendar event id."},
+                "calendar_id": {"type": "string", "description": "Calendar id (default 'me')."},
+                "account": _ACCOUNT,
+            },
+            "required": ["event_id"],
+        },
+    },
+    {
+        "name": "teams_list_joined",
+        "description": "List Microsoft Teams teams joined by the account (id, displayName).",
+        "inputSchema": {"type": "object", "properties": {"account": _ACCOUNT}},
+    },
+    {
+        "name": "teams_list_channels",
+        "description": "List channels of a Team (id, displayName).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"team_id": {"type": "string"}, "account": _ACCOUNT},
+            "required": ["team_id"],
+        },
+    },
+    {
+        "name": "teams_channel_messages",
+        "description": "List recent messages of a Teams channel.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "team_id": {"type": "string"},
+                "channel_id": {"type": "string"},
+                "top": {"type": "integer", "description": "Max items (default 20)."},
+                "account": _ACCOUNT,
+            },
+            "required": ["team_id", "channel_id"],
+        },
+    },
+    {
+        "name": "teams_channel_send",
+        "description": "Send a message to a Teams channel. IMPORTANT: Ask the user for explicit confirmation before sending.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "team_id": {"type": "string"},
+                "channel_id": {"type": "string"},
+                "message": {"type": "string"},
+                "account": _ACCOUNT,
+            },
+            "required": ["team_id", "channel_id", "message"],
+        },
+    },
+    {
+        "name": "teams_list_chats",
+        "description": "List 1:1 and group chats of the account (id, topic, members).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "top": {"type": "integer", "description": "Max items (default 20)."},
+                "account": _ACCOUNT,
+            }
+        },
+    },
+    {
+        "name": "teams_chat_messages",
+        "description": "List recent messages of a Teams chat.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "chat_id": {"type": "string"},
+                "top": {"type": "integer", "description": "Max items (default 20)."},
+                "account": _ACCOUNT,
+            },
+            "required": ["chat_id"],
+        },
+    },
+    {
+        "name": "teams_chat_send",
+        "description": "Send a message to a Teams chat. IMPORTANT: Ask the user for explicit confirmation before sending.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "chat_id": {"type": "string"},
+                "message": {"type": "string"},
+                "account": _ACCOUNT,
+            },
+            "required": ["chat_id", "message"],
+        },
+    },
+    {
+        "name": "onedrive_list",
+        "description": "List OneDrive files/folders (id, name, size, mimeType).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "item_id": {"type": "string", "description": "Folder id (omit = root)."},
+                "top": {"type": "integer", "description": "Max items (default 50)."},
+                "account": _ACCOUNT,
+            }
+        },
+    },
+    {
+        "name": "onedrive_get",
+        "description": "Get OneDrive file/folder metadata by item id.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"item_id": {"type": "string"}, "account": _ACCOUNT},
+            "required": ["item_id"],
+        },
+    },
+    {
+        "name": "onedrive_download",
+        "description": "Download a OneDrive file (base64, max 4 MB).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"item_id": {"type": "string"}, "account": _ACCOUNT},
+            "required": ["item_id"],
+        },
+    },
+    {
+        "name": "onedrive_upload",
+        "description": "Upload text or base64 content to OneDrive (max 10 MB). IMPORTANT: Ask the user for explicit confirmation before uploading.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "File name in OneDrive."},
+                "content_text": {"type": "string", "description": "Plain text content (alternative to data)."},
+                "data": {"type": "string", "description": "File content base64 (alternative to content_text)."},
+                "mime_type": {"type": "string", "description": "MIME type (default text/plain)."},
+                "folder_id": {"type": "string", "description": "Destination folder id (omit = root)."},
+                "account": _ACCOUNT,
+            },
+            "required": ["name"],
+        },
+    },
 ]

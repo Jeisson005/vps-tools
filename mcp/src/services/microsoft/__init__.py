@@ -5,11 +5,11 @@ from .tools import MICROSOFT_TOOLS
 
 
 class MicrosoftService(BaseMcpService):
-    """Microsoft 365 connector (Outlook mail + Calendar) supporting multiple accounts."""
+    """Microsoft 365 connector (Outlook mail + Calendar + Teams + OneDrive) supporting multiple accounts."""
 
     service_id: str = "microsoft"
-    name: str = "Microsoft 365 (Outlook + Calendar)"
-    description: str = "Read/send Outlook mail and manage Calendar via Microsoft Graph, with multiple accounts."
+    name: str = "Microsoft 365 (Outlook + Calendar + Teams + OneDrive)"
+    description: str = "Read/send Outlook mail, manage Calendar, read/send Teams chats/channels and manage OneDrive files via Microsoft Graph, with multiple accounts."
     supports_instances: bool = True
 
     def __init__(self, config, secrets, enabled=True, instances=None):
@@ -64,7 +64,7 @@ class MicrosoftService(BaseMcpService):
     def get_account_schema(self) -> Dict[str, Any]:
         return {
             "service_id": "microsoft",
-            "label": "Microsoft 365 (Outlook + Calendar)",
+            "label": "Microsoft 365 (Outlook + Calendar + Teams + OneDrive)",
             "config": [
                 {"key": "email", "label": "Correo de la cuenta 365", "type": "text", "required": True,
                  "placeholder": "usuario@dominio.com"},
@@ -143,6 +143,42 @@ class MicrosoftService(BaseMcpService):
                 subject=args.get("subject", ""), start=args.get("start", ""), end=args.get("end", ""),
                 body=args.get("body", ""), attendees=args.get("attendees"), calendar_id=args.get("calendar_id") or "me",
             )
+        if tool_name == "outlook_calendar_delete":
+            return await client.calendar_delete(
+                event_id=args.get("event_id", ""), calendar_id=args.get("calendar_id") or "me",
+            )
+        if tool_name == "teams_list_joined":
+            return await client.teams_joined()
+        if tool_name == "teams_list_channels":
+            return await client.teams_channels(team_id=args.get("team_id", ""))
+        if tool_name == "teams_channel_messages":
+            return await client.teams_channel_messages(
+                team_id=args.get("team_id", ""), channel_id=args.get("channel_id", ""),
+                top=int(args.get("top") or 20))
+        if tool_name == "teams_channel_send":
+            return await client.teams_channel_send(
+                team_id=args.get("team_id", ""), channel_id=args.get("channel_id", ""),
+                message=args.get("message", ""))
+        if tool_name == "teams_list_chats":
+            return await client.teams_chats(top=int(args.get("top") or 20))
+        if tool_name == "teams_chat_messages":
+            return await client.teams_chat_messages(
+                chat_id=args.get("chat_id", ""), top=int(args.get("top") or 20))
+        if tool_name == "teams_chat_send":
+            return await client.teams_chat_send(
+                chat_id=args.get("chat_id", ""), message=args.get("message", ""))
+        if tool_name == "onedrive_list":
+            return await client.onedrive_list(
+                item_id=args.get("item_id", ""), top=int(args.get("top") or 50))
+        if tool_name == "onedrive_get":
+            return await client.onedrive_get(item_id=args.get("item_id", ""))
+        if tool_name == "onedrive_download":
+            return await client.onedrive_download(item_id=args.get("item_id", ""))
+        if tool_name == "onedrive_upload":
+            return await client.onedrive_upload(
+                name=args.get("name", ""), content_text=args.get("content_text", ""),
+                data=args.get("data", ""), folder_id=args.get("folder_id", ""),
+                mime_type=args.get("mime_type") or "text/plain")
         raise ValueError(f"Unknown Microsoft tool: '{tool_name}'")
 
     async def test_connection(self) -> Dict[str, Any]:

@@ -12,8 +12,24 @@ CLICKUP_TOOLS = [
     },
     {
         "name": "clickup_list_workspaces",
-        "description": "List ClickUp Workspaces (teams) accessible to the account (id, name, members count). Start here to discover team_id for spaces.",
+        "description": "List ClickUp Workspaces (teams) accessible to the account (id, name, members_count, members with id/username/email). Start here to discover team_id and assignee IDs.",
         "inputSchema": {"type": "object", "properties": {"account": _ACCOUNT}},
+    },
+    {
+        "name": "clickup_get_user",
+        "description": "Get the ClickUp user that owns the API token (id, username, email). Use the id as assignees when creating tasks.",
+        "inputSchema": {"type": "object", "properties": {"account": _ACCOUNT}},
+    },
+    {
+        "name": "clickup_list_team_members",
+        "description": "List workspace members (id, username, email) to resolve assignee IDs for task creation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "team_id": {"type": "string", "description": "Workspace (team) ID. Omit to list members of all accessible workspaces."},
+                "account": _ACCOUNT,
+            },
+        },
     },
     {
         "name": "clickup_list_spaces",
@@ -166,7 +182,7 @@ CLICKUP_TOOLS = [
     },
     {
         "name": "clickup_list_tasks",
-        "description": "List tasks in a List (id, name, status, assignees, due date, url). Up to 100 per page.",
+        "description": "List tasks in a List (id, name, status, due_date as Unix ms, time_estimate as ms, priority, assignees, assignee_ids, url). Up to 100 per page.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -191,7 +207,7 @@ CLICKUP_TOOLS = [
     },
     {
         "name": "clickup_create_task",
-        "description": "Create a task in a List. IMPORTANT: Ask the user for explicit confirmation before creating.",
+        "description": "Create a task in a List. If assignees is omitted, the server auto-assigns it to the token owner. IMPORTANT: Ask the user for explicit confirmation before creating.",
         "inputSchema": {
             "type": "object",
             "properties": {
