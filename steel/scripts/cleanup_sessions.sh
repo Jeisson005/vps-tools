@@ -2,7 +2,10 @@
 # ==============================================================================
 # Steel Browser - Session cleanup
 # Libera sesiones Steel (status live/idle) más antiguas que MAX_AGE_SEC.
-# NO reinicia contenedores: respeta sesiones en vuelo recientes.
+# NO reinicia contenedores con sesiones activas: respeta sesiones en vuelo.
+# Al final puede reciclar workers vacíos (SingletonLock/zombies) vía
+# recycle_workers.sh --force-empty (opt-out con STEEL_RECYCLE_EMPTY=false).
+#
 # Uso: cleanup_sessions.sh [--dry-run] [--max-age-sec N]
 # ==============================================================================
 set -u
@@ -67,21 +70,29 @@ PY
 
 if [[ -z "${IDS}" ]]; then
   echo "[steel-cleanup] sin sesiones > $((MAX_AGE_SEC / 3600))h (nada que liberar)"
-  exit 0
+else
+  COUNT=0
+  while read -r sid age; do
+    [[ -z "${sid}" ]] && continue
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      echo "[steel-cleanup] (dry-run) liberaría ${sid} (edad ${age}s)"
+    elif curl -s --max-time 10 -X POST -H "x-steel-api-key: ${KEY}" \
+        "${API}/v1/sessions/${sid}/release" >/dev/null 2>&1; then
+      echo "[steel-cleanup] liberada ${sid} (edad ${age}s)"
+    else
+      echo "[steel-cleanup] fallo al liberar ${sid}"
+    fi
+    COUNT=$((COUNT + 1))
+  done <<< "${IDS}"
+  echo "[steel-cleanup] total: ${COUNT}"
 fi
 
-COUNT=0
-while read -r sid age; do
-  [[ -z "${sid}" ]] && continue
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "[steel-cleanup] (dry-run) liberaría ${sid} (edad ${age}s)"
-  elif curl -s --max-time 10 -X POST -H "x-steel-api-key: ${KEY}" \
-      "${API}/v1/sessions/${sid}/release" >/dev/null 2>&1; then
-    echo "[steel-cleanup] liberada ${sid} (edad ${age}s)"
+# Reciclar workers vacíos para limpiar SingletonLock/zombies (opt-out).
+if [[ "${STEEL_RECYCLE_EMPTY:-true}" == "true" && "${DRY_RUN}" != "true" ]]; then
+  if [[ -x "${SCRIPT_DIR}/recycle_workers.sh" ]]; then
+    echo "[steel-cleanup] reciclando workers vacíos..."
+    "${SCRIPT_DIR}/recycle_workers.sh" --force-empty 2>&1 | sed 's/^/[steel-recycle] /'
   else
-    echo "[steel-cleanup] fallo al liberar ${sid}"
+    echo "[steel-cleanup] recycle_workers.sh no encontrado/ejecutable, se omite"
   fi
-  COUNT=$((COUNT + 1))
-done <<< "${IDS}"
-
-echo "[steel-cleanup] total: ${COUNT}"
+fi
