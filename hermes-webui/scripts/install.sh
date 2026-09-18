@@ -57,6 +57,12 @@ if [[ ! -x "${AGENT_VENV}/bin/python" ]]; then
   exit 1
 fi
 
+# 3b. Edge TTS Spanish voices allowlist (re-applied on every update too)
+echo "[+] Applying Edge TTS Spanish voices patch ..."
+sudo -u "${WEBUI_USER}" python3 "${BASE_DIR}/scripts/patch-tts-voices.py" "${WEBUI_SRC}" || {
+  echo "[!] [WARNING] TTS voices patch failed — upstream may have reworked api/routes.py" >&2
+}
+
 # 3. .env with secrets (server-only, gitignored via **/.env)
 if [[ ! -f ".env" ]]; then
   echo "[+] Creating .env from .env.example ..."
