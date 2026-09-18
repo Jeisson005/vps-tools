@@ -8,15 +8,17 @@
 #
 # NUNCA toca (pueden tener automatizaciones o mensajes en vuelo):
 #   - steel-browser* , sentinel , nginx , headscale
-#     (las sesiones Steel >24h SÍ se liberan vía API, sin reiniciar contenedores;
-#      desactivable con CLEAN_STEEL_SESSIONS=false en cron/.env)
+#     (las sesiones Steel >24h SÍ se liberan vía API; al terminar, los workers
+#      que quedan SIN sesiones se reciclan con restart para limpiar SingletonLock
+#      y zombies. Desactivable con CLEAN_STEEL_SESSIONS=false en cron/.env)
 #
 # REFRESCADOS con health-check (opt-out vía cron/.env):
 #   - wa-* (MCP WhatsApp personal): 'docker restart' + GET /status
-#   - hermes-gateway.service (puente WhatsApp del agente :3005): 'systemctl restart' + GET /health
-#   Se reinician porque Baileys acumula sesiones E2EE y reconexiones 408/428;
+#   Se reinicia porque Baileys acumula sesiones E2EE y reconexiones 408/428;
 #   el health-check evita dar por bueno un reinicio fallido. Si prefieres
-#   no tocarlos, pon REFRESH_WHATSAPP_MCP=false / REFRESH_HERMES_GATEWAY=false.
+#   no tocarlo, pon REFRESH_WHATSAPP_MCP=false.
+#
+# Hermes NO se toca aquí (ver cron/monthly_hermes_refresh.sh, día 15 02:45).
 #
 # Todo es configurable vía cron/.env (ver .env.example). Sin secretos aquí.
 # ==============================================================================
@@ -34,9 +36,7 @@ fi
 
 REFRESH_OPENCODE="${REFRESH_OPENCODE:-true}"
 REFRESH_WHATSAPP_MCP="${REFRESH_WHATSAPP_MCP:-true}"
-REFRESH_HERMES_GATEWAY="${REFRESH_HERMES_GATEWAY:-true}"
 WHATSAPP_MCP_PORT="${WHATSAPP_MCP_PORT:-3159}"
-HERMES_WHATSAPP_BRIDGE_PORT="${HERMES_WHATSAPP_BRIDGE_PORT:-3005}"
 DOCKER_BUILDER_PRUNE="${DOCKER_BUILDER_PRUNE:-true}"
 CLEAN_TMP="${CLEAN_TMP:-true}"
 JOURNAL_VACUUM_SIZE="${JOURNAL_VACUUM_SIZE:-500M}"
@@ -99,7 +99,7 @@ else
   log "--- opencode-web omitido (REFRESH_OPENCODE=false) ---"
 fi
 
-# --- 4. wa-jeisson (MCP WhatsApp personal, docker) ---
+# --- 2. wa-jeisson (MCP WhatsApp personal, docker) ---
 if [[ "${REFRESH_WHATSAPP_MCP}" == "true" ]]; then
   log "--- wa-jeisson (MCP WhatsApp :${WHATSAPP_MCP_PORT}) ---"
   if docker inspect wa-jeisson >/dev/null 2>&1; then
@@ -129,33 +129,7 @@ else
   log "--- wa-jeisson omitido (REFRESH_WHATSAPP_MCP=false) ---"
 fi
 
-# --- 5. hermes-gateway (systemd, puente WhatsApp del agente :3005) ---
-if [[ "${REFRESH_HERMES_GATEWAY}" == "true" ]]; then
-  log "--- hermes-gateway (puente WhatsApp :${HERMES_WHATSAPP_BRIDGE_PORT}) ---"
-  if sudo -n systemctl restart hermes-gateway.service 2>&1; then
-    # El adapter tarda ~15-30s en levantar bridge.js y dar status connected
-    sleep 20
-    if systemctl is-active --quiet hermes-gateway.service; then
-      _hh="$(curl -s --max-time 3 "http://127.0.0.1:${HERMES_WHATSAPP_BRIDGE_PORT}/health" 2>/dev/null || true)"
-      if echo "${_hh}" | grep -q '"status":"connected"'; then
-        log "[+] hermes-gateway reiniciado y puente connected"
-      else
-        log "[!] hermes-gateway activo pero puente sin connected: ${_hh:0:120}"
-        FAILED="${FAILED} hermes-gateway(bridge)"
-      fi
-    else
-      log "[!] hermes-gateway NO quedó activo tras reinicio"
-      FAILED="${FAILED} hermes-gateway"
-    fi
-  else
-    log "[!] sin permiso sudo para systemctl, se omite hermes-gateway"
-    FAILED="${FAILED} hermes-gateway(sudo)"
-  fi
-else
-  log "--- hermes-gateway omitido (REFRESH_HERMES_GATEWAY=false) ---"
-fi
-
-# --- 6. Limpieza ligera docker (solo caché huérfana, nada tagged) ---
+# --- 3. Limpieza ligera docker (solo caché huérfana, nada tagged) ---
 if [[ "${DOCKER_BUILDER_PRUNE}" == "true" ]]; then
   log "--- docker builder prune ---"
   docker builder prune -f >/dev/null 2>&1 || log "[!] builder prune falló"
@@ -163,7 +137,7 @@ if [[ "${DOCKER_BUILDER_PRUNE}" == "true" ]]; then
   log "[+] prune de caché huérfana OK"
 fi
 
-# --- 7. Limpieza /tmp (restos de backups de prueba y sesiones chrome viejas) ---
+# --- 4. Limpieza /tmp (restos de backups de prueba y sesiones chrome viejas) ---
 if [[ "${CLEAN_TMP}" == "true" ]]; then
   log "--- /tmp cleanup ---"
   rm -rf /tmp/vps-backups /tmp/test_backup_vps 2>/dev/null || true
@@ -171,7 +145,7 @@ if [[ "${CLEAN_TMP}" == "true" ]]; then
   log "[+] /tmp liviano OK"
 fi
 
-# --- 8. Steel sessions: liberar >24h vía API (NO reinicia contenedores) ---
+# --- 5. Steel sessions: liberar >24h vía API (NO reinicia contenedores) ---
 if [[ "${CLEAN_STEEL_SESSIONS}" == "true" ]]; then
   log "--- steel session cleanup ---"
   _steel_cleanup="${BASE_DIR}/steel/scripts/cleanup_sessions.sh"
@@ -183,7 +157,7 @@ if [[ "${CLEAN_STEEL_SESSIONS}" == "true" ]]; then
   fi
 fi
 
-# --- 9. Journal vacuum (evita que /var/log crezca sin control) ---
+# --- 6. Journal vacuum (evita que /var/log crezca sin control) ---
 if [[ -n "${JOURNAL_VACUUM_SIZE}" && "${JOURNAL_VACUUM_SIZE}" != "0" ]]; then
   log "--- journal vacuum (${JOURNAL_VACUUM_SIZE}) ---"
   sudo -n journalctl --vacuum-size="${JOURNAL_VACUUM_SIZE}" 2>&1 | tail -1 || log "[!] journal vacuum falló"
