@@ -66,14 +66,61 @@ class ClickUpClient:
         data = await self._request("GET", "/team")
         out = []
         for t in data.get("teams", []):
+            members = []
+            for m in t.get("members", []) or []:
+                u = (m.get("user") or {}) if isinstance(m, dict) else {}
+                if u.get("id") is not None:
+                    members.append({
+                        "id": u.get("id"),
+                        "username": u.get("username", ""),
+                        "email": u.get("email", ""),
+                    })
             out.append({
                 "id": str(t.get("id", "")),
                 "name": t.get("name", ""),
                 "color": t.get("color", ""),
                 "avatar": t.get("avatar"),
                 "members_count": len(t.get("members", []) or []),
+                "members": members,
             })
         return out
+
+    async def list_team_members(self, team_id: str = "") -> list:
+        """Return workspace members (id, username, email) to resolve assignee IDs.
+
+        Uses GET /team (which already embeds members) and filters by team_id
+        when provided, so no hardcoded user data is needed in the repo.
+        """
+        tid = self._resolve_team(team_id)
+        data = await self._request("GET", "/team")
+        teams = data.get("teams", []) or []
+        if tid:
+            teams = [t for t in teams if str(t.get("id", "")) == str(tid)]
+        members = []
+        for t in teams:
+            for m in t.get("members", []) or []:
+                u = (m.get("user") or {}) if isinstance(m, dict) else {}
+                if u.get("id") is None:
+                    continue
+                try:
+                    uid = int(u.get("id"))
+                except (TypeError, ValueError):
+                    continue
+                members.append({
+                    "id": uid,
+                    "username": u.get("username", ""),
+                    "email": u.get("email", ""),
+                    "team_id": str(t.get("id", "")),
+                })
+        # de-dup by id
+        seen = set()
+        uniq = []
+        for m in members:
+            if m["id"] in seen:
+                continue
+            seen.add(m["id"])
+            uniq.append(m)
+        return uniq
 
     def _resolve_team(self, team_id: str = "") -> str:
         return (team_id or self.default_team_id or "").strip()
@@ -235,6 +282,17 @@ class ClickUpClient:
                   "check_required_custom_fields", "custom_fields"):
             if fields.get(k) is not None:
                 body[k] = fields[k]
+        # Auto-asignar al dueño del token si el agente no pasó assignees.
+        # Evita tareas huérfanas sin hardcodear IDs personales en el repo:
+        # el ID se resuelve en runtime vía GET /user.
+        if body.get("assignees") is None:
+            try:
+                me = await self.get_user()
+                me_id = me.get("id")
+                if me_id is not None:
+                    body["assignees"] = [int(me_id)]
+            except Exception as e:
+                logger.warning(f"clickup create_task auto-assign failed, leaving unassigned: {e}")
         data = await self._request("POST", f"/list/{list_id}/task", json_body=body)
         return self._fmt_task(data, full=True)
 
@@ -314,6 +372,26 @@ class ClickUpClient:
     @staticmethod
     def _fmt_task(t: dict, full: bool = False) -> dict:
         status = t.get("status") or {}
+        assignees_raw = t.get("assignees", []) or []
+        assignee_names = []
+        assignee_ids = []
+        assignees_full = []
+        for a in assignees_raw:
+            if not isinstance(a, dict):
+                continue
+            username = a.get("username") or a.get("email") or ""
+            assignee_names.append(username)
+            try:
+                aid = int(a.get("id")) if a.get("id") is not None else None
+            except (TypeError, ValueError):
+                aid = None
+            if aid is not None:
+                assignee_ids.append(aid)
+            assignees_full.append({
+                "id": aid,
+                "username": a.get("username", ""),
+                "email": a.get("email", ""),
+            })
         out: Dict[str, Any] = {
             "id": str(t.get("id", "")),
             "custom_id": t.get("custom_id"),
@@ -322,9 +400,15 @@ class ClickUpClient:
             "orderindex": t.get("orderindex"),
             "date_created": t.get("date_created"),
             "date_updated": t.get("date_updated"),
-            "date_due": t.get("due_date"),
+            "due_date": t.get("due_date"),
+            "due_date_time": t.get("due_date_time"),
+            "start_date": t.get("start_date"),
+            "time_estimate": t.get("time_estimate"),
+            "parent": str(t.get("parent") or "") or None,
             "priority": (t.get("priority") or {}).get("priority") if isinstance(t.get("priority"), dict) else t.get("priority"),
-            "assignees": [a.get("username") or a.get("email") for a in t.get("assignees", []) or []],
+            "assignees": assignee_names,
+            "assignee_ids": assignee_ids,
+            "assignees_full": assignees_full,
             "tags": [tg.get("name") for tg in t.get("tags", []) or []],
             "url": t.get("url", ""),
             "list": {"id": str(((t.get("list") or {}).get("id")) or "")},

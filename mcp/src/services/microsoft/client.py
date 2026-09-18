@@ -168,6 +168,182 @@ class MSGraphClient:
         data = await self._request("POST", base, json_body=payload)
         return {"id": data.get("id"), "webLink": data.get("webLink", ""), "status": "created"}
 
+    async def calendar_delete(self, event_id: str, calendar_id: str = "me") -> dict:
+        if not event_id:
+            raise ValueError("Se requiere 'event_id'.")
+        base = f"/me/events/{event_id}" if calendar_id in ("me", "calendars/me", "") else f"/me/calendars/{calendar_id}/events/{event_id}"
+        token = await self._get_access_token()
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            res = await client.delete(f"{GRAPH}{base}", headers={"Authorization": f"Bearer {token}"})
+            if res.status_code not in (200, 201, 202, 204):
+                raise RuntimeError(f"Graph API error ({res.status_code}): {res.text[:300]}")
+        return {"id": event_id, "status": "deleted"}
+
+    # ---- Teams (chats y canales, cuenta personal con permisos delegados) ----
+    # Permisos delegados requeridos: Team.ReadBasic.All, Channel.ReadBasic.All,
+    # ChannelMessage.Read.All, ChannelMessage.Send, Chat.ReadWrite, ChatMessage.Send.
+    @staticmethod
+    def _fmt_chat_message(m: dict) -> dict:
+        body = (m.get("body") or {})
+        content = body.get("content", "") or ""
+        sender = ((m.get("from") or {}).get("user") or {}).get("displayName", "")
+        return {
+            "id": m.get("id"),
+            "body": content[:5000],
+            "contentType": body.get("contentType", ""),
+            "from": sender,
+            "createdDateTime": m.get("createdDateTime", ""),
+        }
+
+    async def teams_joined(self) -> list:
+        data = await self._request("GET", "/me/joinedTeams", params={"$select": "id,displayName,description"})
+        return [{
+            "id": t.get("id"),
+            "displayName": t.get("displayName", ""),
+            "description": t.get("description", ""),
+        } for t in data.get("value", [])]
+
+    async def teams_channels(self, team_id: str) -> list:
+        if not team_id:
+            raise ValueError("Se requiere 'team_id'.")
+        data = await self._request("GET", f"/teams/{team_id}/channels")
+        return [{
+            "id": c.get("id"),
+            "displayName": c.get("displayName", ""),
+            "description": c.get("description", ""),
+        } for c in data.get("value", [])]
+
+    async def teams_channel_messages(self, team_id: str, channel_id: str, top: int = 20) -> list:
+        if not team_id or not channel_id:
+            raise ValueError("Se requieren 'team_id' y 'channel_id'.")
+        data = await self._request(
+            "GET", f"/teams/{team_id}/channels/{channel_id}/messages",
+            params={"$top": top, "$orderby": "createdDateTime desc"},
+        )
+        return [self._fmt_chat_message(m) for m in data.get("value", [])]
+
+    async def teams_channel_send(self, team_id: str, channel_id: str, message: str) -> dict:
+        if not team_id or not channel_id or not message:
+            raise ValueError("Se requieren 'team_id', 'channel_id' y 'message'.")
+        data = await self._request(
+            "POST", f"/teams/{team_id}/channels/{channel_id}/messages",
+            json_body={"body": {"contentType": "text", "content": message}},
+        )
+        return {"id": data.get("id"), "status": "sent"}
+
+    async def teams_chats(self, top: int = 20) -> list:
+        data = await self._request("GET", "/me/chats", params={"$top": top, "$expand": "members"})
+        out = []
+        for c in data.get("value", []):
+            members = []
+            for m in c.get("members", []) or []:
+                members.append((m.get("displayName") or "").strip())
+            out.append({
+                "id": c.get("id"),
+                "topic": c.get("topic", ""),
+                "chatType": c.get("chatType", ""),
+                "members": [m for m in members if m][:10],
+            })
+        return out
+
+    async def teams_chat_messages(self, chat_id: str, top: int = 20) -> list:
+        if not chat_id:
+            raise ValueError("Se requiere 'chat_id'.")
+        data = await self._request(
+            "GET", f"/me/chats/{chat_id}/messages",
+            params={"$top": top, "$orderby": "createdDateTime desc"},
+        )
+        return [self._fmt_chat_message(m) for m in data.get("value", [])]
+
+    async def teams_chat_send(self, chat_id: str, message: str) -> dict:
+        if not chat_id or not message:
+            raise ValueError("Se requieren 'chat_id' y 'message'.")
+        data = await self._request(
+            "POST", f"/me/chats/{chat_id}/messages",
+            json_body={"body": {"contentType": "text", "content": message}},
+        )
+        return {"id": data.get("id"), "status": "sent"}
+
+    # ---- OneDrive (archivos personales) ----
+    # Permisos delegados requeridos: Files.ReadWrite.All.
+    @staticmethod
+    def _fmt_drive_item(it: dict) -> dict:
+        return {
+            "id": it.get("id"),
+            "name": it.get("name", ""),
+            "size": it.get("size"),
+            "mimeType": ((it.get("file") or {}).get("mimeType")) if it.get("file") else None,
+            "isFolder": bool(it.get("folder")),
+            "lastModified": ((it.get("lastModifiedDateTime")) or ""),
+            "webUrl": it.get("webUrl", ""),
+        }
+
+    async def onedrive_list(self, item_id: str = "", top: int = 50) -> list:
+        base = "/me/drive/root/children" if not item_id or item_id in ("root", "me") else f"/me/drive/items/{item_id}/children"
+        data = await self._request("GET", base, params={"$top": top})
+        return [self._fmt_drive_item(it) for it in data.get("value", [])]
+
+    async def onedrive_get(self, item_id: str) -> dict:
+        if not item_id:
+            raise ValueError("Se requiere 'item_id'.")
+        data = await self._request("GET", f"/me/drive/items/{item_id}")
+        return self._fmt_drive_item(data)
+
+    async def onedrive_download(self, item_id: str) -> dict:
+        import base64
+        if not item_id:
+            raise ValueError("Se requiere 'item_id'.")
+        meta = await self.onedrive_get(item_id)
+        if meta.get("isFolder"):
+            raise ValueError("El item es una carpeta, no se puede descargar.")
+        token = await self._get_access_token()
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.get(
+                f"{GRAPH}/me/drive/items/{item_id}/content",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if res.status_code >= 400:
+                raise RuntimeError(f"Graph API error ({res.status_code}): {res.text[:300]}")
+            content = res.content
+        if len(content) > 4 * 1024 * 1024:
+            raise ValueError(f"Archivo muy grande ({len(content)} bytes, máx 4 MB por el MCP).")
+        return {
+            "id": item_id,
+            "name": meta.get("name", ""),
+            "mimeType": meta.get("mimeType", "application/octet-stream"),
+            "size": len(content),
+            "data": base64.b64encode(content).decode("ascii"),
+        }
+
+    async def onedrive_upload(self, name: str, content_text: str = "", data: str = "",
+                              folder_id: str = "", mime_type: str = "text/plain") -> dict:
+        import base64
+        if not name:
+            raise ValueError("Se requiere 'name'.")
+        if data:
+            raw = base64.b64decode(data)
+        elif content_text is not None:
+            raw = content_text.encode("utf-8")
+        else:
+            raise ValueError("Provee 'content_text' o 'data' (base64).")
+        if len(raw) > 10 * 1024 * 1024:
+            raise ValueError(f"Archivo muy grande ({len(raw)} bytes, máx 10 MB).")
+        token = await self._get_access_token()
+        if folder_id and folder_id not in ("root", "me"):
+            url = f"{GRAPH}/me/drive/items/{folder_id}:/{name}:/content"
+        else:
+            url = f"{GRAPH}/me/drive/root:/{name}:/content"
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.put(
+                url, content=raw,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": mime_type or "application/octet-stream"},
+            )
+            if res.status_code not in (200, 201):
+                raise RuntimeError(f"Graph API error ({res.status_code}): {res.text[:300]}")
+            created = res.json()
+        return {"id": created.get("id"), "name": created.get("name", name),
+                "size": created.get("size"), "webUrl": created.get("webUrl", ""), "status": "uploaded"}
+
     async def test_connection(self) -> Dict[str, Any]:
         try:
             await self._get_access_token()

@@ -121,6 +121,10 @@ class ClickUpService(BaseMcpService):
 
         if tool_name == "clickup_list_workspaces":
             return await client.list_workspaces()
+        if tool_name == "clickup_get_user":
+            return await client.get_user()
+        if tool_name == "clickup_list_team_members":
+            return await client.list_team_members(team_id=args.get("team_id", ""))
         if tool_name == "clickup_list_spaces":
             return await client.list_spaces(team_id=args.get("team_id", ""), archived=bool(args.get("archived", False)))
         if tool_name == "clickup_get_space":
