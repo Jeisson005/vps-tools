@@ -5,10 +5,15 @@
  * Manages isolated Steel sessions with automatic persistent profile sync.
  *
  * Usage:
- *   steel-session create [url] [--isolated]   -> Creates session (default: persistent), preloads context, outputs live viewer link
- *   steel-session sync <id>                   -> Pulls latest session context (cookies/storage) and persists to disk
- *   steel-session release <id> [--no-sync]    -> Syncs context and releases session
- *   steel-session list                        -> Lists active sessions
+ *   steel-session create [url] [--isolated] [--ttl 30m]  -> Creates session (default: persistent), preloads context, outputs live viewer link
+ *   steel-session heartbeat <id> [--ttl 30m]             -> Renews the session lease (for long tasks)
+ *   steel-session sync <id>                              -> Pulls latest session context (cookies/storage) and persists to disk
+ *   steel-session release <id> [--no-sync]               -> Syncs context and releases session
+ *   steel-session list                                   -> Lists active sessions
+ *
+ * Lifecycle: without --ttl the session has no lease and the router releases it
+ * after ~30 min without HTTP/CDP activity. With --ttl the lease lasts that long
+ * unless renewed with `heartbeat`.
  */
 
 const fs = require('fs');
@@ -65,7 +70,7 @@ function ensureDirSync(dirPath) {
   }
 }
 
-async function apiRequest(endpoint, method = 'GET', data = null, retries = 3) {
+async function apiRequest(endpoint, method = 'GET', data = null, retries = 3, extraHeaders = {}) {
   const payload = data ? JSON.stringify(data) : null;
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -73,7 +78,8 @@ async function apiRequest(endpoint, method = 'GET', data = null, retries = 3) {
         const headers = {
           'Content-Type': 'application/json',
           'Connection': 'close',
-          'x-steel-api-key': steelApiKey
+          'x-steel-api-key': steelApiKey,
+          ...extraHeaders
         };
         if (payload) {
           headers['Content-Length'] = Buffer.byteLength(payload);
@@ -114,6 +120,7 @@ async function apiRequest(endpoint, method = 'GET', data = null, retries = 3) {
 async function createSession(targetUrl, options = {}) {
   const isIsolated = Boolean(options.isolated);
   const isPersistent = !isIsolated;
+  const ttlSec = Number(options.ttlSec) || 0;
 
   const createPayload = {
     useProxy: false
@@ -134,7 +141,8 @@ async function createSession(targetUrl, options = {}) {
     }
   }
 
-  const session = await apiRequest('/v1/sessions', 'POST', createPayload);
+  const session = await apiRequest('/v1/sessions', 'POST', createPayload, 3,
+    ttlSec > 0 ? { 'x-steel-lease-ttl': String(ttlSec) } : {});
   if (!session || !session.id) {
     console.error('[-] Error al crear sesión en Steel Browser:', session);
     process.exit(1);
@@ -186,6 +194,7 @@ async function createSession(targetUrl, options = {}) {
     liveViewerUrl: liveViewerUrl,
     cdpWsUrl: cdpWsUrl,
     mode: isPersistent ? 'persistent' : 'ephemeral',
+    leaseTtlSec: ttlSec > 0 ? ttlSec : null,
     targetUrl: targetUrl || null
   }, null, 2));
   process.exit(0);
@@ -236,10 +245,37 @@ async function listSessions() {
       status: s.status,
       liveViewerUrl: `${PROTOCOL}://${STEEL_PUBLIC_DOMAIN}/v1/sessions/debug?sessionId=${s.id}`,
       createdAt: s.createdAt,
+      leased: s.leased === true,
+      leaseExpiresAt: s.leaseExpiresAt || null,
+      lastActivityAt: s.lastActivityAt || null,
       dimensions: s.dimensions
     }));
   }
   console.log(JSON.stringify(result, null, 2));
+}
+
+function parseDuration(value) {
+  if (!value) return 0;
+  const m = String(value).trim().match(/^(\d+)\s*([smhd]?)$/i);
+  if (!m) return 0;
+  const n = parseInt(m[1], 10);
+  const unit = (m[2] || 's').toLowerCase();
+  if (unit === 'm') return n * 60;
+  if (unit === 'h') return n * 3600;
+  if (unit === 'd') return n * 86400;
+  return n;
+}
+
+async function heartbeatSession(sessionId, ttlSec) {
+  try {
+    const headers = ttlSec > 0 ? { 'x-steel-lease-ttl': String(ttlSec) } : {};
+    const result = await apiRequest(`/v1/sessions/${sessionId}/heartbeat`, 'POST', {}, 2, headers);
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(result && result.success === true ? 0 : 1);
+  } catch (e) {
+    console.error(`[-] Error sending heartbeat: ${e.message}`);
+    process.exit(1);
+  }
 }
 
 // CLI argument parsing
@@ -249,14 +285,32 @@ const command = args[0] || 'list';
 if (command === 'create') {
   let targetUrl = '';
   let isIsolated = false;
+  let ttlSec = 0;
   for (let i = 1; i < args.length; i++) {
     if (args[i] === '--isolated') {
       isIsolated = true;
+    } else if (args[i] === '--ttl') {
+      ttlSec = parseDuration(args[i + 1]);
+      i++;
+    } else if (args[i].startsWith('--ttl=')) {
+      ttlSec = parseDuration(args[i].split('=')[1]);
     } else if (!targetUrl && !args[i].startsWith('--')) {
       targetUrl = args[i];
     }
   }
-  createSession(targetUrl, { isolated: isIsolated });
+  createSession(targetUrl, { isolated: isIsolated, ttlSec: ttlSec });
+} else if (command === 'heartbeat') {
+  const sid = args[1];
+  if (!sid) {
+    console.error('Usage: steel-session heartbeat <sessionId> [--ttl 30m]');
+    process.exit(1);
+  }
+  let ttlSec = 0;
+  for (let i = 2; i < args.length; i++) {
+    if (args[i] === '--ttl') { ttlSec = parseDuration(args[i + 1]); i++; }
+    else if (args[i].startsWith('--ttl=')) { ttlSec = parseDuration(args[i].split('=')[1]); }
+  }
+  heartbeatSession(sid, ttlSec);
 } else if (command === 'sync') {
   const sid = args[1];
   if (!sid) {
@@ -275,5 +329,5 @@ if (command === 'create') {
 } else if (command === 'list') {
   listSessions();
 } else {
-  console.log('Usage: steel-session <create [url] [--isolated] | sync <id> | release <id> | list>');
+  console.log('Usage: steel-session <create [url] [--isolated] [--ttl 30m] | heartbeat <id> [--ttl 30m] | sync <id> | release <id> | list>');
 }

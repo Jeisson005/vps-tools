@@ -1,7 +1,7 @@
 ---
 name: browser-automation
 description: "Automate web browsing and testing via Steel Browser sandbox. Defaults to isolated/ephemeral sessions for development, with persistent profile fallback for logins, and proactive Live Viewer for Captchas/2FA."
-version: 2.4.0
+version: 2.5.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -15,6 +15,8 @@ metadata:
 Controls web browsing, page testing, DOM inspection, scraping, and interactive live viewing inside the sandboxed **Steel Browser** container.
 
 > **Endpoint (this VPS):** Steel API on port `3000` (`browser.jeisson.top`). Sessions are dynamic with unique UUIDs — never use a shared static port. OpenCode drives them via `steel-mcp --isolated` (ephemeral) or persistent profile (`~/.config/steel/profiles/persistent`).
+
+> **♻️ Session lifecycle (leases):** there are **3 Steel workers, 1 session per worker (max 3 concurrent sessions)**. MCP sessions (`playwright` / `playwright-persistent`) hold an automatic lease/heartbeat: when you stop using the browser they are released on their own (~30 min of inactivity), and **the wrapper transparently recreates a session on the next tool call** (the `sessionId` changes — re-check `steel_get_session_info`). Sessions created with the `steel-session` CLI have **no lease** and are released after ~30 min without activity unless you pass `--ttl` and renew it. **Closing the Live Viewer tab does NOT release the session** — always release explicitly when you own it.
 
 ---
 
@@ -54,8 +56,9 @@ Provide the **Live Viewer URL** (`https://{{STEEL_DOMAIN}}/v1/sessions/debug?ses
 **Case 2 — You have not started navigating yet, or want a dedicated session for this specifically:**
 1. Execute the system CLI tool:
    ```bash
-   steel-session create "<url>"
+   steel-session create "<url>" --ttl 1h
    ```
+   (`--ttl` keeps the session alive for long human waits; without it the session is auto-released after ~30 min without activity. For very long waits renew with `steel-session heartbeat <id> --ttl 1h`.)
 2. Parse the returned JSON to obtain `sessionId` and `liveViewerUrl`.
 
 **Both cases then:**

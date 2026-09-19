@@ -1,20 +1,22 @@
 /**
- * Steel Browser Router (3 workers fijos)
+ * Steel Browser Router (3 workers fijos) + Session Lifecycle (leases)
  *
  * Modelo real de Steel auto-hospedado (v0.5.x): 1 sesión = 1 navegador = 1 instancia.
- * Este router reparte cada sesión nueva a una instancia LIBRE (0 sesiones activas)
- * y enruta después todo el tráfico (HTTP, CDP y Live Viewer) a la instancia dueña.
+ * Este router reparte cada sesión nueva a una instancia LIBRE (0 sesiones `live`)
+ * y enruta todo el tráfico (HTTP, CDP y Live Viewer) a la instancia dueña.
+ *
+ * Ciclo de vida de sesiones:
+ *  - Sesiones CON lease (cliente envía `x-steel-lease-ttl` al crear y manda
+ *    heartbeat): se mantienen vivas mientras el cliente las renueve.
+ *  - Sesiones SIN lease: se liberan por inactividad (HTTP+CDP) tras
+ *    SESSION_IDLE_RELEASE_SEC.
+ *  - El reaper además libera leases vencidos (cliente muerto) y descubre
+ *    sesiones creadas antes de un reinicio del router.
  *
  * Garantías:
- *  1. Sin acceso a Docker: el router es un proxy puro (no monta docker.sock).
- *  2. Creación de sesiones SERIALIZADA: evita que dos creaciones simultáneas
- *     caigan en la misma instancia (SingletonLock de Chromium).
- *  3. Reintento automático: si una instancia está degradada (launch_failed),
- *     prueba con la siguiente libre.
- *  4. Si las 3 instancias están ocupadas responde 503 (NUNCA desplaza una sesión viva).
- *
- * El reciclado de instancias (limpiar SingletonLock/zombies) lo hace el host
- * vía scripts/recycle_workers.sh (cron), no el router.
+ *  1. Sin acceso a Docker: es un proxy puro (no monta docker.sock).
+ *  2. Creación SERIALIZADA + reintento: evita SingletonLock y salta workers rotos.
+ *  3. Si las 3 instancias están ocupadas responde 503 (NUNCA desplaza sesión viva).
  */
 
 const http = require('http');
@@ -33,14 +35,71 @@ try {
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const STEEL_API_KEY = process.env.STEEL_API_KEY || '';
 
+/* ---------- Lifecycle config ---------- */
+function envSec(name, def) {
+  const n = parseInt(process.env[name], 10);
+  return Number.isFinite(n) && n >= 0 ? n : def;
+}
+const REAPER_INTERVAL_SEC = envSec('SESSION_REAPER_INTERVAL_SEC', 30);
+const IDLE_RELEASE_SEC = envSec('SESSION_IDLE_RELEASE_SEC', 1800);       // 30 min sin tráfico
+const LEASE_DEFAULT_TTL_SEC = envSec('SESSION_LEASE_DEFAULT_TTL_SEC', 300); // 5 min de rolling TTL
+const HEARTBEAT_GRACE_SEC = envSec('SESSION_HEARTBEAT_GRACE_SEC', 120);  // gracia tras vencer lease
+const MAX_AGE_SEC = envSec('SESSION_MAX_AGE_SEC', 0);                    // 0 = sin tope duro
+const LEASE_MIN_SEC = 30;
+const LEASE_MAX_SEC = 86400;
+
 const BACKENDS = [
   { id: 'steel-1', name: 'steel-browser-1', url: 'http://steel-1:3000', isPrimary: true },
   { id: 'steel-2', name: 'steel-browser-2', url: 'http://steel-2:3000', isPrimary: false },
   { id: 'steel-3', name: 'steel-browser-3', url: 'http://steel-3:3000', isPrimary: false },
 ];
 
-// Map sessionId -> backendUrl
-const sessionMap = new Map();
+/* ---------- Session registry ----------
+ * sid -> { backendUrl, createdAt, lastActivity, expiresAt|null, leased, discovered }
+ */
+const sessions = new Map();
+
+function clampTtl(sec) {
+  const v = Number.isFinite(sec) && sec > 0 ? sec : LEASE_DEFAULT_TTL_SEC;
+  return Math.min(Math.max(v, LEASE_MIN_SEC), LEASE_MAX_SEC);
+}
+
+function trackSession(sid, backendUrl, { leased = false, ttlSec = 0, discovered = false } = {}) {
+  const now = Date.now();
+  const rec = {
+    backendUrl,
+    createdAt: now,
+    lastActivity: now,
+    expiresAt: leased ? now + clampTtl(ttlSec) * 1000 : null,
+    leased,
+    discovered,
+  };
+  sessions.set(sid, rec);
+  return rec;
+}
+
+function touchSession(sid) {
+  const s = sessions.get(sid);
+  if (s) s.lastActivity = Date.now();
+}
+
+function heartbeatSession(sid, ttlSec) {
+  const s = sessions.get(sid);
+  if (!s) return null;
+  s.lastActivity = Date.now();
+  if (s.leased) s.expiresAt = Date.now() + clampTtl(ttlSec) * 1000;
+  return s;
+}
+
+async function releaseSession(sid, reason) {
+  const s = sessions.get(sid);
+  if (!s) return false;
+  sessions.delete(sid);
+  const r = await queryBackend(s.backendUrl, `/v1/sessions/${sid}/release`, 'POST', '{}', {}, 15000);
+  const ok = !!r && r.statusCode >= 200 && r.statusCode < 300;
+  console.log(`[reaper] release ${sid} (${reason}) on ${s.backendUrl}: ${ok ? 'ok' : 'failed'}`);
+  return ok;
+}
 
 /* -------------------------------------------------------------
  * Backend HTTP helpers
@@ -96,15 +155,12 @@ function isActiveSession(s) {
 async function getBackendState(b) {
   const res = await queryBackend(b.url, '/v1/sessions');
   if (!res || res.statusCode !== 200 || !res.data || !Array.isArray(res.data.sessions)) {
-    return { reachable: false, active: 0 };
+    return { reachable: false, active: 0, liveIds: [] };
   }
-  return { reachable: true, active: res.data.sessions.filter(isActiveSession).length };
+  const live = res.data.sessions.filter(isActiveSession);
+  return { reachable: true, active: live.length, liveIds: live.map(s => s.id) };
 }
 
-/**
- * Devuelve la primera instancia LIBRE (primary primero) de las no excluidas.
- * Libre = responde y tiene 0 sesiones activas (1 sesión por instancia).
- */
 async function selectFreeBackend(exclude = new Set()) {
   const ordered = [
     BACKENDS.find(b => b.isPrimary),
@@ -179,14 +235,15 @@ function extractSessionId(reqUrl, headers = {}) {
 }
 
 async function findSessionOwner(sessionId) {
-  if (sessionMap.has(sessionId)) return sessionMap.get(sessionId);
+  const tracked = sessions.get(sessionId);
+  if (tracked) return tracked.backendUrl;
 
   for (const b of BACKENDS) {
     const res = await queryBackend(b.url, '/v1/sessions');
     if (res && res.data && Array.isArray(res.data.sessions)) {
       const found = res.data.sessions.some(s => s.id === sessionId && isActiveSession(s));
       if (found) {
-        sessionMap.set(sessionId, b.url);
+        trackSession(sessionId, b.url, { discovered: true });
         return b.url;
       }
     }
@@ -241,13 +298,14 @@ function proxyHttpRequest(targetBackendUrl, req, res, onResponseJson = null) {
 const server = http.createServer(async (req, res) => {
   const reqUrl = req.url || '/';
   const sid = extractSessionId(reqUrl);
+  if (sid) touchSession(sid);
 
   // 1. Health check & pool status
   if (reqUrl === '/healthz' || reqUrl === '/router/health') {
     const statusList = [];
     for (const b of BACKENDS) {
       const st = await getBackendState(b);
-      const mapped = [...sessionMap.values()].filter(u => u === b.url).length;
+      const mapped = [...sessions.values()].filter(s => s.backendUrl === b.url).length;
       statusList.push({
         id: b.id,
         name: b.name,
@@ -257,12 +315,16 @@ const server = http.createServer(async (req, res) => {
         isPrimary: b.isPrimary
       });
     }
+    const leasedCount = [...sessions.values()].filter(s => s.leased).length;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       status: 'ok',
       mode: '3-fixed-workers (1 session per worker)',
       pool: statusList,
-      totalMappedSessions: sessionMap.size
+      trackedSessions: sessions.size,
+      leasedSessions: leasedCount,
+      idleReleaseSec: IDLE_RELEASE_SEC,
+      leaseDefaultTtlSec: LEASE_DEFAULT_TTL_SEC
     }));
   }
 
@@ -293,7 +355,13 @@ const server = http.createServer(async (req, res) => {
           if (s.debuggerUrl && !s.debuggerUrl.includes('sessionId=')) {
             s.debuggerUrl += `${s.debuggerUrl.includes('?') ? '&' : '?'}sessionId=${s.id}`;
           }
-          s.activeInPool = sessionMap.has(s.id);
+          const rec = sessions.get(s.id);
+          s.activeInPool = !!rec;
+          if (rec) {
+            s.leased = rec.leased;
+            s.leaseExpiresAt = rec.expiresAt ? new Date(rec.expiresAt).toISOString() : null;
+            s.lastActivityAt = new Date(rec.lastActivity).toISOString();
+          }
           aggregated.push(s);
         }
       }
@@ -302,11 +370,14 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ sessions: aggregated }));
   }
 
-  // 5. New session creation: POST /v1/sessions (serializado + reintento)
+  // 5. New session creation: POST /v1/sessions (serializado + reintento + lease)
   if (req.method === 'POST' && (reqUrl === '/v1/sessions' || reqUrl.startsWith('/v1/sessions?'))) {
     return withCreateLock(async () => {
       let body = '';
       try { body = await readRequestBody(req); } catch (e) {}
+
+      const leaseHdr = parseInt(req.headers['x-steel-lease-ttl'], 10);
+      const wantsLease = Number.isFinite(leaseHdr) && leaseHdr > 0;
 
       const tried = new Set();
       const errors = [];
@@ -318,8 +389,8 @@ const server = http.createServer(async (req, res) => {
 
         const r = await queryBackend(backend.url, reqUrl, 'POST', body || null, req.headers, 90000);
         if (r && r.statusCode >= 200 && r.statusCode < 300 && r.data && r.data.id) {
-          sessionMap.set(r.data.id, backend.url);
-          console.log(`[router] Mapped session ${r.data.id} -> ${backend.url}`);
+          trackSession(r.data.id, backend.url, { leased: wantsLease, ttlSec: leaseHdr });
+          console.log(`[router] Mapped session ${r.data.id} -> ${backend.url} (leased=${wantsLease})`);
           res.writeHead(200, { 'Content-Type': 'application/json', Connection: 'close' });
           return res.end(typeof r.data === 'string' ? r.data : JSON.stringify(r.data));
         }
@@ -349,7 +420,27 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  // 6. Debug viewer & DevTools security check (Capability Token)
+  // 6. Lease heartbeat (lo maneja el router, no Steel)
+  const hbMatch = reqUrl.match(/^\/v1\/sessions\/([0-9a-fA-F-]{36})\/heartbeat(?:\?|$)/);
+  if (req.method === 'POST' && hbMatch) {
+    const hbSid = hbMatch[1].toLowerCase();
+    const ttl = parseInt(req.headers['x-steel-lease-ttl'], 10);
+    const rec = heartbeatSession(hbSid, ttl);
+    if (!rec) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: 'unknown or expired session', sessionId: hbSid }));
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      success: true,
+      sessionId: hbSid,
+      leased: rec.leased,
+      expiresAt: rec.expiresAt ? new Date(rec.expiresAt).toISOString() : null,
+      idleReleaseSec: IDLE_RELEASE_SEC
+    }));
+  }
+
+  // 7. Debug viewer & DevTools security check (Capability Token)
   const isDebugView = reqUrl.startsWith('/v1/sessions/debug');
   const isDevtools = reqUrl.startsWith('/v1/devtools');
 
@@ -359,13 +450,13 @@ const server = http.createServer(async (req, res) => {
       return res.end(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>403 Acceso Denegado</title><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0f172a;color:#f8fafc;}.card{background:#1e293b;padding:2.5rem;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.5);text-align:center;max-width:480px;}h1{color:#ef4444;margin-top:0;}p{color:#94a3b8;line-height:1.5;}code{background:#334155;padding:2px 6px;border-radius:4px;color:#38bdf8;}</style></head><body><div class="card"><h1>🔒 403 Prohibido</h1><p>Se requiere un identificador de sesión activo (<code>?sessionId=UUID</code>) para ver el navegador en vivo.</p></div></body></html>`);
     }
 
-    let targetBackend = sessionMap.get(sid);
+    let targetBackend = sessions.get(sid)?.backendUrl || null;
     if (targetBackend) {
       const res2 = await queryBackend(targetBackend, '/v1/sessions');
       const active = res2 && res2.data && Array.isArray(res2.data.sessions)
         && res2.data.sessions.some(s => s.id === sid && isActiveSession(s));
       if (!active) {
-        sessionMap.delete(sid);
+        sessions.delete(sid);
         targetBackend = null;
       }
     }
@@ -383,9 +474,9 @@ const server = http.createServer(async (req, res) => {
     return proxyHttpRequest(targetBackend, req, res);
   }
 
-  // 7. Session-specific requests (by ID)
+  // 8. Session-specific requests (by ID)
   if (sid) {
-    let targetBackend = sessionMap.get(sid);
+    let targetBackend = sessions.get(sid)?.backendUrl || null;
     if (!targetBackend) {
       targetBackend = await findSessionOwner(sid);
     }
@@ -394,7 +485,7 @@ const server = http.createServer(async (req, res) => {
       const isRelease = req.method === 'POST' && reqUrl.includes('/release');
       return proxyHttpRequest(targetBackend, req, res, (resJson) => {
         if (isRelease && resJson && resJson.success) {
-          sessionMap.delete(sid);
+          sessions.delete(sid);
           console.log(`[router] Unmapped released session ${sid}`);
         } else if (resJson && resJson.id) {
           if (resJson.debugUrl && !resJson.debugUrl.includes('sessionId=')) {
@@ -408,7 +499,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 8. Default fallback to primary backend
+  // 9. Default fallback to primary backend
   const defaultBackend = BACKENDS[0].url;
   return proxyHttpRequest(defaultBackend, req, res);
 });
@@ -416,6 +507,7 @@ const server = http.createServer(async (req, res) => {
 // WebSocket / Upgrade proxying
 server.on('upgrade', async (req, clientSocket, head) => {
   const sid = extractSessionId(req.url || '', req.headers);
+  if (sid) touchSession(sid);
   const isCast = (req.url || '').includes('/cast') || (req.url || '').includes('/devtools') || (req.url || '').includes('/ws');
 
   if (isCast && !sid) {
@@ -423,7 +515,7 @@ server.on('upgrade', async (req, clientSocket, head) => {
     return clientSocket.destroy();
   }
 
-  let targetBackend = sid ? (sessionMap.get(sid) || await findSessionOwner(sid)) : null;
+  let targetBackend = sid ? (sessions.get(sid)?.backendUrl || await findSessionOwner(sid)) : null;
 
   if (isCast && !targetBackend) {
     clientSocket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\nSession not found or expired');
@@ -455,6 +547,12 @@ server.on('upgrade', async (req, clientSocket, head) => {
         serverSocket.write(head);
       }
 
+      // Cualquier byte CDP/Live-Viewer cuenta como actividad de la sesión.
+      if (sid) {
+        clientSocket.on('data', () => touchSession(sid));
+        serverSocket.on('data', () => touchSession(sid));
+      }
+
       clientSocket.pipe(serverSocket);
       serverSocket.pipe(clientSocket);
     });
@@ -474,11 +572,63 @@ server.on('upgrade', async (req, clientSocket, head) => {
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+/* -------------------------------------------------------------
+ * Session reaper: leases vencidos + inactividad + discovery
+ * ------------------------------------------------------------- */
+async function runSessionReaper() {
+  const now = Date.now();
+
+  // 1. Descubrir sesiones live no rastreadas y podar las que ya no existen
+  const liveByBackend = new Map();
+  for (const b of BACKENDS) {
+    const st = await getBackendState(b);
+    if (!st.reachable) continue;
+    liveByBackend.set(b.url, new Set(st.liveIds));
+    for (const id of st.liveIds) {
+      if (!sessions.has(id)) {
+        trackSession(id, b.url, { discovered: true });
+        console.log(`[reaper] discovered session ${id} on ${b.url}`);
+      }
+    }
+  }
+  for (const [sid2, rec] of sessions) {
+    const liveIds = liveByBackend.get(rec.backendUrl);
+    if (!liveIds) continue; // backend inalcanzable: no podar
+    if (!liveIds.has(sid2) && now - rec.createdAt > 120000) {
+      sessions.delete(sid2); // ya no vive (liberada por fuera)
+    }
+  }
+
+  // 2. Evaluar liberaciones
+  const toRelease = [];
+  for (const [sid2, rec] of sessions) {
+    const idleMs = now - rec.lastActivity;
+    if (MAX_AGE_SEC > 0 && now - rec.createdAt > MAX_AGE_SEC * 1000) {
+      toRelease.push([sid2, `max-age ${Math.round((now - rec.createdAt) / 1000)}s`]);
+      continue;
+    }
+    if (IDLE_RELEASE_SEC > 0 && idleMs > IDLE_RELEASE_SEC * 1000) {
+      toRelease.push([sid2, `idle ${Math.round(idleMs / 1000)}s`]);
+      continue;
+    }
+    if (rec.leased && rec.expiresAt && now > rec.expiresAt && idleMs > HEARTBEAT_GRACE_SEC * 1000) {
+      toRelease.push([sid2, 'lease expired']);
+      continue;
+    }
+  }
+  for (const [sid2, reason] of toRelease) {
+    await releaseSession(sid2, reason);
+  }
+}
+
+setInterval(runSessionReaper, Math.max(REAPER_INTERVAL_SEC, 5) * 1000);
+
+server.listen(PORT, '0.0.0.0', async () => {
   console.log(`=======================================================`);
   console.log(`🚀 Steel Router listening on 0.0.0.0:${PORT}`);
   console.log(`🧩 Mode: 3 fixed workers, 1 session per worker`);
   console.log(`🔒 No Docker socket access (pure proxy)`);
-  console.log(`⏳ Session creates are serialized with retry`);
+  console.log(`♻️  Lifecycle: idle=${IDLE_RELEASE_SEC}s, leaseTtl=${LEASE_DEFAULT_TTL_SEC}s, grace=${HEARTBEAT_GRACE_SEC}s`);
   console.log(`=======================================================`);
+  runSessionReaper().catch(() => {});
 });
