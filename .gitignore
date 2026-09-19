@@ -85,3 +85,5 @@ Thumbs.db
 # Temporary scratch files
 tmp/
 /tmp/
+# Playwright MCP test artifacts
+**/.playwright-mcp/

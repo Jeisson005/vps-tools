@@ -13,18 +13,21 @@
  *     spawns an independent session preloaded with user logins, and on exit
  *     syncs updated state back to disk before releasing the session.
  *
- * This enables unlimited concurrent sessions across OpenCode and Hermes without collisions.
+ * Session lifecycle (leases):
+ *  - The Steel session is created with a rolling lease (`x-steel-lease-ttl`).
+ *  - While there is MCP activity, this wrapper sends periodic heartbeats that
+ *    renew the lease; when the client stays idle past STEEL_ACTIVE_WINDOW_SEC
+ *    the heartbeats stop and the router releases the session automatically.
+ *  - On the next tool call, if the session is gone, the wrapper transparently
+ *    creates a replacement session and re-spawns the upstream Playwright MCP,
+ *    so the agent/user never has to manage this manually.
+ *  - Persistent profiles are synced to disk periodically, so an automatic
+ *    (non-graceful) release loses at most STEEL_CONTEXT_SYNC_SEC of cookies.
  *
  * MCP proxy layer:
- * The wrapper sits between OpenCode and the real @playwright/mcp process (an
- * MCP client talking to the real server, and an MCP server talking to OpenCode)
- * so it can inject one extra tool, `steel_get_session_info`. Because the Steel
- * sessionId created above is otherwise only ever printed to stderr, an agent
- * driving the browser via the `playwright`/`playwright-persistent` MCP tools has
- * no in-band way to learn which Steel session it is actually attached to - it
- * has to guess from `steel-session list`, which is ambiguous whenever more than
- * one session is active. `steel_get_session_info` answers that deterministically
- * from the exact session this wrapper instance created.
+ * The wrapper sits between OpenCode and the real @playwright/mcp process so it
+ * can inject one extra tool, `steel_get_session_info`, which reports the exact
+ * Steel session this MCP connection is driving right now.
  */
 
 const http = require('http');
@@ -40,6 +43,15 @@ let steelApiKey = process.env.STEEL_API_KEY || '';
 let steelDomain = process.env.STEEL_DOMAIN || '';
 let useSsl = process.env.USE_SSL === 'false' ? false : true;
 const STEEL_PORT = process.env.STEEL_PORT || '3000';
+
+function envInt(name, def) {
+  const n = parseInt(process.env[name], 10);
+  return Number.isFinite(n) && n >= 0 ? n : def;
+}
+let leaseTtlSec = envInt('STEEL_LEASE_TTL_SEC', 300);
+let activeWindowSec = envInt('STEEL_ACTIVE_WINDOW_SEC', 1800);
+let heartbeatIntervalSec = envInt('STEEL_HEARTBEAT_INTERVAL_SEC', 60);
+let contextSyncSec = envInt('STEEL_CONTEXT_SYNC_SEC', 300);
 
 // Allow requiring modules installed alongside OpenCode's own MCP servers
 // (e.g. @modelcontextprotocol/sdk, which ships as a dependency of @playwright/mcp).
@@ -66,8 +78,22 @@ for (const envPath of possibleEnvPaths) {
       if (matchDomain) steelDomain = matchDomain[1].trim().replace(/^["']|["']$/g, '');
     }
     const matchSsl = envContent.match(/^USE_SSL=(.*)$/m);
-    if (matchSsl) {
-      useSsl = matchSsl[1].trim().toLowerCase() !== 'false';
+    if (matchSsl) useSsl = matchSsl[1].trim().toLowerCase() !== 'false';
+    if (!process.env.STEEL_LEASE_TTL_SEC) {
+      const m = envContent.match(/^STEEL_LEASE_TTL_SEC=(.*)$/m);
+      if (m) leaseTtlSec = parseInt(m[1], 10) || leaseTtlSec;
+    }
+    if (!process.env.STEEL_ACTIVE_WINDOW_SEC) {
+      const m = envContent.match(/^STEEL_ACTIVE_WINDOW_SEC=(.*)$/m);
+      if (m) activeWindowSec = parseInt(m[1], 10) || activeWindowSec;
+    }
+    if (!process.env.STEEL_HEARTBEAT_INTERVAL_SEC) {
+      const m = envContent.match(/^STEEL_HEARTBEAT_INTERVAL_SEC=(.*)$/m);
+      if (m) heartbeatIntervalSec = parseInt(m[1], 10) || heartbeatIntervalSec;
+    }
+    if (!process.env.STEEL_CONTEXT_SYNC_SEC) {
+      const m = envContent.match(/^STEEL_CONTEXT_SYNC_SEC=(.*)$/m);
+      if (m) contextSyncSec = parseInt(m[1], 10) || contextSyncSec;
     }
   }
 }
@@ -97,7 +123,8 @@ function ensureDirSync(dirPath) {
   }
 }
 
-async function apiRequest(endpoint, method = 'GET', data = null, retries = 3) {
+async function apiRequest(endpoint, method = 'GET', data = null, opts = {}) {
+  const { retries = 3, timeoutMs = 20000, headers: extraHeaders = {} } = opts;
   const payload = data ? JSON.stringify(data) : null;
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -105,7 +132,8 @@ async function apiRequest(endpoint, method = 'GET', data = null, retries = 3) {
         const headers = {
           'Content-Type': 'application/json',
           'Connection': 'close',
-          'x-steel-api-key': steelApiKey
+          'x-steel-api-key': steelApiKey,
+          ...extraHeaders
         };
         if (payload) {
           headers['Content-Length'] = Buffer.byteLength(payload);
@@ -129,7 +157,7 @@ async function apiRequest(endpoint, method = 'GET', data = null, retries = 3) {
           });
         });
         req.on('error', reject);
-        req.setTimeout(20000, () => {
+        req.setTimeout(timeoutMs, () => {
           req.destroy();
           reject(new Error(`API request timed out: ${endpoint}`));
         });
@@ -192,13 +220,17 @@ async function createSteelSession() {
       }
     }
 
-    const session = await apiRequest('/v1/sessions', 'POST', createPayload);
+    const session = await apiRequest('/v1/sessions', 'POST', createPayload, {
+      retries: 2,
+      timeoutMs: 90000,
+      headers: { 'x-steel-lease-ttl': String(leaseTtlSec) }
+    });
     if (session && session.id) {
       sessionId = session.id;
       cdpEndpoint = `ws://127.0.0.1:${STEEL_PORT}/?sessionId=${sessionId}&apiKey=${steelApiKey}`;
-      console.error(`[steel-mcp] Created isolated Steel session ${sessionId} (mode=${isPersistent ? 'persistent' : 'ephemeral'})`);
+      console.error(`[steel-mcp] Created Steel session ${sessionId} (mode=${isPersistent ? 'persistent' : 'ephemeral'}, lease=${leaseTtlSec}s)`);
     } else {
-      failureNote = `Steel API did not return a session ID: ${JSON.stringify(session)}`;
+      failureNote = `Steel API did not return a session ID: ${JSON.stringify(session).slice(0, 300)}`;
       console.error(`[steel-mcp] Warning: ${failureNote}`);
     }
   } catch (err) {
@@ -213,7 +245,7 @@ async function syncAndReleaseSession(sessionId) {
   try {
     if (isPersistent) {
       console.error(`[steel-mcp] Saving persistent session context for ${sessionId}...`);
-      const ctx = await apiRequest(`/v1/sessions/${sessionId}/context`, 'GET');
+      const ctx = await apiRequest(`/v1/sessions/${sessionId}/context`, 'GET', null, { retries: 1 });
       if (ctx && typeof ctx === 'object' && (ctx.cookies || ctx.localStorage)) {
         ensureDirSync(PERSISTENT_DIR);
         const merged = mergeAndWriteContext(PERSISTENT_CONTEXT_FILE, ctx);
@@ -226,7 +258,7 @@ async function syncAndReleaseSession(sessionId) {
 
   try {
     console.error(`[steel-mcp] Releasing Steel session ${sessionId}...`);
-    await apiRequest(`/v1/sessions/${sessionId}/release`, 'POST', {});
+    await apiRequest(`/v1/sessions/${sessionId}/release`, 'POST', {}, { retries: 1 });
     console.error(`[steel-mcp] Released session ${sessionId}.`);
   } catch (e) {
     console.error(`[steel-mcp] Error releasing session: ${e.message}`);
@@ -235,8 +267,8 @@ async function syncAndReleaseSession(sessionId) {
 
 // ---------------------------------------------------------------------------
 // Legacy path: transparent stdio passthrough (used only if the MCP SDK is not
-// available, so this wrapper degrades to its old behavior instead of failing
-// outright). No `steel_get_session_info` tool is available in this mode.
+// available). Heartbeats keep the lease alive, but there is no transparent
+// session recreation in this mode.
 // ---------------------------------------------------------------------------
 async function runLegacyPassthrough(sessionId, cdpEndpoint) {
   const childArgs = [];
@@ -246,10 +278,23 @@ async function runLegacyPassthrough(sessionId, cdpEndpoint) {
 
   const child = spawn(command, args, { stdio: 'inherit' });
 
+  let hbTimer = null;
+  if (sessionId && heartbeatIntervalSec > 0) {
+    hbTimer = setInterval(() => {
+      apiRequest(`/v1/sessions/${sessionId}/heartbeat`, 'POST', {}, {
+        retries: 1,
+        timeoutMs: 6000,
+        headers: { 'x-steel-lease-ttl': String(leaseTtlSec) }
+      }).catch(() => {});
+    }, heartbeatIntervalSec * 1000);
+    hbTimer.unref?.();
+  }
+
   let cleanupDone = false;
   async function cleanup() {
     if (cleanupDone || !sessionId) return;
     cleanupDone = true;
+    if (hbTimer) clearInterval(hbTimer);
     await syncAndReleaseSession(sessionId);
   }
 
@@ -261,9 +306,10 @@ async function runLegacyPassthrough(sessionId, cdpEndpoint) {
 // ---------------------------------------------------------------------------
 // Proxy path: this wrapper acts as its own MCP server towards OpenCode, and as
 // an MCP client towards the real @playwright/mcp process, so it can splice in
-// the extra `steel_get_session_info` tool.
+// the extra `steel_get_session_info` tool and swap the upstream transparently
+// when the Steel session is recreated.
 // ---------------------------------------------------------------------------
-async function runMcpProxy(sdkRoot, sessionId, cdpEndpoint, failureNote) {
+async function runMcpProxy(sdkRoot, initial) {
   const { Client } = require(path.join(sdkRoot, 'dist/cjs/client/index.js'));
   const { StdioClientTransport } = require(path.join(sdkRoot, 'dist/cjs/client/stdio.js'));
   const { Server } = require(path.join(sdkRoot, 'dist/cjs/server/index.js'));
@@ -282,49 +328,210 @@ async function runMcpProxy(sdkRoot, sessionId, cdpEndpoint, failureNote) {
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }
   };
 
-  const liveViewerUrl = sessionId
-    ? `${PROTOCOL}://${STEEL_PUBLIC_DOMAIN}/v1/sessions/debug?sessionId=${sessionId}`
-    : null;
+  const state = {
+    sessionId: initial.sessionId,
+    cdpEndpoint: initial.cdpEndpoint,
+    alive: !!initial.sessionId,
+    lastActivity: Date.now(),
+    failureNote: initial.failureNote || null,
+    sessionInfo: null
+  };
 
-  const sessionInfo = sessionId
-    ? { success: true, sessionId, liveViewerUrl, cdpWsUrl: cdpEndpoint, mode: isPersistent ? 'persistent' : 'ephemeral' }
-    : { success: false, sessionId: null, liveViewerUrl: null, cdpWsUrl: null, mode: 'local-fallback', note: failureNote || 'No Steel session is active; this MCP connection is driving a local, unrecorded browser.' };
+  function refreshSessionInfo() {
+    const liveViewerUrl = state.sessionId
+      ? `${PROTOCOL}://${STEEL_PUBLIC_DOMAIN}/v1/sessions/debug?sessionId=${state.sessionId}`
+      : null;
+    state.sessionInfo = state.sessionId && state.alive
+      ? {
+          success: true,
+          sessionId: state.sessionId,
+          liveViewerUrl,
+          cdpWsUrl: state.cdpEndpoint,
+          mode: isPersistent ? 'persistent' : 'ephemeral',
+          leased: true,
+          leaseTtlSec
+        }
+      : {
+          success: false,
+          sessionId: null,
+          liveViewerUrl: null,
+          cdpWsUrl: null,
+          mode: state.sessionId ? 'steel-session-expired' : 'local-fallback',
+          note: state.failureNote || 'No active Steel session; this MCP connection is driving a local, unrecorded browser.'
+        };
+  }
+  refreshSessionInfo();
 
-  const childArgs = [];
-  if (cdpEndpoint) childArgs.push('--cdp-endpoint', cdpEndpoint);
-  childArgs.push(...forwardArgs);
-  const { command, args } = resolveMcpCommand(childArgs);
+  function markActivity() {
+    state.lastActivity = Date.now();
+  }
 
-  const clientTransport = new StdioClientTransport({ command, args });
-  const upstream = new Client({ name: 'steel-mcp-wrapper-upstream-client', version: '1.0.0' });
+  function spawnUpstream(cdpEndpoint) {
+    const childArgs = [];
+    if (cdpEndpoint) childArgs.push('--cdp-endpoint', cdpEndpoint);
+    childArgs.push(...forwardArgs);
+    const { command, args } = resolveMcpCommand(childArgs);
+    return new StdioClientTransport({ command, args });
+  }
+
+  let clientTransport = spawnUpstream(state.cdpEndpoint);
+  let upstream = new Client({ name: 'steel-mcp-wrapper-upstream-client', version: '1.0.0' });
   await upstream.connect(clientTransport);
+
+  let replacing = false;
+  function attachTransport(tr) {
+    tr.onclose = async () => {
+      if (replacing) return;
+      await cleanup();
+      process.exit(1);
+    };
+    tr.onerror = (err) => { console.error(`[steel-mcp] Upstream @playwright/mcp error: ${err.message}`); };
+  }
+  attachTransport(clientTransport);
+
+  let hbTimer = null;
+  let ctxTimer = null;
+  function stopLifecycle() {
+    if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
+    if (ctxTimer) { clearInterval(ctxTimer); ctxTimer = null; }
+  }
+  function startLifecycle() {
+    stopLifecycle();
+    if (!state.sessionId) return;
+
+    if (heartbeatIntervalSec > 0) {
+      hbTimer = setInterval(async () => {
+        if (!state.alive || !state.sessionId) return;
+        const idleSec = (Date.now() - state.lastActivity) / 1000;
+        if (idleSec > activeWindowSec) return; // dejar que el lease venza y el router libere
+        try {
+          const r = await apiRequest(`/v1/sessions/${state.sessionId}/heartbeat`, 'POST', {}, {
+            retries: 1,
+            timeoutMs: 6000,
+            headers: { 'x-steel-lease-ttl': String(leaseTtlSec) }
+          });
+          if (!r || r.success !== true) {
+            state.alive = false;
+            refreshSessionInfo();
+            console.error('[steel-mcp] Lease lost; a replacement session will be created on the next tool call.');
+          }
+        } catch (e) { /* transitorio: se reintenta en el siguiente tick */ }
+      }, heartbeatIntervalSec * 1000);
+    }
+
+    if (isPersistent && contextSyncSec > 0) {
+      ctxTimer = setInterval(async () => {
+        if (!state.alive || !state.sessionId) return;
+        try {
+          const ctx = await apiRequest(`/v1/sessions/${state.sessionId}/context`, 'GET', null, { retries: 1 });
+          if (ctx && typeof ctx === 'object' && (ctx.cookies || ctx.localStorage)) {
+            ensureDirSync(PERSISTENT_DIR);
+            mergeAndWriteContext(PERSISTENT_CONTEXT_FILE, ctx);
+          }
+        } catch (e) { /* contexto aún no disponible */ }
+      }, contextSyncSec * 1000);
+    }
+
+    if (hbTimer) hbTimer.unref?.();
+    if (ctxTimer) ctxTimer.unref?.();
+  }
+
+  let recreatePromise = null;
+  async function ensureLiveSession() {
+    if (state.alive) {
+      // Verificación rápida: el lease pudo vencer mientras el MCP estuvo idle.
+      // Solo se marca muerta ante un 404 explícito; un error de red no la mata.
+      const r = await apiRequest(`/v1/sessions/${state.sessionId}/heartbeat`, 'POST', {}, {
+        retries: 1,
+        timeoutMs: 5000,
+        headers: { 'x-steel-lease-ttl': String(leaseTtlSec) }
+      }).catch(() => null);
+      if (r && r.success === true) return true;
+      if (!r || r.success === undefined) return true; // respuesta ambigua: no la matamos
+      state.alive = false;
+      refreshSessionInfo();
+      console.error('[steel-mcp] Session expired while idle; recreating...');
+    }
+    if (recreatePromise) return recreatePromise;
+    recreatePromise = (async () => {
+      console.error('[steel-mcp] Steel session is not alive; creating a replacement session...');
+      const created = await createSteelSession();
+      if (!created.sessionId) {
+        state.failureNote = created.failureNote || 'No Steel session available (pool busy or launch error).';
+        refreshSessionInfo();
+        return false;
+      }
+
+      replacing = true;
+      try { await clientTransport.close(); } catch (e) {}
+      await new Promise(r => setTimeout(r, 150));
+      replacing = false;
+
+      clientTransport = spawnUpstream(created.cdpEndpoint);
+      upstream = new Client({ name: 'steel-mcp-wrapper-upstream-client', version: '1.0.0' });
+      await upstream.connect(clientTransport);
+      attachTransport(clientTransport);
+
+      state.sessionId = created.sessionId;
+      state.cdpEndpoint = created.cdpEndpoint;
+      state.alive = true;
+      state.failureNote = null;
+      refreshSessionInfo();
+      startLifecycle();
+      console.error(`[steel-mcp] Replacement Steel session ready: ${created.sessionId}`);
+      return true;
+    })().finally(() => { recreatePromise = null; });
+    return recreatePromise;
+  }
+
+  startLifecycle();
 
   const server = new Server({ name: 'steel-mcp-wrapper', version: '1.0.0' }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
+    markActivity();
     const { tools } = await upstream.listTools();
     return { tools: [...tools, SESSION_INFO_TOOL] };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    markActivity();
+    await ensureLiveSession();
+
     if (request.params.name === SESSION_INFO_TOOL_NAME) {
-      return { content: [{ type: 'text', text: JSON.stringify(sessionInfo, null, 2) }] };
+      return { content: [{ type: 'text', text: JSON.stringify(state.sessionInfo, null, 2) }] };
     }
+
+    if (!state.alive) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            success: false,
+            error: 'No Steel session available (pool busy or launch error). Retry in a few minutes.',
+            detail: state.failureNote
+          }, null, 2)
+        }],
+        isError: true
+      };
+    }
+
     return upstream.callTool(request.params);
   });
 
   let cleanupDone = false;
   async function cleanup() {
-    if (cleanupDone || !sessionId) return;
+    if (cleanupDone) return;
     cleanupDone = true;
-    await syncAndReleaseSession(sessionId);
+    stopLifecycle();
+    if (state.sessionId && state.alive) {
+      state.alive = false;
+      await syncAndReleaseSession(state.sessionId);
+    }
   }
 
   process.on('SIGINT', async () => { await cleanup(); process.exit(130); });
   process.on('SIGTERM', async () => { await cleanup(); process.exit(143); });
-
-  clientTransport.onclose = async () => { await cleanup(); process.exit(1); };
-  clientTransport.onerror = (err) => { console.error(`[steel-mcp] Upstream @playwright/mcp error: ${err.message}`); };
 
   const serverTransport = new StdioServerTransport();
   serverTransport.onclose = async () => { await cleanup(); process.exit(0); };
@@ -333,15 +540,15 @@ async function runMcpProxy(sdkRoot, sessionId, cdpEndpoint, failureNote) {
 }
 
 async function main() {
-  const { sessionId, cdpEndpoint, failureNote } = await createSteelSession();
+  const initial = await createSteelSession();
   const sdkRoot = resolveSdkRoot();
 
   if (!sdkRoot) {
     console.error('[steel-mcp] Warning: @modelcontextprotocol/sdk not found; running in legacy passthrough mode (no steel_get_session_info tool).');
-    return runLegacyPassthrough(sessionId, cdpEndpoint);
+    return runLegacyPassthrough(initial.sessionId, initial.cdpEndpoint);
   }
 
-  return runMcpProxy(sdkRoot, sessionId, cdpEndpoint, failureNote);
+  return runMcpProxy(sdkRoot, initial);
 }
 
 main().catch((err) => {

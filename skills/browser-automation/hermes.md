@@ -1,7 +1,7 @@
 ---
 name: browser-automation
 description: "Automate web browsing, navigation, form filling, logins, and live screen sessions via Steel Browser sandbox with persistent user profiles and proactive Live Viewer for Captchas/2FA."
-version: 2.3.0
+version: 2.4.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -20,9 +20,11 @@ Controls web browsing, page navigation, form interactions, authenticated user se
 
 All web automation through Steel Browser uses **dynamic, isolated sessions with persistent profile support**:
 * **Endpoint (this VPS):** Steel API on port `3000` (`browser.jeisson.top`). All sessions are dynamic with unique UUIDs — never use a shared static port.
+* **Capacity:** there are **3 Steel workers, 1 session per worker (max 3 concurrent sessions)**. If all 3 are busy, `steel-session create`/MCP returns an error — release a session or retry later.
 * **Every task or chat creates its own session:** Each call to `steel-session create` generates a unique `sessionId` (UUID) in Steel. Multiple conversations or parallel tasks run in separate browser processes without collisions.
 * **Persistent by Default:** Sessions automatically preload saved cookies, logins, and local storage from `~/.config/steel/profiles/persistent/context.json`.
 * **State Syncing:** When a session finishes or the user finishes logging in via the live viewer, running `steel-session sync <sessionId>` or `steel-session release <sessionId>` automatically saves any new cookies and tokens back to disk for future use.
+* **♻️ Session lifecycle (leases):** sessions created **without `--ttl` are auto-released after ~30 min without activity**. For tasks with long human waits (2FA, credentials) create with `--ttl 1h` and renew it with `steel-session heartbeat <sessionId> --ttl 1h`. **Closing the Live Viewer tab does NOT release the session** — always finish with `steel-session release`.
 
 ---
 
@@ -39,12 +41,14 @@ Whenever you are interacting via **Telegram, WhatsApp, Open WebUI, or the Hermes
 ### Step-by-Step Execution:
 1. Create the interactive live session:
    ```bash
-   steel-session create "<url>"
+   steel-session create "<url>" --ttl 1h
    ```
    This returns JSON with:
    - `sessionId`: Unique UUID for this session.
    - `liveViewerUrl`: `https://{{STEEL_DOMAIN}}/v1/sessions/debug?sessionId=<UUID>`
    - `cdpWsUrl`: `ws://127.0.0.1:3000/?sessionId=<UUID>&apiKey=...`
+
+   > `--ttl 1h` keeps the session alive during long human waits; renew it with `steel-session heartbeat <sessionId> --ttl 1h` if the user takes longer. Without `--ttl` the session is auto-released after ~30 min without activity.
 
 2. Send the link directly to the user as a clickable markdown link containing the full `liveViewerUrl` parameter:
    > *"He abierto una sesión interactiva en vivo para ti: [Abrir Sesión en Vivo](https://{{STEEL_DOMAIN}}/v1/sessions/debug?sessionId=<SESSION_ID>)\nPor favor abre el enlace, digita tus credenciales/2FA y avísame por aquí cuando hayas ingresado para continuar con tu consulta."*
