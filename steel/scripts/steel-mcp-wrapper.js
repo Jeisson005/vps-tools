@@ -489,7 +489,8 @@ async function runMcpProxy(sdkRoot, initial) {
   const server = new Server({ name: 'steel-mcp-wrapper', version: '1.0.0' }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    markActivity();
+    // Nota: NO cuenta como actividad. Si el cliente hace polling de tools/list
+    // mientras nadie usa el navegador, la sesión debe expirar igualmente.
     const { tools } = await upstream.listTools();
     return { tools: [...tools, SESSION_INFO_TOOL] };
   });
