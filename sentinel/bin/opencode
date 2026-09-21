@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# OpenCode CLI wrapper — puente de key con Hermes (OpenCode Go).
+#
+# El healer de Sentinel invoca `opencode run ...`. Este wrapper le inyecta
+# OPENCODE_API_KEY (provider opencode-go) leyéndola del .env de Hermes,
+# de modo que Sentinel use SIEMPRE la MISMA key que Hermes y quede
+# sincronizado automáticamente cuando esta rotne.
+#
+# NO modifica ~/.local/share/opencode/auth.json, por lo que el uso
+# interactivo del CLI (con su propia key almacenada) no se ve afectado.
+set -u
+
+HERMES_ENV="/home/jeisson/.hermes/.env"
+REAL_OPENCODE="/usr/local/bin/opencode"
+
+key="$(sed -n 's/^OPENCODE_GO_API_KEY=//p' "$HERMES_ENV" 2>/dev/null | head -n1 | tr -d '\r')"
+if [ -n "$key" ]; then
+  export OPENCODE_API_KEY="$key"
+fi
+
+exec "$REAL_OPENCODE" "$@"
