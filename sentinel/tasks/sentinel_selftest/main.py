@@ -68,9 +68,25 @@ def _c2():
 
 @check("chat_e2e")
 def _c3():
-    t = chat_complete("Responde unicamente con la palabra OK", max_tokens=20, timeout=60)
-    assert "ok" in t.lower(), "respuesta inesperada: %s" % redact(t, 100)
-    return "OK (respuesta=%s)" % redact(t, 20)
+    # El modelo vivo de Hermes puede ser de razonamiento (reasoning): parte del
+    # presupuesto de max_tokens se consume en tokens de pensamiento ANTES de
+    # emitir `content`. Un max_tokens pequeno deja la respuesta vacia de forma
+    # intermitente (finish_reason="length"), asi que usamos un presupuesto
+    # holgado y reintentamos con timeout creciente ante fallos transitorios.
+    last = "sin respuesta"
+    for attempt, (mt, tout) in enumerate(((256, 60), (512, 90)), 1):
+        try:
+            t = chat_complete("Responde unicamente con la palabra OK", max_tokens=mt, timeout=tout)
+            if "ok" in t.lower():
+                return "OK (respuesta=%s)" % redact(t, 20)
+            last = "respuesta inesperada: %s" % redact(t, 100)
+        except Exception as e:  # noqa: BLE001
+            last = redact(e, 200)
+        if attempt < 2:
+            import time
+
+            time.sleep(3)
+    raise AssertionError(last)
 
 
 @check("classifier_referee")

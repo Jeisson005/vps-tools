@@ -211,19 +211,14 @@ def check_models(timeout: float = 15.0) -> List[str]:
     return [str(m.get("id", "")) for m in data if isinstance(m, dict) and m.get("id")]
 
 
-def chat_complete(
-    prompt: str,
-    system: Optional[str] = None,
-    max_tokens: int = 300,
-    timeout: float = 20.0,
-    temperature: float = 0,
+def _chat_once(
+    c: Dict[str, Any],
+    messages: List[Dict[str, str]],
+    max_tokens: int,
+    timeout: float,
+    temperature: float,
 ) -> str:
-    """Direct OpenAI-compatible chat completion against Hermes endpoint."""
-    c = get_llm_config()
-    messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
+    """Single chat request. Returns stripped content (may be empty)."""
     body = _http_json(
         "%s/chat/completions" % c["base_url"],
         c["api_key"],
@@ -235,10 +230,42 @@ def chat_complete(
         text = body["choices"][0]["message"]["content"] or ""
     except Exception:
         raise RuntimeError("Respuesta inesperada del proveedor: %s" % redact(body, 300))
-    text = text.strip()
-    if not text:
-        raise RuntimeError("Respuesta vacia del proveedor")
-    return text
+    return text.strip()
+
+
+def chat_complete(
+    prompt: str,
+    system: Optional[str] = None,
+    max_tokens: int = 300,
+    timeout: float = 20.0,
+    temperature: float = 0,
+) -> str:
+    """Direct OpenAI-compatible chat completion against Hermes endpoint.
+
+    Robust against reasoning models (e.g. deepseek-v4.1-flash): part of the
+    max_tokens budget is spent on reasoning tokens BEFORE any `content` is
+    emitted, so a small budget can yield an empty reply non-deterministically
+    (finish_reason="length"). We retry with a larger budget before failing.
+    """
+    c = get_llm_config()
+    messages: List[Dict[str, str]] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    attempts = (max_tokens, max(max_tokens * 4, 512), max(max_tokens * 8, 1024))
+    empty = True
+    last_text = ""
+    for i, budget in enumerate(attempts):
+        # Give reasoning room: only a timeout-hung call stays empty.
+        eff_timeout = timeout if i == 0 else max(timeout, timeout * (i + 1) * 0.5)
+        last_text = _chat_once(c, messages, budget, eff_timeout, temperature)
+        if last_text:
+            empty = False
+            break
+    if empty:
+        raise RuntimeError("Respuesta vacia del proveedor (se agoto el presupuesto de tokens)")
+    return last_text
 
 
 def build_opencode_config(llm: Optional[Dict[str, Any]] = None) -> Tuple[str, str]:
