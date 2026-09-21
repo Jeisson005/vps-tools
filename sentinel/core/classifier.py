@@ -185,7 +185,7 @@ def _ai_settings():
 
 
 def _ai_enabled() -> bool:
-    """AI referee: ON by default reusing MCP panel AI; explicit opt-out wins."""
+    """AI referee: ON by default using live Hermes LLM config; explicit opt-out wins."""
     flag = os.getenv("SENTINEL_AI_ENABLED", "").strip().lower()
     if not flag:
         try:
@@ -197,6 +197,14 @@ def _ai_enabled() -> bool:
             pass
     if flag in ("0", "false", "no", "off"):
         return False
+    # Primary: live Hermes LLM config (dynamic, always in sync with Hermes).
+    try:
+        from .hermes_ai import is_configured as _hermes_ok
+
+        if _hermes_ok():
+            return True
+    except Exception:
+        pass
     # MCP gateway key present -> AI available (panel-managed, no extra keys).
     if _mcp_api_key():
         return True
@@ -205,6 +213,17 @@ def _ai_enabled() -> bool:
     if flag in ("1", "true", "yes", "on"):
         return bool(base and key and model)
     return bool(base and key and model)
+
+
+def _call_hermes_ai(prompt: str, system: str, max_tokens: int, timeout: float = 20.0) -> Optional[str]:
+    """Primary referee: direct call to the LIVE Hermes endpoint/key/model."""
+    try:
+        from .hermes_ai import chat_complete as _hermes_chat
+
+        return _hermes_chat(prompt, system=system, max_tokens=max_tokens, timeout=timeout)
+    except Exception as e:
+        logger.debug(f"Hermes AI call failed: {e}")
+        return None
 
 
 def _call_mcp_ai(prompt: str, system: str, max_tokens: int, timeout: float = 20.0) -> Optional[str]:
@@ -258,8 +277,9 @@ def _ai_referee(
     stderr_tail: str,
     task_context: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
-    """Tier 1 referee. Primary: panel-managed AI via local MCP gateway.
-    Fallback: direct OpenAI-compatible API (SENTINEL_AI_*). None on any failure."""
+    """Tier 1 referee. Primary: LIVE Hermes LLM config (dynamic).
+    Fallback: panel-managed AI via local MCP gateway, then direct
+    OpenAI-compatible API (SENTINEL_AI_*). None on any failure."""
     try:
         timeout = float(os.getenv("SENTINEL_AI_TIMEOUT", "") or "")
         max_tokens = int(os.getenv("SENTINEL_AI_MAX_TOKENS", "") or "")
@@ -301,7 +321,9 @@ def _ai_referee(
         },
         ensure_ascii=False,
     )
-    text: Optional[str] = _call_mcp_ai(prompt, system, max_tokens, timeout)
+    text: Optional[str] = _call_hermes_ai(prompt, system, max_tokens, timeout)
+    if text is None:
+        text = _call_mcp_ai(prompt, system, max_tokens, timeout)
     if text is None:
         base_url, api_key, model, _flag = _ai_settings()
         base_url = (base_url or "").rstrip("/")
