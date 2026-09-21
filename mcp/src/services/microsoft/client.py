@@ -8,6 +8,23 @@ logger = logging.getLogger("mcp.microsoft")
 GRAPH = "https://graph.microsoft.com/v1.0"
 AUTH = "https://login.microsoftonline.com"
 
+# Scopes delegados que pide el flujo OAuth del panel (Microsoft Graph).
+MAIL_SCOPE = "Mail.ReadWrite"
+MAIL_SEND_SCOPE = "Mail.Send"
+CAL_SCOPE = "Calendars.ReadWrite"
+FILES_SCOPE = "Files.ReadWrite.All"
+USER_SCOPE = "User.Read"
+OFFLINE_SCOPE = "offline_access"
+# Teams solo existe para cuentas corporativas/escolares: si se piden en una
+# cuenta personal el consentimiento falla, así que van en un set aparte.
+TEAMS_SCOPES = ("Team.ReadBasic.All Channel.ReadBasic.All ChannelMessage.Read.All "
+                "ChannelMessage.Send Chat.ReadWrite ChatMessage.Send")
+
+MICROSOFT_PERSONAL_SCOPES = f"{MAIL_SCOPE} {MAIL_SEND_SCOPE} {CAL_SCOPE} {FILES_SCOPE} {USER_SCOPE} {OFFLINE_SCOPE}"
+MICROSOFT_WORK_SCOPES = f"{MICROSOFT_PERSONAL_SCOPES} {TEAMS_SCOPES}"
+# Default del panel: scopes personales (cubre Outlook.com y también 365 sin Teams).
+MICROSOFT_SCOPES = MICROSOFT_PERSONAL_SCOPES
+
 
 class MSGraphClient:
     """Microsoft 365 client (Outlook mail + Calendar) via Graph API + OAuth2 refresh token."""

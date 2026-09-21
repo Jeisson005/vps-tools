@@ -70,12 +70,14 @@ class MicrosoftService(BaseMcpService):
                  "placeholder": "usuario@dominio.com"},
             ],
             "secrets": [
-                {"key": "tenant_id", "label": "Tenant ID (Azure AD)", "type": "text", "required": True},
+                {"key": "tenant_id", "label": "Tenant ID (o 'common' / 'consumers' / 'organizations')", "type": "text", "required": True,
+                 "placeholder": "common — para cuentas personales usa 'consumers' o deja 'common'"},
                 {"key": "client_id", "label": "Application (client) ID", "type": "text", "required": True},
                 {"key": "client_secret", "label": "Client Secret", "type": "password", "required": True},
-                {"key": "refresh_token", "label": "Refresh Token (OAuth)", "type": "textarea", "required": True},
-                {"key": "scope", "label": "Scope (opcional)", "type": "text", "required": False,
-                 "placeholder": "https://graph.microsoft.com/.default"},
+                {"key": "refresh_token", "label": "Refresh Token (OAuth) — o usa «Conectar con Microsoft»", "type": "textarea", "required": False,
+                 "placeholder": "(se rellena solo al conectar)"},
+                {"key": "scope", "label": "Scope (opcional, se rellena al conectar)", "type": "text", "required": False,
+                 "placeholder": "Mail.ReadWrite Mail.Send Calendars.ReadWrite Files.ReadWrite.All User.Read offline_access"},
             ],
         }
 

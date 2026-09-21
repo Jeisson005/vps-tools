@@ -127,8 +127,8 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 | `passbolt` | `/passbolt` | `passbolt_*` | clave GPG + passphrase |
 | `clickup` | `/clickup` | `clickup_*` | Personal API Token (`pk_...`) |
 | `notebooklm` | `/notebooklm` | `notebooklm_*` | Auth JSON (`storage_state.json` de notebooklm-py) |
-| `google` | `/google` | `google_gmail_*`, `google_calendar_*` | OAuth2 (client id/secret + refresh_token) |
-| `microsoft` | `/microsoft` | `outlook_mail_*`, `outlook_calendar_*` | OAuth2 (tenant/client id/secret + refresh_token) |
+| `google` | `/google` | `google_gmail_*`, `google_calendar_*` | OAuth2 vía panel («Conectar con Google»; refresh token automático) |
+| `microsoft` | `/microsoft` | `outlook_mail_*`, `outlook_calendar_*`, `teams_*`, `onedrive_*` | OAuth2 vía panel («Conectar con Microsoft»; Entra ID + refresh token automático) |
 | `telegram` | `/telegram` | `telegram_send_message`, `telegram_list_chats`, ... | MTProto (api_id/api_hash) + login por código |
 | `whatsapp` | `/whatsapp` | `whatsapp_send_message`, `whatsapp_list_chats`, ... | bridge Baileys (por teléfono, link por QR) |
 
@@ -150,6 +150,14 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 > Para otro host, setea `WHATSAPP_BRIDGE_HOST`.
 > **Telegram:** en el panel pon `api_id`/`api_hash` (de my.telegram.org) y el teléfono; luego llama
 > `telegram_request_code` → `telegram_sign_in(code)` para guardar la sesión.
+
+> **Google y Microsoft 365:** se conectan desde el panel con «Conectar con Google/Microsoft»
+> (flujo OAuth web; el refresh token queda cifrado en SQLite). Microsoft necesita una app de
+> Entra ID con redirect URI `https://<tu-dominio>/api/admin/services/microsoft/oauth/callback`;
+> `tenant_id` acepta `common`/`consumers` (cuentas personales) u `organizations`/el GUID del
+> tenant (corporativas, incluye scopes de Teams). En cuentas personales solo se piden correo,
+> calendario, OneDrive y `User.Read`. El callback debe quedar exento de Basic Auth en nginx
+> (ver `nginx/README.md`, sección 5).
 
 > Los agentes los consumen todos desde el endpoint **unificado** `/unified` (o `/mcp`).
 

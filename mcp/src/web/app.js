@@ -432,7 +432,7 @@ async function openAccountEditor(instanceId) {
     } catch (e) { showToast("Error cargando cuenta", "error"); }
   }
   document.getElementById("passbolt-modal").classList.add("active");
-  renderGoogleOAuthBox();
+  renderOAuthBox();
 }
 
 document.getElementById("btn-close-passbolt-modal").addEventListener("click", closeAccountEditor);
@@ -523,97 +523,117 @@ document.getElementById("passbolt-form").addEventListener("submit", async (e) =>
     showToast(err.message, "error");
   }
 });
-// --- Google OAuth web flow (100% panel) ---------------------------------------
-async function renderGoogleOAuthBox() {
-  const old = document.getElementById("google-oauth-box");
-  if (old) old.remove();
-  if (currentAccountService !== "google") return;
+// --- OAuth web flows del panel (Google / Microsoft) ---------------------------
+const OAUTH_FLOWS = {
+  google: {
+    title: "Conexión OAuth con Google",
+    button: "🔗 Conectar con Google",
+    step1: "guarda la cuenta con email + Client ID + Client Secret.",
+    step2: "pulsa <b>Conectar con Google</b>, acepta los scopes (Gmail, Calendar y Drive) y vuelve al panel.",
+    callbackLabel: "Callback web (regístrala si tu cliente OAuth es tipo <b>Web</b>):",
+    opening: "Abriendo Google en una pestaña nueva... autoriza y vuelve aquí.",
+    exchangeHint: "¿Cliente tipo Escritorio? Pega aquí el código o la URL de localhost",
+    exchangePlaceholder: "4/0XXXX... o http://127.0.0.1:8080/?code=4/0XXXX...",
+    exchangeRedirectUri: "http://127.0.0.1:8080/",
+    exchangeMissing: "Necesitas el ID de cuenta guardada y el código de Google.",
+  },
+  microsoft: {
+    title: "Conexión OAuth con Microsoft 365",
+    button: "🔗 Conectar con Microsoft",
+    step1: "guarda la cuenta con email + Tenant ID ('common' para personales) + Client ID + Client Secret.",
+    step2: "pulsa <b>Conectar con Microsoft</b>, inicia sesión y acepta los permisos (Outlook, Calendar y OneDrive); vuelve al panel.",
+    callbackLabel: "Callback web (regístrala en Entra ID › tu app › Authentication › Web):",
+    opening: "Abriendo Microsoft en una pestaña nueva... inicia sesión y acepta los permisos.",
+    exchangeHint: "¿Cliente público? Pega aquí el código o la URL de localhost",
+    exchangePlaceholder: "0.XXXX... o http://localhost/?code=0.XXXX...",
+    exchangeRedirectUri: "http://localhost",
+    exchangeMissing: "Necesitas el ID de cuenta guardada y el código de Microsoft.",
+  },
+};
+
+async function renderOAuthBox() {
+  document.querySelectorAll(".oauth-box").forEach(el => el.remove());
+  const flow = OAUTH_FLOWS[currentAccountService];
+  if (!flow) return;
   const container = document.getElementById("account-form-fields");
   if (!container) return;
 
   const box = document.createElement("div");
-  box.id = "google-oauth-box";
+  box.className = "oauth-box";
   box.innerHTML = `
-    <div class="form-section-title">Conexión OAuth con Google</div>
+    <div class="form-section-title">${flow.title}</div>
     <div class="test-feedback-box" style="display:block">
-      <div><b>Paso 1:</b> guarda la cuenta con email + Client ID + Client Secret.</div>
-      <div style="margin-top:6px"><b>Paso 2:</b> pulsa <b>Conectar con Google</b>, acepta los scopes (Gmail, Calendar y Drive) y vuelve al panel.</div>
-      <div id="google-oauth-cb" class="muted" style="margin-top:6px;font-size:12px;word-break:break-all"></div>
+      <div><b>Paso 1:</b> ${flow.step1}</div>
+      <div style="margin-top:6px"><b>Paso 2:</b> ${flow.step2}</div>
+      <div class="oauth-cb muted" style="margin-top:6px;font-size:12px;word-break:break-all"></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-      <button type="button" id="btn-google-connect" class="btn btn-primary btn-sm">🔗 Conectar con Google</button>
+      <button type="button" class="btn btn-primary btn-sm oauth-connect">${flow.button}</button>
     </div>
     <div class="input-group" style="margin-top:10px">
-      <label for="google-oauth-code">¿Cliente tipo Escritorio? Pega aquí el código o la URL de localhost</label>
-      <textarea id="google-oauth-code" rows="2" placeholder="4/0XXXX... o http://127.0.0.1:8080/?code=4/0XXXX..."></textarea>
+      <label for="oauth-code">${flow.exchangeHint}</label>
+      <textarea id="oauth-code" class="oauth-code" rows="2" placeholder="${flow.exchangePlaceholder}"></textarea>
     </div>
     <div style="display:flex;gap:8px;margin-top:6px">
-      <button type="button" id="btn-google-exchange" class="btn btn-secondary btn-sm">Canjear código</button>
+      <button type="button" class="btn btn-secondary btn-sm oauth-exchange">Canjear código</button>
     </div>
-    <div id="google-oauth-feedback" class="test-feedback-box hidden"></div>
+    <div class="oauth-feedback test-feedback-box hidden"></div>
   `;
   container.appendChild(box);
 
+  const setFeedback = (kind, text) => {
+    const fb = box.querySelector(".oauth-feedback");
+    fb.classList.remove("hidden");
+    fb.className = `oauth-feedback test-feedback-box${kind ? " " + kind : ""}`;
+    fb.innerText = text;
+  };
+
   try {
-    const res = await apiFetch("/api/admin/services/google/oauth/info");
+    const res = await apiFetch(`/api/admin/services/${encodeURIComponent(currentAccountService)}/oauth/info`);
     const info = await res.json();
-    const cb = document.getElementById("google-oauth-cb");
+    const cb = box.querySelector(".oauth-cb");
     if (cb && info.callback_url) {
-      cb.innerHTML = `Callback web (regístrala si tu cliente OAuth es tipo <b>Web</b>):<br><code>${info.callback_url}</code>`;
+      cb.innerHTML = `${flow.callbackLabel}<br><code>${info.callback_url}</code>`;
     }
   } catch (e) { /* info opcional */ }
 
-  document.getElementById("btn-google-connect").addEventListener("click", async () => {
-    const fb = document.getElementById("google-oauth-feedback");
+  box.querySelector(".oauth-connect").addEventListener("click", async () => {
     const instanceId = document.getElementById("pb-instance-id").value;
     if (!instanceId) {
-      fb.classList.remove("hidden");
-      fb.className = "test-feedback-box error";
-      fb.innerText = "Guarda la cuenta primero (con Client ID y Secret) y reabre el editor para conectar.";
+      setFeedback("error", "Guarda la cuenta primero (con Client ID y Secret) y reabre el editor para conectar.");
       return;
     }
-    fb.classList.remove("hidden");
-    fb.className = "test-feedback-box";
-    fb.innerText = "Generando URL de autorización...";
+    setFeedback("", "Generando URL de autorización...");
     try {
-      const res = await apiFetch(`/api/admin/services/google/oauth/start?instance_id=${encodeURIComponent(instanceId)}`);
+      const res = await apiFetch(`/api/admin/services/${encodeURIComponent(currentAccountService)}/oauth/start?instance_id=${encodeURIComponent(instanceId)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "No se pudo generar la URL");
-      fb.className = "test-feedback-box success";
-      fb.innerText = "Abriendo Google en una pestaña nueva... autoriza y vuelve aquí.";
+      setFeedback("success", flow.opening);
       window.open(data.auth_url, "_blank", "noopener");
     } catch (e) {
-      fb.className = "test-feedback-box error";
-      fb.innerText = "✗ " + e.message;
+      setFeedback("error", "✗ " + e.message);
     }
   });
 
-  document.getElementById("btn-google-exchange").addEventListener("click", async () => {
-    const fb = document.getElementById("google-oauth-feedback");
+  box.querySelector(".oauth-exchange").addEventListener("click", async () => {
     const instanceId = document.getElementById("pb-instance-id").value;
-    const code = document.getElementById("google-oauth-code").value.trim();
+    const code = box.querySelector(".oauth-code").value.trim();
     if (!instanceId || !code) {
-      fb.classList.remove("hidden");
-      fb.className = "test-feedback-box error";
-      fb.innerText = "Necesitas el ID de cuenta guardada y el código de Google.";
+      setFeedback("error", flow.exchangeMissing);
       return;
     }
-    fb.classList.remove("hidden");
-    fb.className = "test-feedback-box";
-    fb.innerText = "Canjeando código...";
+    setFeedback("", "Canjeando código...");
     try {
-      const res = await apiFetch("/api/admin/services/google/oauth/exchange", {
+      const res = await apiFetch(`/api/admin/services/${encodeURIComponent(currentAccountService)}/oauth/exchange`, {
         method: "POST",
-        body: JSON.stringify({ instance_id: instanceId, code, redirect_uri: "http://127.0.0.1:8080/" })
+        body: JSON.stringify({ instance_id: instanceId, code, redirect_uri: flow.exchangeRedirectUri })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || data.message || "Fallo el canje");
-      fb.className = "test-feedback-box success";
-      fb.innerText = "✓ " + (data.message || "Cuenta conectada. Pulsa «Probar Conexión Live».");
+      setFeedback("success", "✓ " + (data.message || "Cuenta conectada. Pulsa «Probar Conexión Live»."));
       loadServices();
     } catch (e) {
-      fb.className = "test-feedback-box error";
-      fb.innerText = "✗ " + e.message;
+      setFeedback("error", "✗ " + e.message);
     }
   });
 }
