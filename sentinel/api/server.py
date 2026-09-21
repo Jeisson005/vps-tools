@@ -369,6 +369,8 @@ async def mcp_sse_endpoint(request: Request):
 
 @app.post("/messages")
 @app.post("/mcp/messages")
+@app.post("/sse")
+@app.post("/mcp")
 async def mcp_messages_endpoint(request: Request):
     session_id = request.headers.get("Mcp-Session-Id") or request.query_params.get("sessionId")
     
