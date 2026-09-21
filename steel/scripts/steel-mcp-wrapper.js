@@ -100,22 +100,35 @@ for (const envPath of possibleEnvPaths) {
 
 const STEEL_PUBLIC_DOMAIN = steelDomain || 'browser.localhost';
 const PROTOCOL = useSsl ? 'https' : 'http';
-const PERSISTENT_DIR = path.join(homeDir, '.config/steel/profiles/persistent');
-const PERSISTENT_CONTEXT_FILE = path.join(PERSISTENT_DIR, 'context.json');
-
 // Check CLI arguments for mode
 const rawArgs = process.argv.slice(2);
+let customUserDataDir = null;
+const forwardArgs = [];
+for (let i = 0; i < rawArgs.length; i++) {
+  const arg = rawArgs[i];
+  if (arg === '--isolated' || arg === '--persistent' || arg === '--shared-browser-context') {
+    continue;
+  }
+  if (arg === '--user-data-dir') {
+    if (i + 1 < rawArgs.length && !rawArgs[i + 1].startsWith('--')) {
+      customUserDataDir = rawArgs[i + 1];
+      i++;
+    }
+    continue;
+  }
+  if (arg.startsWith('--user-data-dir=')) {
+    customUserDataDir = arg.slice('--user-data-dir='.length);
+    continue;
+  }
+  forwardArgs.push(arg);
+}
+
 const isIsolated = rawArgs.includes('--isolated');
-const isExplicitPersistent = rawArgs.includes('--persistent') || rawArgs.includes('--shared-browser-context') || rawArgs.some(a => a.startsWith('--user-data-dir'));
+const isExplicitPersistent = rawArgs.includes('--persistent') || rawArgs.includes('--shared-browser-context') || customUserDataDir !== null || rawArgs.some(a => a.startsWith('--user-data-dir'));
 const isPersistent = !isIsolated || isExplicitPersistent;
 
-// Safe forward arguments for Playwright MCP (strip custom wrapper flags)
-const forwardArgs = rawArgs.filter(arg =>
-  arg !== '--isolated' &&
-  arg !== '--persistent' &&
-  arg !== '--shared-browser-context' &&
-  !arg.startsWith('--user-data-dir')
-);
+const PERSISTENT_DIR = customUserDataDir || path.join(homeDir, '.config/steel/profiles/persistent');
+const PERSISTENT_CONTEXT_FILE = path.join(PERSISTENT_DIR, 'context.json');
 
 function ensureDirSync(dirPath) {
   if (!fs.existsSync(dirPath)) {
