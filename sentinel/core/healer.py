@@ -162,17 +162,46 @@ class Healer:
         )
         
         opencode_bin = settings.OPENCODE_BIN if Path(settings.OPENCODE_BIN).exists() else "opencode"
-        
+
+        # Deterministic Hermes path: dedicated provider with the LIVE Hermes
+        # credential/model/endpoint on a private server. Falls back to the
+        # legacy binary invocation only if Hermes LLM config is unavailable.
+        use_hermes = False
         try:
-            # Run OpenCode in headless non-interactive mode
-            # NOTE: --auto is the v1.18+ flag; the legacy --auto-approve was removed.
-            cmd = [opencode_bin, "run", "--auto", prompt]
-            proc = subprocess.run(cmd, cwd=str(task_dir), capture_output=True, text=True, timeout=180)
-            opencode_out = proc.stdout
-        except Exception as e:
-            logger.error(f"Failed to spawn OpenCode for task '{task_name}': {e}")
-            cls.record_failure(task_id)
-            return {"repaired": False, "reason": f"opencode_spawn_error: {e}"}
+            from .hermes_ai import is_configured as _hermes_ok
+
+            use_hermes = bool(_hermes_ok())
+        except Exception:
+            use_hermes = False
+
+        opencode_out = ""
+        if use_hermes:
+            try:
+                from .hermes_ai import run_opencode as _run_opencode
+
+                res = _run_opencode(prompt, cwd=task_dir, timeout=180)
+                opencode_out = res.get("stdout", "") or ""
+                if not res.get("ok"):
+                    logger.warning(
+                        "Hermes opencode heal failed rc=%s: %s",
+                        res.get("returncode"),
+                        (res.get("stderr", "") or "")[-400:],
+                    )
+            except Exception as e:
+                logger.error(f"Hermes opencode heal error for task '{task_name}': {e}")
+                cls.record_failure(task_id)
+                return {"repaired": False, "reason": "opencode_spawn_error"}
+        else:
+            try:
+                # Run OpenCode in headless non-interactive mode
+                # NOTE: --auto is the v1.18+ flag; the legacy --auto-approve was removed.
+                cmd = [opencode_bin, "run", "--auto", prompt]
+                proc = subprocess.run(cmd, cwd=str(task_dir), capture_output=True, text=True, timeout=180)
+                opencode_out = proc.stdout
+            except Exception as e:
+                logger.error(f"Failed to spawn OpenCode for task '{task_name}': {e}")
+                cls.record_failure(task_id)
+                return {"repaired": False, "reason": f"opencode_spawn_error: {e}"}
 
         # Extract non-technical summary
         summary = "Se corrigió un error en el flujo de ejecución de la tarea."

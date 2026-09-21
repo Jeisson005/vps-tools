@@ -1,0 +1,11 @@
+{
+  "id": "sentinel_selftest",
+  "name": "Autoprueba Diaria Sentinel",
+  "language": "python",
+  "script_file": "main.py",
+  "schedule_cron": "0 0 * * *",
+  "requires_browser": false,
+  "timeout_seconds": 600,
+  "created_at": 1758420000,
+  "description": "Autoprueba diaria 00:00 del motor Sentinel: verifica config LLM viva de Hermes, E2E directo de chat y modelos, referee del clasificador, E2E del healer via opencode con provider dedicado, bot urgente de Telegram, cableado de cron, salud del API y disco. Si algo falla notifica por el bot rojo y sale 1."
+}
