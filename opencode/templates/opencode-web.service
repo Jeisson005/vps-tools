@@ -9,7 +9,7 @@ WorkingDirectory={{OPENCODE_WORKSPACE}}
 EnvironmentFile=-/etc/default/opencode-web
 Environment=HOME=/home/{{OPENCODE_USER}}
 Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/{{OPENCODE_USER}}/.opencode/bin:/home/{{OPENCODE_USER}}/.local/bin
-ExecStart=/usr/local/bin/opencode web --port {{OPENCODE_PORT}} --hostname {{OPENCODE_HOST}} --log-level {{OPENCODE_LOG_LEVEL}}
+ExecStart=/usr/local/bin/opencode serve --port {{OPENCODE_PORT}} --hostname {{OPENCODE_HOST}} --log-level {{OPENCODE_LOG_LEVEL}}
 Restart=always
 RestartSec=5
 StandardOutput=journal

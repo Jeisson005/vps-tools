@@ -53,7 +53,7 @@ OPENCODE_SERVER_PASSWORD=""
 BRAVE_API_KEY=""
 MCP_API_KEY=""
 PASSBOLT_MCP_URL="http://127.0.0.1:8005/passbolt/sse"
-OPENCODE_LOG_LEVEL="INFO"
+OPENCODE_LOG_LEVEL="info"
 
 if [[ -f .env ]]; then
   load_env_safe .env
@@ -85,7 +85,7 @@ fi
 
 # 2. Download and install OpenCode binary natively
 echo "--> [2/6] Downloading and installing OpenCode native binary..."
-su - "${OPENCODE_USER}" -c 'curl -fsSL https://opencode.ai/install | bash'
+su - "${OPENCODE_USER}" -c 'curl -fsSL https://opencode.ai/v2/install | bash'
 
 # Locate binary and symlink to /usr/local/bin/opencode
 OPENCODE_BIN=""
