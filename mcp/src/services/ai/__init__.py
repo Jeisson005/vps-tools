@@ -24,6 +24,7 @@ class AiService(BaseMcpService):
             base_url=cfg.get("base_url", ""),
             api_key=sec.get("api_key", ""),
             model=cfg.get("model", ""),
+            session_id=cfg.get("session_id", ""),
         )
 
     def reload_accounts(self, instances: List[Dict[str, Any]]):
