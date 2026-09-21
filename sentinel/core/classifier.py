@@ -17,7 +17,6 @@ import os
 import re
 import urllib.request
 from enum import Enum
-from pathlib import Path
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger("sentinel.classifier")
@@ -144,28 +143,8 @@ def _matches_any(text: str, patterns) -> Optional[str]:
     return None
 
 
-def _mcp_api_key() -> str:
-    """Reuse the MCP gateway key (panel-managed AI). Never logged."""
-    key = os.getenv("MCP_API_KEY", "").strip()
-    if key:
-        return key
-    for cand in (
-        Path("/home/jeisson/vps-tools/mcp/.env"),
-        Path(__file__).resolve().parent.parent.parent / "mcp" / ".env",
-    ):
-        try:
-            if cand.is_file():
-                for line in cand.read_text(encoding="utf-8", errors="ignore").splitlines():
-                    line = line.strip()
-                    if line.startswith("MCP_API_KEY="):
-                        return line.split("=", 1)[1].strip().strip("'\"")
-        except Exception:
-            continue
-    return ""
-
-
 def _ai_settings():
-    """Direct-API fallback config (only if MCP gateway is unreachable)."""
+    """Direct OpenAI-compatible API config (fallback when Hermes is unavailable)."""
     base = os.getenv("SENTINEL_AI_BASE_URL") or ""
     key = os.getenv("SENTINEL_AI_API_KEY") or ""
     model = os.getenv("SENTINEL_AI_MODEL") or ""
@@ -205,13 +184,8 @@ def _ai_enabled() -> bool:
             return True
     except Exception:
         pass
-    # MCP gateway key present -> AI available (panel-managed, no extra keys).
-    if _mcp_api_key():
-        return True
     # Otherwise require direct-API credentials.
     base, key, model, _ = _ai_settings()
-    if flag in ("1", "true", "yes", "on"):
-        return bool(base and key and model)
     return bool(base and key and model)
 
 
@@ -226,51 +200,6 @@ def _call_hermes_ai(prompt: str, system: str, max_tokens: int, timeout: float = 
         return None
 
 
-def _call_mcp_ai(prompt: str, system: str, max_tokens: int, timeout: float = 20.0) -> Optional[str]:
-    """Call panel-managed AI via local MCP gateway. Returns raw text or None."""
-    api_key = _mcp_api_key()
-    if not api_key:
-        return None
-    port = os.getenv("MCP_PORT", "8005").strip() or "8005"
-    urls = [f"http://127.0.0.1:{port}/mcp", f"http://127.0.0.1:{port}/unified"]
-    payload = json.dumps(
-        {
-            "jsonrpc": "2.0",
-            "id": "sentinel-classify",
-            "method": "tools/call",
-            "params": {
-                "name": "ai_complete",
-                "arguments": {"prompt": prompt, "system": system, "max_tokens": max_tokens},
-            },
-        }
-    ).encode("utf-8")
-    for url in urls:
-        try:
-            req = urllib.request.Request(
-                url,
-                data=payload,
-                headers={"Content-Type": "application/json", "X-API-Key": api_key},
-            )
-            with urllib.request.urlopen(req, timeout=timeout) as res:
-                body = json.loads(res.read().decode("utf-8", errors="replace"))
-            result = body.get("result", {}) or {}
-            content = result.get("content", []) or []
-            if content and isinstance(content[0], dict):
-                text = content[0].get("text", "") or ""
-                try:
-                    inner = json.loads(text)
-                    if isinstance(inner, dict) and "text" in inner:
-                        return str(inner["text"])
-                except Exception:
-                    pass
-                return text
-            return None
-        except Exception as e:
-            logger.debug(f"MCP AI call failed ({url}): {e}")
-            continue
-    return None
-
-
 def _ai_referee(
     exit_code: int,
     stdout_tail: str,
@@ -278,8 +207,7 @@ def _ai_referee(
     task_context: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
     """Tier 1 referee. Primary: LIVE Hermes LLM config (dynamic).
-    Fallback: panel-managed AI via local MCP gateway, then direct
-    OpenAI-compatible API (SENTINEL_AI_*). None on any failure."""
+    Fallback: direct OpenAI-compatible API (SENTINEL_AI_*). None on any failure."""
     try:
         timeout = float(os.getenv("SENTINEL_AI_TIMEOUT", "") or "")
         max_tokens = int(os.getenv("SENTINEL_AI_MAX_TOKENS", "") or "")
@@ -322,8 +250,6 @@ def _ai_referee(
         ensure_ascii=False,
     )
     text: Optional[str] = _call_hermes_ai(prompt, system, max_tokens, timeout)
-    if text is None:
-        text = _call_mcp_ai(prompt, system, max_tokens, timeout)
     if text is None:
         base_url, api_key, model, _flag = _ai_settings()
         base_url = (base_url or "").rstrip("/")

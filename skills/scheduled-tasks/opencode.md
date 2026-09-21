@@ -72,11 +72,11 @@ Whenever the user asks to *"programar una tarea"*, *"crear un cron"*, *"sincroni
    - **Reuse/extend** (`sentinel_update_task`) when the new criterion shares the **same channel, compatible cadence, and data** (e.g., another filter on the same mailbox or group).
    - **Create a separate task** when the required **cadence/latency** changes (e.g., every 5 min vs. daily), the **recipient or severity**, the **secrets**, or if merging criteria would tangle the logic.
    - When in doubt, prefer small readable tasks; avoid pointless polling duplication, but don't force a merge that complicates the task.
-8. **One-off AI calls in tasks (never ask the user for keys):** If a task needs a very specific AI call
-   (summarize, classify, draft), use the gateway's **`ai_complete`** MCP tool: **`api_key`/`model`/`base_url`
-   are already configured** on the gateway (`MCP_AI_BASE_URL`, `MCP_AI_API_KEY`, `MCP_AI_MODEL`) — **never ask
-   the user for AI keys**. From a script, call the MCP `/ai` endpoint with the gateway `MCP_API_KEY`, or
-   use `litellm` reading those same vars. Keep the call minimal; don't use AI for deterministic things.
+8. **One-off AI calls in tasks:** If a task needs a very specific AI call (summarize, classify, draft),
+   give it its **own** OpenAI-compatible provider credentials via `env_vars` at creation time
+   (`SENTINEL_AI_BASE_URL`, `SENTINEL_AI_API_KEY`, `SENTINEL_AI_MODEL`) or reuse Sentinel's Hermes LLM
+   helper (`sentinel/core/hermes_ai.py`). Never hardcode or print keys. Keep the call minimal; don't use
+   AI for deterministic things.
 9. **🔔 Notification bots and how your scripts get credentials:**
    - Use the right bot instead of inventing sends:
      - **Routine bot** (`TELEGRAM_BOT_ROUTINE_TOKEN`): **the one you may use** for informational alerts, summaries, and watcher matches.
