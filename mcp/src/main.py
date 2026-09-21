@@ -335,7 +335,7 @@ async def get_service_account_schema(service_id: str, auth: bool = Depends(verif
 _GOOGLE_OAUTH_STATES: Dict[str, Dict[str, Any]] = {}
 
 
-def _google_public_base() -> str:
+def _mcp_public_base() -> str:
     base = (os.environ.get("MCP_PUBLIC_BASE_URL") or "").strip().rstrip("/")
     if base:
         return base
@@ -343,6 +343,26 @@ def _google_public_base() -> str:
     if domain:
         return f"https://{domain}"
     return "https://mcp.jeisson.top"
+
+
+def _google_public_base() -> str:
+    return _mcp_public_base()
+
+
+def _oauth_result_page(provider: str, ok: bool, title: str, msg: str) -> str:
+    color = "#22c55e" if ok else "#ef4444"
+    icon = "✓" if ok else "✗"
+    return (
+        "<!DOCTYPE html><html lang='es'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        f"<title>{provider} OAuth</title></head>"
+        f"<body style='font-family:system-ui;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0'>"
+        f"<div style='max-width:480px;background:#1e293b;padding:32px;border-radius:16px;text-align:center'>"
+        f"<div style='font-size:48px;color:{color}'>{icon}</div>"
+        f"<h2>{title}</h2><p style='color:#94a3b8'>{msg}</p>"
+        "<p style='color:#64748b;font-size:13px'>Puedes cerrar esta pestaña y pulsar «Probar» en el panel.</p>"
+        "</div></body></html>"
+    )
 
 
 def _google_callback_url() -> str:
@@ -434,19 +454,7 @@ async def google_oauth_start(instance_id: str = Query(...), auth: bool = Depends
 async def google_oauth_callback(code: Optional[str] = Query(None), state: Optional[str] = Query(None),
                                 error: Optional[str] = Query(None)):
     def _page(ok: bool, title: str, msg: str) -> str:
-        color = "#22c55e" if ok else "#ef4444"
-        icon = "✓" if ok else "✗"
-        return (
-            "<!DOCTYPE html><html lang='es'><head><meta charset='utf-8'>"
-            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-            "<title>Google OAuth</title></head>"
-            f"<body style='font-family:system-ui;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0'>"
-            f"<div style='max-width:480px;background:#1e293b;padding:32px;border-radius:16px;text-align:center'>"
-            f"<div style='font-size:48px;color:{color}'>{icon}</div>"
-            f"<h2>{title}</h2><p style='color:#94a3b8'>{msg}</p>"
-            "<p style='color:#64748b;font-size:13px'>Puedes cerrar esta pestaña y pulsar «Probar» en el panel.</p>"
-            "</div></body></html>"
-        )
+        return _oauth_result_page("Google", ok, title, msg)
     if error:
         return HTMLResponse(_page(False, "Autorización cancelada", f"Google devolvió: {error}"), status_code=400)
     if not code or not state:
@@ -509,6 +517,200 @@ async def google_oauth_exchange(payload: GoogleOAuthExchangePayload, auth: bool 
     if not refresh:
         raise HTTPException(status_code=400, detail="Google no devolvió refresh_token.")
     return _google_save_refresh(payload.instance_id, refresh, tokens.get("scope", ""))
+
+# --- Microsoft OAuth web flow (100% panel, sin localhost manual) ----------------
+# Estados pendientes: state -> {instance_id, redirect_uri, scope, created}
+_MICROSOFT_OAUTH_STATES: Dict[str, Dict[str, Any]] = {}
+
+
+def _microsoft_callback_url() -> str:
+    return _mcp_public_base() + "/api/admin/services/microsoft/oauth/callback"
+
+
+def _looks_like_tenant_id(value: str) -> bool:
+    return len(value) == 36 and value.count("-") == 4
+
+
+def _microsoft_scopes_for(tenant_id: str, saved_scope: str = "") -> str:
+    """Scopes del flujo web: respeta el scope guardado o lo deduce del tenant.
+
+    Reglas: tenant GUID o 'organizations' => scopes de trabajo (incluye Teams);
+    'consumers'/'common' => scopes personales, porque pedir Teams en una cuenta
+    personal hace fallar el consentimiento. Para Teams con tenant 'common' hay
+    que pegar el scope explícito en la cuenta.
+    """
+    from .services.microsoft.client import MICROSOFT_PERSONAL_SCOPES, MICROSOFT_WORK_SCOPES
+    if (saved_scope or "").strip():
+        return saved_scope.strip()
+    t = (tenant_id or "").strip().lower()
+    if t == "organizations" or _looks_like_tenant_id(t):
+        return MICROSOFT_WORK_SCOPES
+    return MICROSOFT_PERSONAL_SCOPES
+
+
+async def _microsoft_exchange_code(tenant_id: str, client_id: str, client_secret: str,
+                                   code: str, redirect_uri: str, scope: str = "") -> Dict[str, Any]:
+    import httpx
+    tenant = (tenant_id or "common").strip() or "common"
+    data = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+    }
+    if scope:
+        data["scope"] = scope
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        res = await client.post(f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token", data=data)
+        if res.status_code != 200:
+            raise RuntimeError(f"Microsoft token exchange failed ({res.status_code}): {res.text[:300]}")
+        return res.json()
+
+
+def _microsoft_save_refresh(instance_id: str, refresh_token: str, scope: str) -> Dict[str, Any]:
+    instances = registry.get_instances("microsoft")
+    target = next((i for i in instances if i["instance_id"] == instance_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Cuenta Microsoft '{instance_id}' no existe. Guárdala primero en el panel.")
+    merged_secrets = dict(target["secrets"])
+    merged_secrets["refresh_token"] = refresh_token
+    if scope:
+        merged_secrets["scope"] = scope
+    registry.save_instance(
+        "microsoft", instance_id, target["enabled"], target["config"], merged_secrets,
+        is_default=target.get("is_default", True), name=target.get("name", ""),
+    )
+    log_activity("microsoft", "oauth_connect", "success", f"Cuenta '{instance_id}' conectada vía web")
+    return {"ok": True, "message": f"Cuenta '{instance_id}' conectada con Microsoft.", "instance_id": instance_id}
+
+
+@app.get("/api/admin/services/microsoft/oauth/info")
+async def microsoft_oauth_info(auth: bool = Depends(verify_admin_token)):
+    from .services.microsoft.client import MICROSOFT_PERSONAL_SCOPES, MICROSOFT_WORK_SCOPES
+    return {
+        "callback_url": _microsoft_callback_url(),
+        "scopes": MICROSOFT_PERSONAL_SCOPES,
+        "scopes_work": MICROSOFT_WORK_SCOPES,
+        "instructions": (
+            "1) Guarda la cuenta con email + tenant_id (usa 'common' para cuentas personales) "
+            "+ client_id + client_secret. "
+            "2) Registra esta callback URL en la app de Entra ID (plataforma Web). "
+            "3) Pulsa «Conectar con Microsoft»."
+        ),
+    }
+
+
+@app.get("/api/admin/services/microsoft/oauth/start")
+async def microsoft_oauth_start(instance_id: str = Query(...), auth: bool = Depends(verify_admin_token)):
+    import urllib.parse
+    instances = registry.get_instances("microsoft")
+    target = next((i for i in instances if i["instance_id"] == instance_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Cuenta Microsoft '{instance_id}' no existe. Guárdala primero.")
+    secrets = target["secrets"] or {}
+    tenant = (secrets.get("tenant_id") or "common").strip() or "common"
+    client_id = (secrets.get("client_id") or "").strip()
+    client_secret = (secrets.get("client_secret") or "").strip()
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=400, detail="La cuenta no tiene client_id/client_secret guardados.")
+    redirect_uri = _microsoft_callback_url()
+    scopes = _microsoft_scopes_for(tenant, secrets.get("scope", ""))
+    state = "ms-" + uuid.uuid4().hex[:16]
+    _MICROSOFT_OAUTH_STATES[state] = {"instance_id": instance_id, "redirect_uri": redirect_uri,
+                                      "scope": scopes, "created": asyncio.get_event_loop().time()}
+    params = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "response_mode": "query",
+        "scope": scopes,
+        "state": state,
+        "prompt": "consent",
+    }
+    auth_url = (
+        f"https://login.microsoftonline.com/{urllib.parse.quote(tenant)}/oauth2/v2.0/authorize?"
+        + urllib.parse.urlencode(params)
+    )
+    return {"auth_url": auth_url, "redirect_uri": redirect_uri, "state": state, "scopes": scopes}
+
+
+@app.get("/api/admin/services/microsoft/oauth/callback", response_class=HTMLResponse)
+async def microsoft_oauth_callback(code: Optional[str] = Query(None), state: Optional[str] = Query(None),
+                                   error: Optional[str] = Query(None),
+                                   error_description: Optional[str] = Query(None)):
+    if error:
+        return HTMLResponse(_oauth_result_page(
+            "Microsoft", False, "Autorización cancelada",
+            f"Microsoft devolvió: {(error_description or error)[:300]}"), status_code=400)
+    if not code or not state:
+        return HTMLResponse(_oauth_result_page("Microsoft", False, "Faltan parámetros",
+                                               "No se recibió code/state de Microsoft."), status_code=400)
+    pending = _MICROSOFT_OAUTH_STATES.pop(state, None)
+    if not pending:
+        return HTMLResponse(_oauth_result_page("Microsoft", False, "Sesión caducada",
+                                               "Repite «Conectar con Microsoft» desde el panel."), status_code=400)
+    try:
+        instances = registry.get_instances("microsoft")
+        target = next((i for i in instances if i["instance_id"] == pending["instance_id"]), None)
+        if not target:
+            raise RuntimeError("La cuenta ya no existe.")
+        secrets = target["secrets"] or {}
+        tenant = (secrets.get("tenant_id") or "common").strip() or "common"
+        tokens = await _microsoft_exchange_code(
+            tenant, (secrets.get("client_id") or "").strip(), (secrets.get("client_secret") or "").strip(),
+            code, pending["redirect_uri"], pending.get("scope", ""),
+        )
+        refresh = tokens.get("refresh_token", "")
+        if not refresh:
+            raise RuntimeError("Microsoft no devolvió refresh_token (reintenta aceptando el consentimiento).")
+        _microsoft_save_refresh(pending["instance_id"], refresh, tokens.get("scope", "") or pending.get("scope", ""))
+        return HTMLResponse(_oauth_result_page(
+            "Microsoft", True, "Microsoft conectado",
+            f"Cuenta '{pending['instance_id']}' vinculada. Outlook, Calendar y OneDrive activos."))
+    except Exception as e:
+        logger.error(f"microsoft oauth callback failed: {e}")
+        return HTMLResponse(_oauth_result_page("Microsoft", False, "Error conectando", str(e)[:300]), status_code=400)
+
+
+class MicrosoftOAuthExchangePayload(BaseModel):
+    instance_id: str
+    code: str
+    redirect_uri: str = "http://localhost"
+
+
+@app.post("/api/admin/services/microsoft/oauth/exchange")
+async def microsoft_oauth_exchange(payload: MicrosoftOAuthExchangePayload, auth: bool = Depends(verify_admin_token)):
+    """Canje manual para clientes públicos (redirect a localhost): pega el code en el panel."""
+    code = (payload.code or "").strip()
+    if "code=" in code and "://" in code:
+        # Acepta pegar la URL completa de localhost (?code=...)
+        import urllib.parse as _up
+        try:
+            code = _up.parse_qs(_up.urlparse(code).query).get("code", [code])[0]
+        except Exception:
+            pass
+    if not code:
+        raise HTTPException(status_code=400, detail="Falta el código de autorización.")
+    instances = registry.get_instances("microsoft")
+    target = next((i for i in instances if i["instance_id"] == payload.instance_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Cuenta Microsoft '{payload.instance_id}' no existe.")
+    secrets = target["secrets"] or {}
+    tenant = (secrets.get("tenant_id") or "common").strip() or "common"
+    redirect_uri = (payload.redirect_uri or "").strip() or "http://localhost"
+    scopes = _microsoft_scopes_for(tenant, secrets.get("scope", ""))
+    try:
+        tokens = await _microsoft_exchange_code(
+            tenant, (secrets.get("client_id") or "").strip(), (secrets.get("client_secret") or "").strip(),
+            code, redirect_uri, scopes,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)[:300])
+    refresh = tokens.get("refresh_token", "")
+    if not refresh:
+        raise HTTPException(status_code=400, detail="Microsoft no devolvió refresh_token.")
+    return _microsoft_save_refresh(payload.instance_id, refresh, tokens.get("scope", "") or scopes)
 
 # Backward-compatible Passbolt aliases -----------------------------------------
 @app.get("/api/admin/passbolt/accounts")

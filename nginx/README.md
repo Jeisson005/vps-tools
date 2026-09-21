@@ -91,11 +91,17 @@ location = /api/admin/services/google/oauth/callback {
   proxy_pass http://mcp-gateway:8000;
   # …mismos proxy_set_header que el resto del vhost…
 }
+
+location = /api/admin/services/microsoft/oauth/callback {
+  auth_basic off;
+  proxy_pass http://mcp-gateway:8000;
+  # …mismos proxy_set_header que el resto del vhost…
+}
 ```
 
 Es seguro: el `code` es de un solo uso, va atado al `client_id` + `redirect_uri` del cliente y la
 aplicación valida el `state` antes de canjearlo. Caso real: `mcp.jeisson.top` (panel MCP) — sin
-este bloque, «Conectar con Google» del panel fallaba siempre con 401.
+estos bloques, «Conectar con Google» / «Conectar con Microsoft» del panel fallaban siempre con 401.
 
 ---
 
