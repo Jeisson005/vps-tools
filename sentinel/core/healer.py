@@ -165,7 +165,8 @@ class Healer:
         
         try:
             # Run OpenCode in headless non-interactive mode
-            cmd = [opencode_bin, "run", "--auto-approve", prompt]
+            # NOTE: --auto is the v1.18+ flag; the legacy --auto-approve was removed.
+            cmd = [opencode_bin, "run", "--auto", prompt]
             proc = subprocess.run(cmd, cwd=str(task_dir), capture_output=True, text=True, timeout=180)
             opencode_out = proc.stdout
         except Exception as e:
