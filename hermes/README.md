@@ -73,3 +73,30 @@ To ensure upstream updates never corrupt files or break silently, `scripts/updat
 2. Validate AST and signature blocks before applying patches.
 3. If upstream Nous Research modifies those functions in a new release, an explicit warning `[!] [WARNING]` is emitted instead of forcing a broken patch.
 4. Automatically rebuild the dashboard frontend and reload services.
+
+## 6. Passbolt como fuente del vault del navegador (vps-tools)
+
+Upstream Hermes solo rellena contraseñas desde su vault local / 1Password /
+Bitwarden, y en sesiones headless (Telegram/API) no puede pedir ni guardar
+logins (`prompt_unavailable`). Este repo añade Passbolt como backend nativo:
+
+- **Fuente**: `hermes/patches/passbolt_backend.py` → instalado en
+  `agent/vault_backends/passbolt.py` por `install_passbolt_backend()` en
+  `scripts/patch-hermes.py` (con validación de firmas + `ast.parse`, igual que
+  los demás parches; sobrevive a `scripts/update.sh`).
+- **Cómo funciona**: lista metadata vía el gateway MCP local
+  (`passbolt_search_resources`, solo label/usuario/origen, nunca secretos);
+  al rellenar resuelve `passbolt_get_secret` en el momento (contraseña + TOTP
+  vivo). Handles `pb:<uuid>`. `needs_unlock = False`: funciona headless.
+- **Rendimiento**: el listado completo tarda ~30 s (descifrado GPG en el
+  gateway); se cachea en proceso (`list_ttl_seconds`, defecto 600 s). Los
+  secretos siempre se leen frescos: cambiar una clave en Passbolt aplica al
+  siguiente fill. Cero migración, cero sincronización.
+- **Config** (`~/.hermes/config.yaml`, sección `vault.passbolt`):
+  `gateway_url`, `scope`, `account` (opcional), `list_ttl_seconds`,
+  `list_limit` y `origin_overrides` (`{uuid: origin}` para recursos cuyo URI
+  no coincide con el IdP real, p. ej. cuentas Microsoft →
+  `https://login.microsoftonline.com`).
+- **Límite conocido**: `browser_vault_fill` solo escribe en páginas del
+  navegador nativo de Hermes, no en sesiones Steel externas. Para sitios con
+  muro anti-bot se sigue usando Steel (perfil persistente o `portal-drive.js`).
