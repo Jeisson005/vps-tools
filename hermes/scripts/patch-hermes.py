@@ -17,6 +17,12 @@ Applies necessary custom patches to upstream hermes-agent:
     read receipts (no blue ticks, no error). The patch resolves the PN via
     the session lid-mapping file (fallback: signalRepository.lidMapping)
     and appends a PN key alongside the original LID key.
+4. agent/vault_backends/passbolt.py (new file + 2 anchored edits in base.py):
+    Exposes the Passbolt vault (via the local MCP gateway) as a login source
+    for the password-blind browser tools (handles ``pb:<uuid>``). No unlock
+    needed (gateway holds the session), so it works headless. List results
+    are cached in-process; secrets always resolve fresh. See
+    hermes/patches/passbolt_backend.py (source of truth).
 
 Validates target signatures before applying and issues explicit warnings if upstream
 code has changed.
@@ -117,13 +123,111 @@ def patch_whatsapp_presence(base_dir: str) -> bool:
     print(f"[+] [whatsapp-presence] markOnlineOnConnect enabled for delivery/read receipts (sha256:{digest}).")
     return True
 
+def install_passbolt_backend(base_dir: str) -> bool:
+    """Install the Passbolt vault backend (vps-tools addition).
+
+    Copies hermes/patches/passbolt_backend.py -> agent/vault_backends/passbolt.py
+    and registers it in agent/vault_backends/base.py with two anchored edits
+    (external_backend_classes + is_enabled). Idempotent; warns (does not force)
+    if upstream signatures changed. Validates with ast.parse before writing.
+    """
+    import ast
+    import hashlib
+
+    src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "patches", "passbolt_backend.py")
+    dest_dir = os.path.join(base_dir, "agent", "vault_backends")
+    dest = os.path.join(dest_dir, "passbolt.py")
+    base_py = os.path.join(dest_dir, "base.py")
+
+    if not os.path.isfile(src):
+        print(f"[-] [passbolt-backend] Source not found: {src}")
+        return False
+    if not os.path.isfile(base_py):
+        print(f"[-] [passbolt-backend] base.py not found: {base_py}")
+        return False
+
+    with open(src, "r", encoding="utf-8") as f:
+        wanted = f.read()
+    try:
+        ast.parse(wanted)
+    except SyntaxError as exc:
+        print(f"[!] [WARNING] [passbolt-backend] Source has syntax errors ({exc}); NOT installed.")
+        return False
+
+    current = ""
+    if os.path.isfile(dest):
+        with open(dest, "r", encoding="utf-8") as f:
+            current = f.read()
+    if current != wanted:
+        with open(dest, "w", encoding="utf-8") as f:
+            f.write(wanted)
+        digest = hashlib.sha256(wanted.encode("utf-8")).hexdigest()[:16]
+        print(f"[+] [passbolt-backend] Installed agent/vault_backends/passbolt.py (sha256:{digest}).")
+    else:
+        print("[+] [passbolt-backend] agent/vault_backends/passbolt.py already current.")
+
+    with open(base_py, "r", encoding="utf-8") as f:
+        code = f.read()
+    orig = code
+
+    old_classes = '''def external_backend_classes():
+    from agent.vault_backends.bitwarden import BitwardenLoginBackend
+    from agent.vault_backends.onepassword import OnePasswordLoginBackend
+    return (OnePasswordLoginBackend, BitwardenLoginBackend)'''
+    new_classes = '''def external_backend_classes():
+    from agent.vault_backends.bitwarden import BitwardenLoginBackend
+    from agent.vault_backends.onepassword import OnePasswordLoginBackend
+    _classes = [OnePasswordLoginBackend, BitwardenLoginBackend]
+    try:
+        # vps-tools: Passbolt backend (optional local addition).
+        from agent.vault_backends.passbolt import PassboltLoginBackend
+        _classes.append(PassboltLoginBackend)
+    except Exception:
+        pass
+    return tuple(_classes)'''
+    if "PassboltLoginBackend" not in code:
+        if old_classes not in code:
+            print("[!] [WARNING] [passbolt-backend] external_backend_classes signature changed; patch NOT applied.")
+            return False
+        code = code.replace(old_classes, new_classes, 1)
+
+    old_enabled = "    return is_installed(name)"
+    new_enabled = '''    if name == "passbolt":
+        # vps-tools: enabled when a gateway token is available (no CLI needed).
+        try:
+            from agent.vault_backends.passbolt import is_configured
+            return is_configured()
+        except Exception:
+            return False
+    return is_installed(name)'''
+    if "is_configured()" not in code:
+        if code.count(old_enabled) != 1:
+            print("[!] [WARNING] [passbolt-backend] is_enabled signature changed; patch NOT applied.")
+            return False
+        code = code.replace(old_enabled, new_enabled, 1)
+
+    if code != orig:
+        try:
+            ast.parse(code)
+        except SyntaxError as exc:
+            print(f"[!] [WARNING] [passbolt-backend] Patched base.py fails ast.parse ({exc}); reverted, NOT applied.")
+            return False
+        with open(base_py, "w", encoding="utf-8") as f:
+            f.write(code)
+        print("[+] [passbolt-backend] Registered PassboltLoginBackend in base.py.")
+    else:
+        print("[+] [passbolt-backend] base.py registration already present.")
+    return True
+
+
 def main():
     target_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser("~/.hermes/hermes-agent")
     print(f"[*] Checking and applying custom Hermes patches on: {target_dir}")
     ok1 = patch_browser_tool(target_dir)
     ok2 = patch_whatsapp_presence(target_dir)
     ok3 = patch_whatsapp_read_lid_pn(target_dir)
-    if ok1 and ok2 and ok3:
+    ok4 = install_passbolt_backend(target_dir)
+    if ok1 and ok2 and ok3 and ok4:
         print("[+] All custom patches verified and active.")
     else:
         print("[!] Note: One or more patches could not be auto-applied due to upstream changes.")
