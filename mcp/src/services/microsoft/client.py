@@ -163,8 +163,16 @@ class MSGraphClient:
             return {"ok": False, "message": f"Error transcribiendo: {e}"}
         return {"ok": True, "text": text, "filename": att.get("filename"), "contentType": att.get("contentType")}
 
-    async def calendar_events(self, top: int = 20, calendar_id: str = "calendars/me") -> list:
+    async def calendar_events(self, top: int = 20, calendar_id: str = "calendars/me",
+                              time_min: str = "", time_max: str = "") -> list:
+        filters = []
+        if (time_min or "").strip():
+            filters.append(f"start/dateTime ge '{time_min.strip()}'")
+        if (time_max or "").strip():
+            filters.append(f"start/dateTime le '{time_max.strip()}'")
         params = {"$top": top, "$orderby": "start/dateTime asc", "$select": "id,subject,start,end,organizer"}
+        if filters:
+            params["$filter"] = " and ".join(filters)
         base = "/me/calendar/events" if calendar_id in ("me", "calendars/me") else f"/me/calendars/{calendar_id}/events"
         data = await self._request("GET", base, params=params)
         return [{

@@ -91,12 +91,14 @@ MICROSOFT_TOOLS = [
     },
     {
         "name": "outlook_calendar_events",
-        "description": "List upcoming calendar events.",
+        "description": "List calendar events in a time range (ascending start order). For upcoming events pass time_min = now.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "top": {"type": "integer"},
-                "calendar_id": {"type": "string", "description": "Calendar id (default 'calendars/me')."},
+                "calendar_id": {"type": "string", "description": "Calendar id (default 'me')."},
+                "time_min": {"type": "string", "description": "ISO 8601 datetime (e.g. 2026-09-21T00:00:00Z). Omit for no lower bound."},
+                "time_max": {"type": "string", "description": "ISO 8601 datetime."},
                 "account": _ACCOUNT,
             }
         },
