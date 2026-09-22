@@ -67,11 +67,36 @@ MICROSOFT_TOOLS = [
         "inputSchema": {"type": "object", "properties": {"account": _ACCOUNT}},
     },
     {
+        "name": "outlook_draft_create",
+        "description": "Create an Outlook draft (it is NOT sent; use outlook_draft_send to send it later).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "to": {"type": "string"},
+                "subject": {"type": "string"},
+                "body": {"type": "string"},
+                "cc": {"type": "string"},
+                "attachments": {"type": "array", "items": {"type": "object", "properties": {"filename": {"type": "string"}, "data": {"type": "string", "description": "File content base64."}}, "required": ["filename", "data"]}},
+                "account": _ACCOUNT,
+            },
+            "required": ["to", "subject", "body"],
+        },
+    },
+    {
         "name": "outlook_draft_send",
         "description": "Send an Outlook draft.",
         "inputSchema": {
             "type": "object",
             "properties": {"message_id": {"type": "string"}, "account": _ACCOUNT},
+            "required": ["message_id"],
+        },
+    },
+    {
+        "name": "outlook_draft_delete",
+        "description": "Delete an Outlook draft. IMPORTANT: Ask the user for explicit confirmation before deleting.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"message_id": {"type": "string", "description": "Draft message id."}, "account": _ACCOUNT},
             "required": ["message_id"],
         },
     },
@@ -256,6 +281,15 @@ MICROSOFT_TOOLS = [
                 "account": _ACCOUNT,
             },
             "required": ["name"],
+        },
+    },
+    {
+        "name": "onedrive_delete",
+        "description": "Delete a OneDrive file/folder by item id. IMPORTANT: Ask the user for explicit confirmation before deleting.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"item_id": {"type": "string"}, "account": _ACCOUNT},
+            "required": ["item_id"],
         },
     },
 ]

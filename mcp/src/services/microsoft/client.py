@@ -1,4 +1,5 @@
 import time
+import re
 import logging
 from typing import Dict, Any, List, Optional
 import httpx
@@ -7,6 +8,28 @@ logger = logging.getLogger("mcp.microsoft")
 
 GRAPH = "https://graph.microsoft.com/v1.0"
 AUTH = "https://login.microsoftonline.com"
+
+
+def _normalize_graph_datetime(value: str) -> tuple:
+    """Convierte un ISO 8601 (con Z u offset) al par (dateTime, timeZone) que espera Graph.
+
+    Graph rechaza valores con sufijo Z en el campo timeZone; hay que enviar el
+    dateTime sin offset y el timeZone explícito.
+    """
+    v = (value or "").strip()
+    if not v:
+        return "", "UTC"
+    m = re.match(r"^(.*?)(Z|[+-]\d{2}:\d{2})$", v)
+    if not m:
+        return v, "UTC"
+    if m.group(2) == "Z":
+        return m.group(1), "UTC"
+    try:
+        from datetime import datetime, timezone
+        dt = datetime.fromisoformat(v)
+        return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"), "UTC"
+    except Exception:
+        return m.group(1), "UTC"
 
 # Scopes delegados que pide el flujo OAuth del panel (Microsoft Graph).
 MAIL_SCOPE = "Mail.ReadWrite"
@@ -72,11 +95,14 @@ class MSGraphClient:
             return res.json() if res.content else {}
 
     async def mail_list(self, filter: str = "", search: str = "", top: int = 10) -> list:
-        params = {"$top": top, "$orderby": "receivedDateTime desc", "$select": "id,subject,from,receivedDateTime,isRead"}
-        if filter:
-            params["$filter"] = filter
+        params = {"$top": top, "$select": "id,subject,from,receivedDateTime,isRead"}
         if search:
+            # Graph no permite combinar $search con $orderby/$filter en mensajes.
             params["$search"] = f'"{search}"'
+        else:
+            params["$orderby"] = "receivedDateTime desc"
+            if filter:
+                params["$filter"] = filter
         data = await self._request("GET", "/me/messages", params=params)
         return [{
             "id": m.get("id"),
@@ -141,9 +167,35 @@ class MSGraphClient:
             "to": ", ".join((r.get("emailAddress", {}) or {}).get("address", "") for r in (m.get("toRecipients") or [])),
         } for m in data.get("value", [])]
 
+    async def draft_create(self, to: str, subject: str, body: str, cc: str = "",
+                           attachments: Optional[list] = None) -> dict:
+        recipients = [{"emailAddress": {"address": x.strip()}} for x in to.split(",") if x.strip()]
+        message = {
+            "subject": subject,
+            "body": {"contentType": "Text", "content": body},
+            "toRecipients": recipients,
+        }
+        cc_list = [{"emailAddress": {"address": x.strip()}} for x in cc.split(",") if x.strip()] if cc else []
+        if cc_list:
+            message["ccRecipients"] = cc_list
+        if attachments:
+            message["attachments"] = [
+                {"@odata.type": "#microsoft.graph.fileAttachment", "name": a.get("filename", "archivo"),
+                 "contentType": a.get("mimeType", "application/octet-stream"), "contentBytes": a.get("data", "")}
+                for a in attachments
+            ]
+        data = await self._request("POST", "/me/messages", json_body=message)
+        return {"id": data.get("id"), "subject": data.get("subject", subject), "status": "draft_created"}
+
     async def draft_send(self, message_id: str) -> dict:
         await self._request("POST", f"/me/messages/{message_id}/send")
         return {"id": message_id, "status": "sent"}
+
+    async def draft_delete(self, message_id: str) -> dict:
+        if not message_id:
+            raise ValueError("Se requiere 'message_id'.")
+        await self._request("DELETE", f"/me/messages/{message_id}")
+        return {"id": message_id, "status": "deleted"}
 
     async def folders(self) -> list:
         data = await self._request("GET", "/me/mailFolders")
@@ -184,7 +236,9 @@ class MSGraphClient:
         } for e in data.get("value", [])]
 
     async def calendar_create(self, subject: str, start: str, end: str, body: str = "", attendees: Optional[list] = None, calendar_id: str = "me") -> dict:
-        payload = {"subject": subject, "start": {"dateTime": start}, "end": {"dateTime": end}}
+        start_dt, start_tz = _normalize_graph_datetime(start)
+        end_dt, end_tz = _normalize_graph_datetime(end)
+        payload = {"subject": subject, "start": {"dateTime": start_dt, "timeZone": start_tz}, "end": {"dateTime": end_dt, "timeZone": end_tz}}
         if body:
             payload["body"] = {"contentType": "Text", "content": body}
         if attendees:
@@ -322,7 +376,7 @@ class MSGraphClient:
         if meta.get("isFolder"):
             raise ValueError("El item es una carpeta, no se puede descargar.")
         token = await self._get_access_token()
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             res = await client.get(
                 f"{GRAPH}/me/drive/items/{item_id}/content",
                 headers={"Authorization": f"Bearer {token}"},
@@ -368,6 +422,12 @@ class MSGraphClient:
             created = res.json()
         return {"id": created.get("id"), "name": created.get("name", name),
                 "size": created.get("size"), "webUrl": created.get("webUrl", ""), "status": "uploaded"}
+
+    async def onedrive_delete(self, item_id: str) -> dict:
+        if not item_id:
+            raise ValueError("Se requiere 'item_id'.")
+        await self._request("DELETE", f"/me/drive/items/{item_id}")
+        return {"id": item_id, "status": "deleted"}
 
     async def test_connection(self) -> Dict[str, Any]:
         try:

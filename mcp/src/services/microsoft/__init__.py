@@ -94,13 +94,30 @@ class MicrosoftService(BaseMcpService):
     def is_configured(self) -> bool:
         return bool(self.accounts) and any(c.is_configured() for c in self.accounts.values())
 
+    @staticmethod
+    def _supports_teams(cli: MSGraphClient) -> bool:
+        """Teams solo funciona en cuentas corporativas/escolares con licencia.
+
+        Señales: el scope guardado incluye permisos de Teams, o el tenant es de
+        trabajo ('organizations' o GUID). Una cuenta personal (common/consumers)
+        no soporta la API de Teams y devolvería 401 por licencia.
+        """
+        scope = cli.scope or ""
+        if "Team." in scope or "Chat." in scope:
+            return True
+        tenant = (cli.tenant_id or "").strip().lower()
+        return tenant == "organizations" or (len(tenant) == 36 and tenant.count("-") == 4)
+
     def get_tools(self) -> List[Dict[str, Any]]:
         if not self.enabled or not self.is_configured():
             return []
         import copy
         account_ids = list(self.accounts.keys())
+        teams_supported = any(self._supports_teams(c) for c in self.accounts.values())
         tools = []
         for tool in copy.deepcopy(MICROSOFT_TOOLS):
+            if tool["name"].startswith("teams_") and not teams_supported:
+                continue
             props = tool.get("inputSchema", {}).get("properties", {})
             acc_prop = props.get("account")
             if acc_prop and account_ids:
@@ -120,6 +137,12 @@ class MicrosoftService(BaseMcpService):
         if tool_name == "outlook_list_accounts":
             return self.get_account_summary()
 
+        if tool_name.startswith("teams_") and not any(self._supports_teams(c) for c in self.accounts.values()):
+            raise RuntimeError(
+                "Teams no está disponible con las cuentas actuales: requiere conectar una cuenta "
+                "corporativa/escolar con licencia de Teams (y sus scopes)."
+            )
+
         client = self._resolve_client(account)
 
         if tool_name == "outlook_mail_list":
@@ -132,8 +155,14 @@ class MicrosoftService(BaseMcpService):
             return await client.mail_set_read(args.get("message_id", ""), bool(args.get("read", True)))
         if tool_name == "outlook_drafts":
             return await client.drafts()
+        if tool_name == "outlook_draft_create":
+            return await client.draft_create(
+                to=args.get("to", ""), subject=args.get("subject", ""), body=args.get("body", ""),
+                cc=args.get("cc", ""), attachments=args.get("attachments"))
         if tool_name == "outlook_draft_send":
             return await client.draft_send(args.get("message_id", ""))
+        if tool_name == "outlook_draft_delete":
+            return await client.draft_delete(args.get("message_id", ""))
         if tool_name == "outlook_folders":
             return await client.folders()
         if tool_name == "outlook_mail_transcribe_attachment":
@@ -184,6 +213,8 @@ class MicrosoftService(BaseMcpService):
                 name=args.get("name", ""), content_text=args.get("content_text", ""),
                 data=args.get("data", ""), folder_id=args.get("folder_id", ""),
                 mime_type=args.get("mime_type") or "text/plain")
+        if tool_name == "onedrive_delete":
+            return await client.onedrive_delete(item_id=args.get("item_id", ""))
         raise ValueError(f"Unknown Microsoft tool: '{tool_name}'")
 
     async def test_connection(self) -> Dict[str, Any]:
