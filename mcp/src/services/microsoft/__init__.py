@@ -139,7 +139,10 @@ class MicrosoftService(BaseMcpService):
         if tool_name == "outlook_mail_transcribe_attachment":
             return await client.mail_transcribe_attachment(args.get("message_id", ""), int(args.get("attachment_index") or 0), args.get("language", ""))
         if tool_name == "outlook_calendar_events":
-            return await client.calendar_events(top=int(args.get("top") or 20), calendar_id=args.get("calendar_id") or "me")
+            return await client.calendar_events(
+                top=int(args.get("top") or 20), calendar_id=args.get("calendar_id") or "me",
+                time_min=args.get("time_min", ""), time_max=args.get("time_max", ""),
+            )
         if tool_name == "outlook_calendar_create":
             return await client.calendar_create(
                 subject=args.get("subject", ""), start=args.get("start", ""), end=args.get("end", ""),
