@@ -269,8 +269,11 @@ en la misma red Docker que el gateway, con **persistencia total** en su volumen 
   `google_gmail_draft_create/send`), etiquetas (`google_gmail_labels`), leído/no leído (`google_gmail_set_read`),
   hilos (`google_gmail_thread`), transcribir adjunto (`google_gmail_transcribe_attachment`).
 - **Outlook (Graph)**: adjuntos en `outlook_mail_get`/`_send`, leído/no leído (`outlook_mail_set_read`),
-  borradores (`outlook_drafts`, `outlook_draft_send`), carpetas (`outlook_folders`),
-  transcribir adjunto (`outlook_mail_transcribe_attachment`).
+  borradores (`outlook_drafts`, `outlook_draft_create`, `outlook_draft_send`, `outlook_draft_delete`),
+  carpetas (`outlook_folders`), transcribir adjunto (`outlook_mail_transcribe_attachment`).
+- **OneDrive**: `onedrive_list`, `onedrive_get`, `onedrive_download`, `onedrive_upload`, `onedrive_delete`.
+- **Teams**: `teams_*` solo funciona en cuentas corporativas/escolares con licencia; con cuentas
+  personales las tools se ocultan automáticamente y cualquier llamada devuelve un mensaje explicativo.
 - La transcripción de todas usa el **mismo ASR que Hermes** por defecto.
 
 ---
