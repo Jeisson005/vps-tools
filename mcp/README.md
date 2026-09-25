@@ -196,13 +196,27 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 | `trello_list_lists` | Lists on a board (id, name, pos). | `board_id`, `filter` |
 | `trello_create_list` / `trello_update_list` | Create / rename-archive a List. | `board_id`+`name` / `list_id`+`name`/`closed` |
 | `trello_list_cards` | Cards of a List (`list_id`) or a whole Board (`board_id`). | `list_id` or `board_id`, `filter` |
-| `trello_get_card` | Full card (desc, members, checklists, recent comments). | `card_id` |
-| `trello_create_card` | Create a card (`name` required; `desc`, `due` ISO 8601, `pos`, `member_ids`). | `list_id`, `name`, ... |
-| `trello_update_card` | Update/move a card (`name`, `desc`, `due`, `dueComplete`, `idList`, `pos`, `member_ids`, `closed`). | `card_id`, ... |
+| `trello_get_card` | Full card (desc, members, checklists, attachments, recent comments). | `card_id` |
+| `trello_create_card` | Create a card (`name` required; `desc`, `due` ISO 8601, `pos`, `member_ids`, `label_ids`). | `list_id`, `name`, ... |
+| `trello_update_card` | Update/move a card (`name`, `desc`, `due`, `dueComplete`, `idList`, `pos`, `member_ids`, `label_ids`, `closed`). | `card_id`, ... |
 | `trello_archive_card` | Archive a card. | `card_id` |
-| `trello_list_card_comments` / `trello_create_card_comment` | Card comments. | `card_id`, `text`/`limit` |
+| `trello_delete_card` | PERMANENTLY delete a card (cannot be undone). | `card_id` |
+| `trello_delete_board` | PERMANENTLY delete a board with all its content. | `board_id` |
+| `trello_archive_list` | Archive a List AND all its cards (the API has no list delete; plain archive leaves cards active). | `list_id` |
+| `trello_list_labels` / `trello_create_label` / `trello_update_label` / `trello_delete_label` | Label CRUD (colors: green, yellow, orange, red, purple, blue, sky, lime, pink, black). Assign via `label_ids`. | ids + `name`/`color` |
+| `trello_create_checklist` / `trello_create_checkitem` / `trello_update_checkitem` / `trello_delete_checklist` | Checklist write ops: create, add item, complete/incomplete + rename, delete (read already in `trello_get_card`). | ids + `name`/`state` |
+| `trello_list_card_comments` / `trello_create_card_comment` / `trello_update_card_comment` / `trello_delete_card_comment` | Full comment CRUD. | `card_id`, `comment_id`, `text`/`limit` |
+| `trello_add_attachment_url` / `trello_delete_attachment` | Attach link / remove attachment (listing in `trello_get_card`; no binary upload). | `card_id`, `url`/`attachment_id` |
+| `trello_list_custom_fields` / `trello_set_custom_field` | Custom field defs + set value (text/number/checkbox/date/list). Defs are created in Trello UI. | `board_id` / `card_id`+`field_id` |
 | `trello_list_board_members` | Board members (id, fullName, username) to resolve assignee IDs. | `board_id` |
-| `trello_search` | Keyword search over cards + boards. | `query`, `model_types`, limits |
+| `trello_search` | Keyword search (case-insensitive; index lags minutes for new cards; archived included unless `include_closed=false`). | `query`, limits, `include_closed` |
+
+> **Comportamiento real de la API (verificado en vivo):**
+> - `trello_get_board` incluye listas abiertas + miembros (el filtro `members` solo acepta `all/normal/...`, nunca booleano).
+> - Las listas NO tienen borrado permanente en la API: `trello_archive_list` archiva lista + tarjetas.
+> - Archivar no borra; el buscador incluye archivadas (usa `include_closed=false` para excluirlas).
+> - Portadas (`cover`): la API responde 200 pero ignora el color — solo desde la UI de Trello.
+> - Los errores del gateway nunca exponen `key`/`token` (redactados).
 
 > **Credenciales:** cada cuenta guarda `api_key` + `api_token` cifrados en SQLite.
 > Key: crea un Power-Up en `trello.com/power-ups/admin` → API Key. Token: visita
