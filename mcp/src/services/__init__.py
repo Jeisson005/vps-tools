@@ -6,6 +6,7 @@ from .microsoft import MicrosoftService
 from .telegram import TelegramService
 from .whatsapp import WhatsAppService
 from .clickup import ClickUpService
+from .trello import TrelloService
 from .notebooklm import NotebookLMService
 
 AVAILABLE_SERVICES: Dict[str, Type[BaseMcpService]] = {
@@ -15,5 +16,6 @@ AVAILABLE_SERVICES: Dict[str, Type[BaseMcpService]] = {
     "telegram": TelegramService,
     "whatsapp": WhatsAppService,
     "clickup": ClickUpService,
+    "trello": TrelloService,
     "notebooklm": NotebookLMService,
 }

@@ -126,6 +126,7 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 | :--- | :--- | :--- | :--- |
 | `passbolt` | `/passbolt` | `passbolt_*` | clave GPG + passphrase |
 | `clickup` | `/clickup` | `clickup_*` | Personal API Token (`pk_...`) |
+| `trello` | `/trello` | `trello_*` | API Key + Token (`trello.com/power-ups/admin`) |
 | `notebooklm` | `/notebooklm` | `notebooklm_*` | Auth JSON (`storage_state.json` de notebooklm-py) |
 | `google` | `/google` | `google_gmail_*`, `google_calendar_*` | OAuth2 vía panel («Conectar con Google»; refresh token automático) |
 | `microsoft` | `/microsoft` | `outlook_mail_*`, `outlook_calendar_*`, `teams_*`, `onedrive_*` | OAuth2 vía panel («Conectar con Microsoft»; Entra ID + refresh token automático) |
@@ -182,6 +183,33 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 > **Multi-cuenta:** igual que los demás servicios, todas aceptan `account` opcional (alias de la cuenta;
 > `clickup_list_accounts` para descubrirlas). Cada cuenta guarda su Personal API Token (`pk_...`,
 > ClickUp → Settings → Apps → API Token) cifrado en SQLite. Aislamiento por subruta: `/clickup`.
+
+### 4b-ter2. Trello MCP Tools Catalog
+
+| Tool Name | Description | Arguments |
+| :--- | :--- | :--- |
+| `trello_list_accounts` | Lists configured Trello accounts (id, default flag) WITHOUT exposing key/token. | none |
+| `trello_get_user` | User owning the token (id, fullName, username). | `account` (opt) |
+| `trello_list_boards` | Boards visible to the account (id, name, url). Start here to get `board_id`. | `filter` (open/closed/all/starred), `account` |
+| `trello_get_board` | Single board + its open lists + members. | `board_id` |
+| `trello_create_board` | Create a board (with default lists). | `name`, `desc` (opt) |
+| `trello_list_lists` | Lists on a board (id, name, pos). | `board_id`, `filter` |
+| `trello_create_list` / `trello_update_list` | Create / rename-archive a List. | `board_id`+`name` / `list_id`+`name`/`closed` |
+| `trello_list_cards` | Cards of a List (`list_id`) or a whole Board (`board_id`). | `list_id` or `board_id`, `filter` |
+| `trello_get_card` | Full card (desc, members, checklists, recent comments). | `card_id` |
+| `trello_create_card` | Create a card (`name` required; `desc`, `due` ISO 8601, `pos`, `member_ids`). | `list_id`, `name`, ... |
+| `trello_update_card` | Update/move a card (`name`, `desc`, `due`, `dueComplete`, `idList`, `pos`, `member_ids`, `closed`). | `card_id`, ... |
+| `trello_archive_card` | Archive a card. | `card_id` |
+| `trello_list_card_comments` / `trello_create_card_comment` | Card comments. | `card_id`, `text`/`limit` |
+| `trello_list_board_members` | Board members (id, fullName, username) to resolve assignee IDs. | `board_id` |
+| `trello_search` | Keyword search over cards + boards. | `query`, `model_types`, limits |
+
+> **Credenciales:** cada cuenta guarda `api_key` + `api_token` cifrados en SQLite.
+> Key: crea un Power-Up en `trello.com/power-ups/admin` → API Key. Token: visita
+> `https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=TU_KEY`
+> y autorízalo. Pega ambos en el panel (Servicio → Trello → Añadir cuenta) y pulsa
+> **Probar Conexión Live**. Aislamiento por subruta: `/trello`. Agregado al endpoint
+> **unificado** `/unified`.
 
 ### 4b-ter. NotebookLM (Gemini Notebook) MCP Tools Catalog
 
