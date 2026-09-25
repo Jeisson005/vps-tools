@@ -16,7 +16,7 @@ class TrelloService(BaseMcpService):
 
     service_id: str = "trello"
     name: str = "Trello"
-    description: str = "Project management: boards, lists, cards, comments and search via API key + token, with multiple accounts."
+    description: str = "Project management: boards, lists, cards, labels, checklists, comments, attachments, custom fields and search via API key + token, with multiple accounts."
     supports_instances: bool = True
 
     def __init__(self, config, secrets, enabled=True, instances=None):
@@ -148,11 +148,13 @@ class TrelloService(BaseMcpService):
             return await client.create_card(
                 list_id=args.get("list_id", ""), name=args.get("name", ""),
                 desc=args.get("desc", ""), due=args.get("due", ""),
-                pos=args.get("pos", "bottom"), member_ids=args.get("member_ids"))
+                pos=args.get("pos", "bottom"), member_ids=args.get("member_ids"),
+                label_ids=args.get("label_ids"))
         if tool_name == "trello_update_card":
             passthrough = {k: args[k] for k in (
                 "name", "desc", "due", "dueComplete", "closed",
-                "idList", "pos", "member_ids", "idMembers") if args.get(k) is not None}
+                "idList", "pos", "member_ids", "idMembers",
+                "label_ids", "idLabels") if args.get(k) is not None}
             return await client.update_card(card_id=args.get("card_id", ""), **passthrough)
         if tool_name == "trello_archive_card":
             return await client.archive_card(card_id=args.get("card_id", ""))
@@ -163,13 +165,67 @@ class TrelloService(BaseMcpService):
         if tool_name == "trello_create_card_comment":
             return await client.create_card_comment(
                 card_id=args.get("card_id", ""), text=args.get("text", ""))
+        if tool_name == "trello_update_card_comment":
+            return await client.update_card_comment(
+                card_id=args.get("card_id", ""), comment_id=args.get("comment_id", ""),
+                text=args.get("text", ""))
+        if tool_name == "trello_delete_card_comment":
+            return await client.delete_card_comment(
+                card_id=args.get("card_id", ""), comment_id=args.get("comment_id", ""))
+        if tool_name == "trello_delete_attachment":
+            return await client.delete_attachment(
+                card_id=args.get("card_id", ""), attachment_id=args.get("attachment_id", ""))
         if tool_name == "trello_list_board_members":
             return await client.list_board_members(board_id=args.get("board_id", ""))
         if tool_name == "trello_search":
             return await client.search(
                 query=args.get("query", ""), model_types=args.get("model_types", "cards,boards"),
                 cards_limit=int(args.get("cards_limit") or 20),
-                boards_limit=int(args.get("boards_limit") or 10))
+                boards_limit=int(args.get("boards_limit") or 10),
+                include_closed=bool(args.get("include_closed", True)))
+        if tool_name == "trello_delete_card":
+            return await client.delete_card(card_id=args.get("card_id", ""))
+        if tool_name == "trello_delete_board":
+            return await client.delete_board(board_id=args.get("board_id", ""))
+        if tool_name == "trello_archive_list":
+            return await client.archive_list(list_id=args.get("list_id", ""))
+        if tool_name == "trello_list_labels":
+            return await client.list_labels(board_id=args.get("board_id", ""))
+        if tool_name == "trello_create_label":
+            return await client.create_label(
+                board_id=args.get("board_id", ""), name=args.get("name", ""),
+                color=args.get("color", ""))
+        if tool_name == "trello_update_label":
+            return await client.update_label(
+                label_id=args.get("label_id", ""), name=args.get("name"),
+                color=args.get("color"))
+        if tool_name == "trello_delete_label":
+            return await client.delete_label(label_id=args.get("label_id", ""))
+        if tool_name == "trello_create_checklist":
+            return await client.create_checklist(
+                card_id=args.get("card_id", ""), name=args.get("name", ""),
+                pos=args.get("pos", "bottom"))
+        if tool_name == "trello_create_checkitem":
+            return await client.create_checkitem(
+                checklist_id=args.get("checklist_id", ""), name=args.get("name", ""),
+                pos=args.get("pos", "bottom"))
+        if tool_name == "trello_update_checkitem":
+            return await client.update_checkitem(
+                card_id=args.get("card_id", ""), checklist_id=args.get("checklist_id", ""),
+                checkitem_id=args.get("checkitem_id", ""),
+                state=args.get("state"), name=args.get("name"))
+        if tool_name == "trello_delete_checklist":
+            return await client.delete_checklist(checklist_id=args.get("checklist_id", ""))
+        if tool_name == "trello_add_attachment_url":
+            return await client.add_attachment_url(
+                card_id=args.get("card_id", ""), url=args.get("url", ""),
+                name=args.get("name", ""))
+        if tool_name == "trello_list_custom_fields":
+            return await client.list_custom_fields(board_id=args.get("board_id", ""))
+        if tool_name == "trello_set_custom_field":
+            return await client.set_custom_field(
+                card_id=args.get("card_id", ""), field_id=args.get("field_id", ""),
+                field_type=args.get("field_type", "text"), value=args.get("value", ""))
         raise ValueError(f"Unknown Trello tool: '{tool_name}'")
 
     async def test_connection(self) -> Dict[str, Any]:
