@@ -401,7 +401,7 @@ TRELLO_TOOLS = [
     },
     {
         "name": "trello_set_custom_field",
-        "description": "Set a custom field value on a card. field_type: text, number, checkbox (value true/false), date (ISO 8601), list (value = option id from trello_list_custom_fields). NOTE: the field definition must already exist on the board (create it in the Trello UI; the API has no field-definition create endpoint). IMPORTANT: Ask the user for explicit confirmation before modifying.",
+        "description": "Set a custom field value on a card. field_type: text, number, checkbox (value true/false), date (ISO 8601), list (value = option id from trello_list_custom_fields). NOTE: the field definition must already exist on the board (create it in the Trello UI; the API has no field-definition create endpoint, and custom fields require a paid Standard+ workspace). IMPORTANT: Ask the user for explicit confirmation before modifying.",
         "inputSchema": {
             "type": "object",
             "properties": {

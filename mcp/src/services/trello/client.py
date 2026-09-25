@@ -355,15 +355,27 @@ class TrelloClient:
         return {"id": board_id, "status": "deleted"}
 
     async def archive_list(self, list_id: str = "") -> dict:
-        """Archive a list AND all its cards (archiving a list alone leaves cards active)."""
+        """Archive a list AND all its cards (archiving a list alone leaves cards active).
+
+        NOTE: POST archiveAllCards does not return a usable count, so the
+        archived total is measured directly: open cards before vs after.
+        """
         if not list_id:
             raise ValueError("Se requiere 'list_id'.")
-        res = await self._request("POST", f"/lists/{list_id}/archiveAllCards")
-        n = len(res) if isinstance(res, list) else 0
+        before = await self._request(
+            "GET", f"/lists/{list_id}/cards", params={"fields": "id,closed"},
+        )
+        open_before = [c for c in before or [] if not c.get("closed")]
+        await self._request("POST", f"/lists/{list_id}/archiveAllCards")
         await self._request("PUT", f"/lists/{list_id}/closed", params={"value": "true"})
+        after = await self._request(
+            "GET", f"/lists/{list_id}/cards", params={"fields": "id,closed"},
+        )
+        open_after = [c for c in after or [] if not c.get("closed")]
         data = await self._request("GET", f"/lists/{list_id}", params={"fields": "id,name,closed,pos,idBoard"})
         out = self._fmt_list(data)
-        out["cards_archived"] = n
+        out["cards_archived"] = len(open_before) - len(open_after)
+        out["cards_archived_verified"] = len(open_after) == 0
         return out
 
     # ---- labels ----

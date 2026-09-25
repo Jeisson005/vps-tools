@@ -207,7 +207,7 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 | `trello_create_checklist` / `trello_create_checkitem` / `trello_update_checkitem` / `trello_delete_checklist` | Checklist write ops: create, add item, complete/incomplete + rename, delete (read already in `trello_get_card`). | ids + `name`/`state` |
 | `trello_list_card_comments` / `trello_create_card_comment` / `trello_update_card_comment` / `trello_delete_card_comment` | Full comment CRUD. | `card_id`, `comment_id`, `text`/`limit` |
 | `trello_add_attachment_url` / `trello_delete_attachment` | Attach link / remove attachment (listing in `trello_get_card`; no binary upload). | `card_id`, `url`/`attachment_id` |
-| `trello_list_custom_fields` / `trello_set_custom_field` | Custom field defs + set value (text/number/checkbox/date/list). Defs are created in Trello UI. | `board_id` / `card_id`+`field_id` |
+| `trello_list_custom_fields` / `trello_set_custom_field` | Custom field defs + set value (text/number/checkbox/date/list). Defs are created in Trello UI and require paid Standard+. | `board_id` / `card_id`+`field_id` |
 | `trello_list_board_members` | Board members (id, fullName, username) to resolve assignee IDs. | `board_id` |
 | `trello_search` | Keyword search (case-insensitive; index lags minutes for new cards; archived included unless `include_closed=false`). | `query`, limits, `include_closed` |
 
