@@ -178,11 +178,20 @@ Open `http://127.0.0.1:8005/admin` (or `https://mcp.jeisson.top/admin` once conf
 | `clickup_create_task` | Create a task (`name` required; `status`, `priority` 1-4, `assignees`, `tags`, `due_date` ms, `parent` for subtasks). | `list_id`, `name`, ... |
 | `clickup_update_task` | Update a task (`name`, `description`, `status`, `priority`, `due_date`, `assignees: {add, rem}`, `archived`). | `task_id`, ... |
 | `clickup_delete_task` | Delete a task. | `task_id` |
-| `clickup_list_task_comments` / `clickup_create_task_comment` | Task comments. | `task_id`, `comment_text` |
+| `clickup_list_task_comments` / `clickup_create_task_comment` / `clickup_update_task_comment` / `clickup_delete_task_comment` | Full comment CRUD. List returns 25/page (newest first) plus a `next_page` hint; update edits text, reassigns (`assignee`) or resolves (`resolved`). | `task_id`, `comment_id`, `comment_text`, `assignee`, `resolved` |
 
 > **Multi-cuenta:** igual que los demás servicios, todas aceptan `account` opcional (alias de la cuenta;
 > `clickup_list_accounts` para descubrirlas). Cada cuenta guarda su Personal API Token (`pk_...`,
 > ClickUp → Settings → Apps → API Token) cifrado en SQLite. Aislamiento por subruta: `/clickup`.
+
+> **Comentarios (comportamiento real verificado en vivo):** el `POST` devuelve un cuerpo mínimo
+> (`id`/`hist_id`/`date`/`version`) y el `PUT` devuelve `{}`, así que `clickup_create_task_comment`
+> relee el comentario y `clickup_update_task_comment` acepta `task_id` opcional para devolver el
+> estado real (sin él, responde `{id, status: updated, updated_fields}`). `resolved: true` solo
+> aplica si el comentario tiene `assignee` (comentarios 2.0). No existe `GET /comment/{id}` (405).
+> El listado devuelve **25 por página** (más nuevos primero) y la paginación exige `start`
+> (timestamp ms) **+** `start_id` (id del último comentario) juntos; el propio listado incluye la
+> pista `next_page`. Las respuestas en hilo no están en el CRUD (existe `GET /task/{id}/comment/threaded`).
 
 ### 4b-ter2. Trello MCP Tools Catalog
 

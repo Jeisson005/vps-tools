@@ -315,15 +315,72 @@ class ClickUpClient:
         return {"id": task_id, "status": "deleted"}
 
     # ---- comments ----
-    async def list_task_comments(self, task_id: str = "") -> list:
+    @staticmethod
+    def _fmt_comment(c: dict) -> dict:
+        text = c.get("comment_text") or ""
+        if not text and isinstance(c.get("comment"), list):
+            # Comentarios con formato enriquecido (menciones, emojis...) llegan
+            # como array de segmentos; se concatena su texto plano.
+            text = "".join(seg.get("text", "") for seg in c["comment"] if isinstance(seg, dict))
+        user = c.get("user") if isinstance(c.get("user"), dict) else {}
+        assignee = c.get("assignee") if isinstance(c.get("assignee"), dict) else None
+        out: Dict[str, Any] = {
+            "id": str(c.get("id", "")),
+            "comment_text": text,
+            "user": user.get("username", ""),
+            "date": c.get("date", ""),
+            "resolved": bool(c.get("resolved", False)),
+            "assignee": None,
+        }
+        if assignee and assignee.get("id") is not None:
+            try:
+                aid: Any = int(assignee.get("id"))
+            except (TypeError, ValueError):
+                aid = str(assignee.get("id"))
+            out["assignee"] = {"id": aid, "username": assignee.get("username", "")}
+        if c.get("reply_count") is not None:
+            out["reply_count"] = c.get("reply_count")
+        return out
+
+    async def list_task_comments(self, task_id: str = "", start: Optional[int] = None,
+                                 start_id: Optional[str] = None) -> dict:
         if not task_id:
             raise ValueError("Se requiere 'task_id'.")
+        # ClickUp pagina con start (timestamp ms) Y start_id (id del último
+        # comentario de la página anterior) juntos; uno solo se ignora.
+        if (start is None) != (start_id is None or start_id == ""):
+            raise ValueError("Para paginar comentarios, ClickUp exige 'start' (timestamp ms) y 'start_id' juntos.")
+        params: Dict[str, Any] = {}
+        if start is not None:
+            params["start"] = int(start)
+        if start_id:
+            params["start_id"] = start_id
+        data = await self._request("GET", f"/task/{task_id}/comment", params=params or None)
+        comments = data.get("comments", []) or []
+        out: Dict[str, Any] = {
+            "task_id": task_id,
+            "count": len(comments),
+            "comments": [self._fmt_comment(c) for c in comments],
+        }
+        # La API devuelve 25 por página (más nuevos primero); si vino llena,
+        # se expone la pista para pedir la siguiente página.
+        if len(comments) >= 25:
+            last = comments[-1]
+            try:
+                last_date: Any = int(last.get("date"))
+            except (TypeError, ValueError):
+                last_date = None
+            if last_date is not None and last.get("id") is not None:
+                out["next_page"] = {"start": last_date, "start_id": str(last.get("id", ""))}
+        return out
+
+    async def _find_comment(self, task_id: str, comment_id: str) -> Optional[dict]:
+        """Busca un comentario en la primera página de comentarios de la tarea."""
         data = await self._request("GET", f"/task/{task_id}/comment")
-        return [
-            {"id": str(c.get("id", "")), "comment_text": c.get("comment_text", ""),
-             "user": (c.get("user") or {}).get("username", ""), "date": c.get("date", "")}
-            for c in data.get("comments", [])
-        ]
+        for c in data.get("comments", []) or []:
+            if str(c.get("id", "")) == str(comment_id):
+                return c
+        return None
 
     async def create_task_comment(self, task_id: str = "", comment_text: str = "",
                                   assignee: Optional[int] = None, notify_all: bool = True) -> dict:
@@ -333,7 +390,59 @@ class ClickUpClient:
         if assignee is not None:
             body["assignee"] = assignee
         data = await self._request("POST", f"/task/{task_id}/comment", json_body=body)
-        return {"id": str(data.get("id", "")), "comment_text": data.get("comment_text", ""), "date": data.get("date", "")}
+        comment_id = str(data.get("id", ""))
+        # El POST devuelve un cuerpo mínimo (id/hist_id/date/version); se relee el
+        # comentario para responder con su texto, autor, assignee y estado reales.
+        if comment_id:
+            try:
+                found = await self._find_comment(task_id, comment_id)
+                if found:
+                    return self._fmt_comment(found)
+            except Exception as e:
+                logger.warning(f"clickup create_task_comment refetch failed: {e}")
+        out = self._fmt_comment(data)
+        if not out.get("comment_text"):
+            out["comment_text"] = comment_text
+        return out
+
+    async def update_task_comment(self, comment_id: str = "", comment_text: Optional[str] = None,
+                                  assignee: Optional[int] = None, resolved: Optional[bool] = None,
+                                  task_id: str = "") -> dict:
+        if not comment_id:
+            raise ValueError("Se requiere 'comment_id'.")
+        body: Dict[str, Any] = {}
+        if comment_text:
+            body["comment_text"] = comment_text
+        if assignee is not None:
+            body["assignee"] = assignee
+        if resolved is not None:
+            body["resolved"] = resolved
+        if not body:
+            raise ValueError("Nada que actualizar: provee 'comment_text', 'assignee' y/o 'resolved'.")
+        data = await self._request("PUT", f"/comment/{comment_id}", json_body=body)
+        out = self._fmt_comment(data) if data else {}
+        if out.get("comment_text") or out.get("id"):
+            return out
+        # El PUT responde {} (cuerpo vacío). Con 'task_id' se relee el comentario
+        # para devolver su estado real; sin él, se devuelve un acuse con lo aplicado.
+        if task_id:
+            try:
+                found = await self._find_comment(task_id, comment_id)
+                if found:
+                    out = self._fmt_comment(found)
+                    if resolved is True and not out.get("resolved"):
+                        out["note"] = ("ClickUp no aplicó 'resolved': el comentario debe tener "
+                                       "'assignee' (as\u00edgnalo y reintenta).")
+                    return out
+            except Exception as e:
+                logger.warning(f"clickup update_task_comment refetch failed: {e}")
+        return {"id": comment_id, "status": "updated", "updated_fields": body}
+
+    async def delete_task_comment(self, comment_id: str = "") -> dict:
+        if not comment_id:
+            raise ValueError("Se requiere 'comment_id'.")
+        await self._request("DELETE", f"/comment/{comment_id}")
+        return {"id": comment_id, "status": "deleted"}
 
     # ---- formatters (respuestas compactas para no saturar el contexto del LLM) ----
     @staticmethod

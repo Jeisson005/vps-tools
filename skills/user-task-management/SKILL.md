@@ -1,7 +1,7 @@
 ---
 name: user-task-management
 description: "Manages the HUMAN USER's personal to-dos in ClickUp as an intelligent chief-of-staff: fully autonomous reads AND writes (no confirmation by default, only when user asks), mandatory pre-creation duplicate/overlap check with conflict handling, auto-suggests time estimate + due date + priority when missing, mandatory post-action report, clarifies ambiguous tasks, proactive triage by creation age, helps execute tasks, schedules to calendar. (NOT for agent's own cron/background jobs — see scheduled-tasks)."
-version: 2.2.0
+version: 2.3.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -36,7 +36,9 @@ Actúa directo, sin ficha bloqueante. Después SIEMPRE haz el **reporte post-acc
 
 * **`clickup_create_task(list_id, name, description, status, priority, assignees, tags, due_date, due_date_time, time_estimate, parent, account)`** — `description` = texto/markdown de la tarea, `parent` = id de tarea padre para crear **subtarea**. Ambos soportados por el MCP.
 * **`clickup_update_task(task_id, ..., name, description, status, priority, due_date, time_estimate, parent, archived, account)`** — también edita `description` y re-parenta con `parent`.
-* **`clickup_create_task_comment(task_id, comment_text, notify_all, account)`** — avances, notas.
+* **`clickup_create_task_comment(task_id, comment_text, notify_all, assignee, account)`** — avances, notas. `assignee` (id de usuario) asigna el comentario.
+* **`clickup_update_task_comment(comment_id, comment_text, assignee, resolved, task_id, account)`** — edita el texto, reasigna o marca el comentario como resuelto (para `resolved` el comentario debe tener `assignee`; `task_id` opcional devuelve el estado real).
+* **`clickup_delete_task_comment(comment_id, account)`** — elimina un comentario (borrado destructivo: aplica §3.2).
 * Estructurales (`create/update/delete_list`, `create_folder`, `create/update/delete_space`): también autónomas si el usuario las pide explícito (*"créame la lista Compras en Personal"*). No las inventes por tu cuenta.
 
 ### 🔴 3. Cuándo SÍ confirmar

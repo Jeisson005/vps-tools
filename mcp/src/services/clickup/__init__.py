@@ -15,7 +15,7 @@ class ClickUpService(BaseMcpService):
 
     service_id: str = "clickup"
     name: str = "ClickUp"
-    description: str = "Project management: workspaces, spaces, folders, lists and full task CRUD via personal API token, with multiple accounts."
+    description: str = "Project management: workspaces, spaces, folders, lists, full task CRUD and task comment CRUD via personal API token, with multiple accounts."
     supports_instances: bool = True
 
     def __init__(self, config, secrets, enabled=True, instances=None):
@@ -179,11 +179,20 @@ class ClickUpService(BaseMcpService):
         if tool_name == "clickup_delete_task":
             return await client.delete_task(task_id=args.get("task_id", ""))
         if tool_name == "clickup_list_task_comments":
-            return await client.list_task_comments(task_id=args.get("task_id", ""))
+            return await client.list_task_comments(
+                task_id=args.get("task_id", ""), start=args.get("start"),
+                start_id=args.get("start_id", ""))
         if tool_name == "clickup_create_task_comment":
             return await client.create_task_comment(
                 task_id=args.get("task_id", ""), comment_text=args.get("comment_text", ""),
-                notify_all=bool(args.get("notify_all", True)))
+                assignee=args.get("assignee"), notify_all=bool(args.get("notify_all", True)))
+        if tool_name == "clickup_update_task_comment":
+            return await client.update_task_comment(
+                comment_id=args.get("comment_id", ""), comment_text=args.get("comment_text"),
+                assignee=args.get("assignee"), resolved=args.get("resolved"),
+                task_id=args.get("task_id", ""))
+        if tool_name == "clickup_delete_task_comment":
+            return await client.delete_task_comment(comment_id=args.get("comment_id", ""))
         raise ValueError(f"Unknown ClickUp tool: '{tool_name}'")
 
     async def test_connection(self) -> Dict[str, Any]:

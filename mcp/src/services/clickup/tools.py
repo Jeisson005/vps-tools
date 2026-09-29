@@ -259,25 +259,59 @@ CLICKUP_TOOLS = [
     },
     {
         "name": "clickup_list_task_comments",
-        "description": "List comments on a task.",
+        "description": "List comments on a task (id, text, author, date, resolved, assignee, reply_count). The API returns 25 per page (newest first); when a page is full the response includes 'next_page' with the 'start' (ms timestamp) + 'start_id' to request the next one.",
         "inputSchema": {
             "type": "object",
-            "properties": {"task_id": {"type": "string"}, "account": _ACCOUNT},
+            "properties": {
+                "task_id": {"type": "string"},
+                "start": {"type": "integer", "description": "Pagination: ms timestamp of the last comment of the previous page (use together with 'start_id'; take both from the 'next_page' hint)."},
+                "start_id": {"type": "string", "description": "Pagination: id of the last comment of the previous page (use together with 'start')."},
+                "account": _ACCOUNT,
+            },
             "required": ["task_id"],
         },
     },
     {
         "name": "clickup_create_task_comment",
-        "description": "Add a comment to a task. IMPORTANT: Ask the user for explicit confirmation before commenting.",
+        "description": "Add a comment to a task (optionally assigning it to a user via 'assignee'). IMPORTANT: Ask the user for explicit confirmation before commenting.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "task_id": {"type": "string"},
                 "comment_text": {"type": "string"},
                 "notify_all": {"type": "boolean"},
+                "assignee": {"type": "integer", "description": "User id to assign the comment to (see clickup_list_team_members)."},
                 "account": _ACCOUNT,
             },
             "required": ["task_id", "comment_text"],
+        },
+    },
+    {
+        "name": "clickup_update_task_comment",
+        "description": "Edit a comment (needs the comment id from clickup_list_task_comments): change 'comment_text', reassign it ('assignee') or mark it as 'resolved' (requires the comment to have an assignee). ClickUp's PUT returns an empty body: pass 'task_id' to get the updated comment back. IMPORTANT: Ask the user for explicit confirmation before modifying.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "comment_id": {"type": "string"},
+                "comment_text": {"type": "string"},
+                "assignee": {"type": "integer", "description": "User id to assign the comment to."},
+                "resolved": {"type": "boolean", "description": "True marks the comment as resolved."},
+                "task_id": {"type": "string", "description": "Optional: task id to return the updated comment state."},
+                "account": _ACCOUNT,
+            },
+            "required": ["comment_id"],
+        },
+    },
+    {
+        "name": "clickup_delete_task_comment",
+        "description": "Permanently delete a comment (needs the comment id from clickup_list_task_comments). IMPORTANT: Ask the user for explicit confirmation before deleting.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "comment_id": {"type": "string"},
+                "account": _ACCOUNT,
+            },
+            "required": ["comment_id"],
         },
     },
 ]
