@@ -25,3 +25,7 @@ certbot/www/*
 conf.d/*
 !conf.d/00-default.conf
 !conf.d/localhost.*.conf*
+
+# VPS-local compose overlay (per-VPS app networks). Never commit: the base
+# docker-compose.yml must stay generic for any VPS.
+docker-compose.override.yml

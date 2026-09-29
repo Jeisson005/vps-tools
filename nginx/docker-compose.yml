@@ -53,7 +53,9 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - default
-      - sorteos_artic-network
+      # App networks (sorteos, excel, ...) are attached per-VPS via
+      # docker-compose.override.yml (gitignored). This base file stays generic
+      # so the stack boots on any VPS, with or without those projects.
 
   certbot:
     image: certbot/certbot:v5.2.2
@@ -69,5 +71,3 @@ services:
 
 networks:
   default: {}
-  sorteos_artic-network:
-    external: true

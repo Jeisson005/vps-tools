@@ -105,6 +105,59 @@ estos bloques, «Conectar con Google» / «Conectar con Microsoft» del panel fa
 
 ---
 
+### 6. Integrar proyectos externos sin acoplarlos
+
+**Regla de oro: el proyecto manda; el VPS se adapta.** Un proyecto externo (en su propio repo,
+pensado para correr también en otra máquina o en local sin nginx) **no debe saber que nginx
+existe**, y este stack **no debe conocer** los proyectos concretos de un VPS.
+
+Consecuencia práctica:
+
+| Va en el **repo del proyecto** (portable) | Va **aquí** (local, gitignored) |
+|---|---|
+| Red interna propia (`driver: bridge`), `expose`, puertos normales | Acoplamiento con la red del proyecto y binds específicos del VPS |
+
+El `docker-compose.yml` base de nginx es **genérico**: solo declara la red `default` y arranca en
+cualquier VPS, con o sin proyectos externos. Las redes de los proyectos de *este* VPS se declaran
+en `docker-compose.override.yml` (gitignored, Compose lo carga solo).
+
+**Añadir un proyecto externo (pasos):**
+
+1. El proyecto ya corre con **su propia red interna** (compose normal, sin referencias a nginx,
+   sin publicar puertos). Ejemplo: `sorteos` (`artic-network`) y `excel-sanitizer` (`*_default`).
+2. Averigua el nombre de su red:
+   ```bash
+   docker inspect <contenedor> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+   ```
+3. Añádela a `nginx/docker-compose.override.yml` (servicio `core` + bloque `networks`, `external: true`)
+   y aplica:
+   ```bash
+   bash scripts/reload_nginx.sh
+   ```
+4. Crea el vhost apuntando al **nombre de servicio**:
+   ```bash
+   bash scripts/site_add.sh --domain ejemplo.com --upstream http://mi-servicio:8000
+   ```
+5. Para que un recreate del proyecto no rompa el proxy (nginx cachea la IP al cargar la config),
+   usa resolución en runtime en el `location`:
+   ```nginx
+   resolver 127.0.0.11 valid=10s ipv6=off;
+   set $upstream http://mi-servicio:8000;
+   proxy_pass $upstream;
+   ```
+
+**Por qué así:** el repo del proyecto sigue siendo desplegable en cualquier parte (`docker compose up`
+sin redes externas inexistentes) y este stack sigue siendo genérico; solo la máquina concreta sabe
+qué proyectos hay. El acoplamiento nunca se escribe en un archivo versionado.
+
+**Alternativa (proyectos no-Docker o que ya publican puerto):** publicar en loopback
+(`127.0.0.1:PUERTO`) y apuntar el vhost a `host.docker.internal:PUERTO`. Ojo: desde el contenedor
+de nginx `host.docker.internal` = `172.17.0.1`, así que un bind a `127.0.0.1` **no** es alcanzable;
+para eso hay que publicar en `0.0.0.0` (queda dependiendo del firewall) o en `172.17.0.1`. Si el
+proyecto debe seguir siendo portable, ese bind va en un override local del propio proyecto.
+
+---
+
 ## Directory Structure
 - `conf.d/`: Server blocks (`*.http.conf`, `*.https.conf`) and location snippets (`*.locations.*.conf`).
 - `auth/`: Hashed `.htpasswd` files and generated `.key` files (mounted into `/etc/nginx/auth:ro`).
