@@ -1,7 +1,7 @@
 ---
 name: messaging-platforms
 description: "Enviar y leer mensajes del usuario o del agente (WhatsApp, Telegram, Gmail, Outlook); elige el canal correcto y el tono adecuado."
-version: 1.3.0
+version: 1.4.0
 author: VPS Tools
 license: MIT
 metadata:
@@ -63,6 +63,14 @@ con mensajes que ya estaban guardados cuando se borraron).
 - Para **responder citando un mensaje específico** en WhatsApp usa el parámetro `reply_to` de `whatsapp_send_message` / `whatsapp_send_media` con el `id` del mensaje (de `whatsapp_get_messages`). Solo funciona con mensajes recientes que aún estén en el búfer en vivo; si el id ya no está, el envío falla con error en vez de salir sin cita.
 - Leer/buscar → `*_get_messages`, `*_gmail_list`, `*_mail_list`, `*_list_chats`.
 - No inventes ni improvises llamadas fuera de lo que expone cada plataforma.
+
+**Datos de WhatsApp (puente):** cada mensaje de `whatsapp_get_messages`/`whatsapp_get_history` incluye
+`sender` (nombre), `senderId` (jid real del emisor; teléfono cuando se conoce), `senderLid` (solo si el
+emisor usa LID) y `mentions` (personas etiquetadas: `{id, name, number?}`). Usa `mentions`/`senderId`
+en vez de interpretar a mano los tokens `@<número>` del texto. `whatsapp_get_group_info` también
+devuelve `subject` y, por participante, `id`, `name`, `number?` y `admin`; `whatsapp_list_chats` ya
+reporta los subjects reales de los grupos. Para saber si un mensaje menciona al usuario, compara
+`mentions[].number`/`id` con el teléfono de `whatsapp_list_accounts`.
 
 ### 4. Confirma antes de enviar
 

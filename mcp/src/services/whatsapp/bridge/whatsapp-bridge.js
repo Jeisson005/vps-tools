@@ -132,7 +132,7 @@ let qr = '';
 let loggedIn = false;
 let makeSocket = null;
 let saveCreds = null;
-const socketStore = { chats: [], messages: {}, byId: {}, names: {}, lidJid: {}, deleted: {} };
+const socketStore = { chats: [], messages: {}, byId: {}, names: {}, lidJid: {}, jidLid: {}, deleted: {} };
 
 function appendDeleted(jid, tomb) {
   if (!socketStore.deleted[jid]) socketStore.deleted[jid] = [];
@@ -155,7 +155,7 @@ async function markDeleted(key) {
       e.deleted = true; e.deletedAt = now;
       // Carry content on the tombstone so /deleted returns full entries
       // even before (or without) the disk merge.
-      for (const f of ['text', 'sender', 'media', 'mediaFile', 'fromMe']) {
+      for (const f of ['text', 'sender', 'senderId', 'senderLid', 'mentions', 'media', 'mediaFile', 'fromMe']) {
         if (e[f] !== undefined) tomb[f] = e[f];
       }
     }
@@ -163,31 +163,87 @@ async function markDeleted(key) {
   appendDeleted(jid, tomb);
 }
 
+// --- Identity / name resolution --------------------------------------------
+// WhatsApp addresses contacts either by phone-number jid (…@s.whatsapp.net) or
+// by lid jid (…@lid). Names must be keyed by the person they belong to, NEVER
+// by the chat jid: storing a sender's pushName against the chat renamed real
+// contacts and groups (production incident, Sep 2026).
+function bareJid(jid) {
+  return String(jid || '').replace(/^(\d+):\d+@/, '$1@');
+}
+
+// Baileys persists lid<->phone mappings as lid-mapping-<lid>_reverse.json and
+// lid-mapping-<pn>.json inside the session dir; preload them so names/mentions
+// resolve even before contacts.update arrives.
+function loadLidMappings() {
+  try {
+    for (const f of fs.readdirSync(SESSION_DIR)) {
+      const m = /^lid-mapping-(.+?)\.json$/.exec(f);
+      if (!m) continue;
+      let val = '';
+      try { val = JSON.parse(fs.readFileSync(path.join(SESSION_DIR, f), 'utf8')); } catch (e) { continue; }
+      if (!val || typeof val !== 'string') continue;
+      const valJid = val.indexOf('@') >= 0 ? val : `${val}@s.whatsapp.net`;
+      if (m[1].endsWith('_reverse')) storeLidMapping(`${m[1].slice(0, -'_reverse'.length)}@lid`, valJid);
+      else storeLidMapping(valJid, `${m[1]}@s.whatsapp.net`);
+    }
+  } catch (e) { /* ignore */ }
+}
+
 function contactName(jid) {
-  return socketStore.names[jid] || '';
+  if (!jid) return '';
+  return socketStore.names[jid] || socketStore.names[bareJid(jid)] || '';
+}
+function resolveJidName(jid) {
+  if (!jid) return '';
+  const bare = bareJid(jid);
+  return contactName(bare) ||
+         contactName(socketStore.lidJid[bare]) ||
+         contactName(socketStore.jidLid[bare]) || '';
 }
 function resolveChatName(jid) {
   return contactName(jid) || jid;
 }
-function storeContactName(jid, name) {
-  if (jid && name) { socketStore.names[jid] = name; saveNames(); }
+function storeContactName(jid, name, source) {
+  if (!jid || !name) return;
+  const key = bareJid(jid);
+  const cur = socketStore.names[key];
+  // A pushName is the sender's self-chosen name; it must never clobber an
+  // address-book name already resolved for that contact.
+  if (source === 'pushName' && cur && cur !== name) return;
+  socketStore.names[key] = name;
+  saveNames();
 }
 function storeLidMapping(lidJid, realJid) {
-  if (lidJid && realJid) socketStore.lidJid[lidJid] = realJid;
+  if (!lidJid || !realJid) return;
+  socketStore.lidJid[bareJid(lidJid)] = bareJid(realJid);
+  socketStore.jidLid[bareJid(realJid)] = bareJid(lidJid);
 }
 function realJidFor(jid) {
-  return socketStore.lidJid[jid] || jid;
+  if (!jid) return jid;
+  return socketStore.lidJid[bareJid(jid)] || jid;
+}
+function ownName() {
+  return (sock && sock.user && sock.user.name) || '';
 }
 
-// Authoritative group subject via groupMetadata (Baileys), cached.
+// Authoritative group subject via groupMetadata (Baileys). It MUST overwrite
+// cached names: legacy entries were corrupted with senders' pushNames.
+const groupRefreshAt = {};
+const GROUP_NAME_TTL_MS = 6 * 60 * 60 * 1000;
 async function refreshGroupName(jid) {
   if (!jid || jid.indexOf('@g.us') < 0) return;
-  if (contactName(jid)) return; // already resolved
   if (!sock || typeof sock.groupMetadata !== 'function') return;
+  const now = Date.now();
+  if (now - (groupRefreshAt[jid] || 0) < GROUP_NAME_TTL_MS) return;
+  groupRefreshAt[jid] = now;
   try {
     const md = await sock.groupMetadata(jid);
     if (md && md.subject) storeContactName(jid, md.subject);
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    // Retry in ~5 min instead of hammering, without waiting the full TTL.
+    groupRefreshAt[jid] = now - GROUP_NAME_TTL_MS + 5 * 60 * 1000;
+  }
 }
 
 const log = (...a) => console.log(new Date().toISOString(), ...a);
@@ -203,6 +259,7 @@ function attach(s) {
       everOpen = true;
       loggedIn = true;
       qr = '';
+      loadLidMappings();
       log('connected');
     }
     if (connection === 'close') {
@@ -223,18 +280,29 @@ function attach(s) {
     }
   });
   s.ev.on('contacts.set', ({ contacts }) => {
-    for (const c of contacts || []) { if (c?.jid) storeContactName(c.jid, c.notify || c.verifiedName || c.name || ''); }
+    for (const c of contacts || []) {
+      if (!c?.jid) continue;
+      const nm = c.notify || c.verifiedName || c.name || '';
+      storeContactName(c.jid, nm);
+      if (c.lid) { storeLidMapping(c.lid, c.jid); if (nm) storeContactName(c.lid, nm); }
+    }
   });
   s.ev.on('contacts.update', (contacts) => {
     for (const c of contacts || []) {
       if (!c?.jid) continue;
-      storeContactName(c.jid, c.notify || c.verifiedName || c.name || '');
-      if (c.lid) storeLidMapping(c.lid, c.jid);
+      const nm = c.notify || c.verifiedName || c.name || '';
+      storeContactName(c.jid, nm);
+      if (c.lid) { storeLidMapping(c.lid, c.jid); if (nm) storeContactName(c.lid, nm); }
     }
   });
   // Preload a window of history at connect (bounded by what WhatsApp syncs).
   s.ev.on('messaging-history.set', async ({ messages, contacts, chats }) => {
-    for (const c of contacts || []) { if (c?.jid) storeContactName(c.jid, c.notify || c.verifiedName || c.name || ''); }
+    for (const c of contacts || []) {
+      if (!c?.jid) continue;
+      const nm = c.notify || c.verifiedName || c.name || '';
+      storeContactName(c.jid, nm);
+      if (c.lid) { storeLidMapping(c.lid, c.jid); if (nm) storeContactName(c.lid, nm); }
+    }
     for (const ch of chats || []) {
       if (ch?.id && ch.name) storeContactName(ch.id, ch.name);
       if (ch?.id && !socketStore.chats.find(x => x.id === ch.id)) socketStore.chats.push({ id: ch.id, name: ch.name || ch.id });
@@ -272,7 +340,7 @@ function attach(s) {
 }
 
 async function ingestMessage(m) {
-  const jid = m.key?.remoteJid || 'unknown';
+  const chatJid = m.key?.remoteJid || 'unknown';
   const id = m.key?.id;
   // Skip protocol/control messages (e.g. REVOKE for "delete for everyone"):
   // they carry no user content and would otherwise be stored as empty
@@ -282,31 +350,41 @@ async function ingestMessage(m) {
   if (rawContent.protocolMessage || unwrapMessage(rawContent).protocolMessage) return;
   if (id && socketStore.byId[id]) return; // already ingested
   if (id) socketStore.byId[id] = m;
-  if (jid.indexOf('@g.us') >= 0) refreshGroupName(jid).catch(() => {});
-  if (m.pushName) storeContactName(realJidFor(jid), m.pushName);
-  const senderKey = realJidFor(jid);
-  const senderName = contactName(senderKey) || m.pushName || (jid === senderKey ? jid : senderKey);
-  if (!socketStore.messages[jid]) socketStore.messages[jid] = [];
+  const isGroup = chatJid.indexOf('@g.us') >= 0;
+  if (isGroup) refreshGroupName(chatJid).catch(() => {});
+  // In a group the sender is the participant, never the chat jid. Binding the
+  // pushName to the chat jid renamed every contact/group the account wrote to.
+  const senderRaw = (isGroup && (m.key?.participant || m.key?.participantAlt)) || chatJid;
+  const senderKey = realJidFor(senderRaw);
+  if (m.pushName && !m.key?.fromMe) storeContactName(senderKey, m.pushName, 'pushName');
+  const senderName = m.key?.fromMe
+    ? (m.pushName || ownName() || senderKey)
+    : (resolveJidName(senderRaw) || m.pushName || senderKey);
+  if (!socketStore.messages[chatJid]) socketStore.messages[chatJid] = [];
   const mediaType = mediaTypeOf(m.message);
   let mediaFile = '';
   if (mediaType) mediaFile = await persistMedia(m).catch(() => '');
+  const mentions = extractMentions(m.message);
   const entry = {
     id, fromMe: !!m.key?.fromMe,
     media: mediaType,
     mediaFile,
     sender: senderName,
+    senderId: senderKey,
+    senderLid: senderRaw !== senderKey ? bareJid(senderRaw) : undefined,
+    mentions,
     text: messageText(m.message),
     ts: m.messageTimestamp,
   };
   // Avoid duplicates from history + live sync by checking the tail.
-  if (socketStore.messages[jid].some(x => x.id === id)) return;
-  appendHistory(jid, entry);
-  socketStore.messages[jid].unshift(entry);
-  if (socketStore.messages[jid].length > MESSAGE_LIMIT) {
-    const dropped = socketStore.messages[jid].pop();
+  if (socketStore.messages[chatJid].some(x => x.id === id)) return;
+  appendHistory(chatJid, entry);
+  socketStore.messages[chatJid].unshift(entry);
+  if (socketStore.messages[chatJid].length > MESSAGE_LIMIT) {
+    const dropped = socketStore.messages[chatJid].pop();
     if (dropped && socketStore.byId[dropped.id]) delete socketStore.byId[dropped.id];
   }
-  if (!socketStore.chats.find(c => c.id === jid)) socketStore.chats.push({ id: jid, name: resolveChatName(jid) });
+  if (!socketStore.chats.find(c => c.id === chatJid)) socketStore.chats.push({ id: chatJid, name: resolveChatName(chatJid) });
 }
 
 function unwrapMessage(msg) {
@@ -332,6 +410,34 @@ function messageText(msg) {
   msg = unwrapMessage(msg);
   return (msg.conversation || msg.extendedTextMessage?.text || msg.imageMessage?.caption ||
           msg.videoMessage?.caption || msg.documentMessage?.caption || msg.audioMessage?.caption || '') || '';
+}
+
+function contextInfoOf(msg) {
+  msg = unwrapMessage(msg || {});
+  return msg.extendedTextMessage?.contextInfo || msg.imageMessage?.contextInfo ||
+         msg.videoMessage?.contextInfo || msg.documentMessage?.contextInfo ||
+         msg.audioMessage?.contextInfo || msg.stickerMessage?.contextInfo || null;
+}
+
+// Mentions arrive in the text as raw `@<lid|phone>` tokens; expose the people
+// behind them (with phone + name when resolvable) so agents never have to guess.
+function extractMentions(msg) {
+  const ctx = contextInfoOf(msg);
+  const jids = (ctx && Array.isArray(ctx.mentionedJid)) ? ctx.mentionedJid : [];
+  const out = [];
+  const seen = new Set();
+  for (const j of jids) {
+    const bare = bareJid(j);
+    if (!bare || seen.has(bare)) continue;
+    seen.add(bare);
+    const real = realJidFor(bare);
+    const isPhone = real.indexOf('@s.whatsapp.net') >= 0;
+    const mention = { id: bare, name: resolveJidName(bare) || '' };
+    if (isPhone) mention.number = real.split('@')[0];
+    out.push(mention);
+    if (out.length >= 50) break;
+  }
+  return out;
 }
 
 async function getMediaBuffer(m) {
@@ -428,6 +534,7 @@ async function sendMedia(chatId, mediaType, base64, caption, filename, replyTo) 
 
 async function start() {
   loadNames();
+  loadLidMappings();
   const { state, saveCreds: _saveCreds } = await useMultiFileAuthState(SESSION_DIR);
   saveCreds = _saveCreds;
   const { version } = await fetchLatestBaileysVersion();
@@ -488,7 +595,7 @@ const server = http.createServer(async (req, res) => {
       let msgs = socketStore.messages[chatId] || [];
       // If not in the live buffer, fall back to the persisted history.
       if (!msgs.length) msgs = readHistory(chatId, parseInt(url.searchParams.get('limit') || '50', 10) || 50);
-      const mapped = msgs.map(x => ({ ...x, sender: x.sender || resolveChatName(x.id) || "" }));
+      const mapped = msgs.map(x => ({ ...x, sender: x.sender || resolveChatName(chatId) || "" }));
       return json({ messages: mapped });
     }
     if (url.pathname === '/history') {
@@ -509,9 +616,16 @@ const server = http.createServer(async (req, res) => {
       return json({
         id,
         subject: md.subject || contactName(id) || id,
-        participants: (md.participants || []).map(p => ({
-          id: p.id, name: contactName(p.id) || p.id, admin: !!(p.isAdmin || p.isSuperAdmin),
-        })),
+        participants: (md.participants || []).map(p => {
+          const real = realJidFor(p.id);
+          const person = {
+            id: p.id,
+            name: resolveJidName(p.id) || p.id,
+            admin: !!(p.isAdmin || p.isSuperAdmin),
+          };
+          if (real !== p.id && real.indexOf('@s.whatsapp.net') >= 0) person.number = real.split('@')[0];
+          return person;
+        }),
       });
     }
     if (url.pathname === '/send' && req.method === 'POST') {
