@@ -10,12 +10,17 @@ services:
       - mongodata:/data/db
       - mongoconfig:/data/configdb
     restart: unless-stopped
+    # Healthcheck barato: comprueba que mongod escucha, sin arrancar un
+    # proceso Node (mongosh) en cada intento. En VPS pequeños, un mongosh cada
+    # 10s agota el límite de memoria del contenedor y el OOM killer lo mata en
+    # bucle, dejando el contenedor como unhealthy para siempre (incidente
+    # 2026-09-30). Un ping TCP cuesta kilobytes.
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" -u \"$${MONGO_INITDB_ROOT_USERNAME}\" -p \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin | grep 1"]
-      interval: 10s
+      test: ["CMD-SHELL", "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/27017'"]
+      interval: 30s
       timeout: 5s
-      retries: 5
-      start_period: 20s
+      retries: 3
+      start_period: 30s
     logging:
       driver: json-file
       options:
