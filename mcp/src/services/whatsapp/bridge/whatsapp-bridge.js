@@ -48,6 +48,10 @@ const EXT_BY_MIME = {
   'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'application/pdf': 'pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/zip': 'zip', 'application/x-zip-compressed': 'zip',
+  'application/vnd.rar': 'rar', 'application/x-rar-compressed': 'rar',
+  'application/x-7z-compressed': '7z', 'application/gzip': 'gz', 'application/x-tar': 'tar',
+  'text/csv': 'csv', 'application/vnd.ms-excel': 'xls', 'text/plain': 'txt',
 };
 function extForMime(mime) { return EXT_BY_MIME[(mime || '').toLowerCase()] || 'bin'; }
 function mediaFileFor(id, mime) { return `${id}.${extForMime(mime)}`; }
@@ -496,7 +500,13 @@ function mimetypeForExt(ext) {
   const map = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', mp4: 'video/mp4',
     oga: 'audio/ogg', opus: 'audio/opus', m4a: 'audio/mp4', mp3: 'audio/mpeg', pdf: 'application/pdf',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', bin: 'application/octet-stream' };
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    doc: 'application/msword', xls: 'application/vnd.ms-excel',
+    ppt: 'application/vnd.ms-powerpoint',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    zip: 'application/zip', rar: 'application/vnd.rar', '7z': 'application/x-7z-compressed',
+    gz: 'application/gzip', tar: 'application/x-tar', csv: 'text/csv', txt: 'text/plain',
+    json: 'application/json', bin: 'application/octet-stream' };
   return map[ext] || 'application/octet-stream';
 }
 
