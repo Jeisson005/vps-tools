@@ -47,10 +47,12 @@ fi
 # NOTE: the message goes via STDIN, never as CLI arg: opencode run resolves
 # message args as file paths when -f is used ("File not found"). Keep the
 # message free of file-like tokens; full instructions live in ${RENDERED}.
-# NOTE: opencode run v2.x NO tiene flag de directorio (el --dir de la primera
-# versión de este script ya no existe: "Unrecognized flag: --dir" y el agente
-# nunca arranca). El "proyecto" es el cwd, así que se entra a REPO_ROOT dentro
-# de un subshell para no alterar el cwd del resto del script.
+# NOTE: opencode run v2.x NO acepta --dir ("Unrecognized flag: --dir"): el
+# directorio pasó a ser ARGUMENTO POSICIONAL (opencode <sub> [flags] [<dir>]).
+# OJO: con -f ese posicional se lo traga (probado: el agente terminó corriendo
+# en el cwd del llamador, no en el dir pedido), así que NO sirve aquí. Como el
+# "proyecto" de opencode es el cwd, se entra a REPO_ROOT dentro de un subshell.
+# No cambiar esto por el posicional: verificado 2026-10-02 con pwd real.
 log "Running opencode (model=${MODEL}, timeout=${TIMEOUT_MIN}min, --auto, cwd=${REPO_ROOT}, read-only prompt)..."
 if ( cd "${REPO_ROOT}" \
   && printf '%s' "You are the monthly security auditor. First read the attached audit procedure file, then the attached layer-1 report files. Execute the procedure end to end: verify findings, judge exposure, send exactly one Telegram verdict yourself, save your verdict file in the dated report folder, and reply with the verdict text." \

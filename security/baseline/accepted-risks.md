@@ -7,8 +7,10 @@
    support, drop this exception.
 2. **RustDesk protocol ports (21115-21119) are public.** Required for remote
    desktop connectivity. Mitigated by: key-pinned self-hosted server, fail2ban.
-3. **`opencode run --auto` is used ONLY by security/agent/run_audit.sh**, scoped
-   `--dir security/` with a read-only prompt (only curl to api.telegram.org
+3. **`opencode run --auto` is used ONLY by security/agent/run_audit.sh**, run with
+   cwd = repo root (`cd` inside a subshell; the old `--dir` flag no longer exists in
+   opencode v2 and the positional directory argument is swallowed when `-f` is used)
+   with a read-only prompt (only curl to api.telegram.org
    allowed as a side effect). No other automation uses --auto.
 4. **Trivy/Gitleaks findings on `latest`/`main` tags**: version drift is reported,
    not auto-upgraded. Patching is always manual.
