@@ -17,6 +17,9 @@
 #   Se reinicia porque Baileys acumula sesiones E2EE y reconexiones 408/428;
 #   el health-check evita dar por bueno un reinicio fallido. Si prefieres
 #   no tocarlo, pon REFRESH_WHATSAPP_MCP=false.
+#   - hermes-webui (systemd): leak conocido de páginas en swap estando inactivo
+#     (llegó a 1.2 GB); 'systemctl restart' + is-active + HTTP en el puerto.
+#     Se omite con REFRESH_HERMES_WEBUI=false.
 #
 # Hermes NO se toca aquí (ver cron/monthly_hermes_refresh.sh, día 15 02:45).
 #
@@ -35,6 +38,8 @@ if [[ -f "${SCRIPT_DIR}/.env" ]]; then
 fi
 
 REFRESH_OPENCODE="${REFRESH_OPENCODE:-true}"
+REFRESH_HERMES_WEBUI="${REFRESH_HERMES_WEBUI:-true}"
+HERMES_WEBUI_PORT="${HERMES_WEBUI_PORT:-8787}"
 REFRESH_WHATSAPP_MCP="${REFRESH_WHATSAPP_MCP:-true}"
 WHATSAPP_MCP_PORT="${WHATSAPP_MCP_PORT:-3159}"
 DOCKER_BUILDER_PRUNE="${DOCKER_BUILDER_PRUNE:-true}"
@@ -99,7 +104,38 @@ else
   log "--- opencode-web omitido (REFRESH_OPENCODE=false) ---"
 fi
 
-# --- 2. wa-jeisson (MCP WhatsApp personal, docker) ---
+# --- 2. hermes-webui (systemd) ---
+# Mismo caso que opencode-web: servicio host-native de larga vida que acumula
+# páginas en swap estando inactivo (medido: 1.2 GB). Reinicio + health-check real
+# (activo en systemd Y respondiendo HTTP), nunca un "reiniciado" a ciegas.
+if [[ "${REFRESH_HERMES_WEBUI}" == "true" ]]; then
+  log "--- hermes-webui (systemd, :${HERMES_WEBUI_PORT}) ---"
+  if sudo -n systemctl restart hermes-webui 2>&1; then
+    _webui_ok="false"
+    for _i in $(seq 1 6); do
+      sleep 3
+      if systemctl is-active --quiet hermes-webui; then
+        _code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:${HERMES_WEBUI_PORT}/" 2>/dev/null || echo 000)"
+        if [[ "${_code}" =~ ^[2-4][0-9][0-9]$ ]]; then
+          log "[+] hermes-webui reiniciado, activo y respondiendo (http_${_code})"
+          _webui_ok="true"
+          break
+        fi
+      fi
+    done
+    if [[ "${_webui_ok}" != "true" ]]; then
+      log "[!] hermes-webui NO quedó sirviendo tras el reinicio"
+      FAILED="${FAILED} hermes-webui(health)"
+    fi
+  else
+    log "[!] sin permiso sudo para systemctl, se omite hermes-webui"
+    FAILED="${FAILED} hermes-webui(sudo)"
+  fi
+else
+  log "--- hermes-webui omitido (REFRESH_HERMES_WEBUI=false) ---"
+fi
+
+# --- 3. wa-jeisson (MCP WhatsApp personal, docker) ---
 if [[ "${REFRESH_WHATSAPP_MCP}" == "true" ]]; then
   log "--- wa-jeisson (MCP WhatsApp :${WHATSAPP_MCP_PORT}) ---"
   if docker inspect wa-jeisson >/dev/null 2>&1; then
@@ -129,7 +165,7 @@ else
   log "--- wa-jeisson omitido (REFRESH_WHATSAPP_MCP=false) ---"
 fi
 
-# --- 3. Limpieza ligera docker (solo caché huérfana, nada tagged) ---
+# --- 4. Limpieza ligera docker (solo caché huérfana, nada tagged) ---
 if [[ "${DOCKER_BUILDER_PRUNE}" == "true" ]]; then
   log "--- docker builder prune ---"
   docker builder prune -f >/dev/null 2>&1 || log "[!] builder prune falló"
@@ -137,7 +173,7 @@ if [[ "${DOCKER_BUILDER_PRUNE}" == "true" ]]; then
   log "[+] prune de caché huérfana OK"
 fi
 
-# --- 4. Limpieza /tmp (restos de backups de prueba y sesiones chrome viejas) ---
+# --- 5. Limpieza /tmp (restos de backups de prueba y sesiones chrome viejas) ---
 if [[ "${CLEAN_TMP}" == "true" ]]; then
   log "--- /tmp cleanup ---"
   rm -rf /tmp/vps-backups /tmp/test_backup_vps 2>/dev/null || true
@@ -145,7 +181,7 @@ if [[ "${CLEAN_TMP}" == "true" ]]; then
   log "[+] /tmp liviano OK"
 fi
 
-# --- 5. Steel sessions: liberar >24h vía API (NO reinicia contenedores) ---
+# --- 6. Steel sessions: liberar >24h vía API (NO reinicia contenedores) ---
 if [[ "${CLEAN_STEEL_SESSIONS}" == "true" ]]; then
   log "--- steel session cleanup ---"
   _steel_cleanup="${BASE_DIR}/steel/scripts/cleanup_sessions.sh"
@@ -157,7 +193,7 @@ if [[ "${CLEAN_STEEL_SESSIONS}" == "true" ]]; then
   fi
 fi
 
-# --- 6. Journal vacuum (evita que /var/log crezca sin control) ---
+# --- 7. Journal vacuum (evita que /var/log crezca sin control) ---
 if [[ -n "${JOURNAL_VACUUM_SIZE}" && "${JOURNAL_VACUUM_SIZE}" != "0" ]]; then
   log "--- journal vacuum (${JOURNAL_VACUUM_SIZE}) ---"
   sudo -n journalctl --vacuum-size="${JOURNAL_VACUUM_SIZE}" 2>&1 | tail -1 || log "[!] journal vacuum falló"
